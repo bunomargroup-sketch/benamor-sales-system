@@ -168,13 +168,13 @@
             <div class="form" style="margin-top:12px">
               <div><label>خصم</label><input id="purchaseDiscount" type="number" step="0.001" value="0" oninput="updatePurchaseTotal()"></div>
               <div class="totalBox"><span>إجمالي الفاتورة</span><b id="purchaseTotal">0.00</b></div>
-              <div><button class="btn" type="submit">حفظ الفاتورة وزيادة المخزون</button></div>
+              <div class="row"><button class="btn" id="purchaseSubmitBtn" type="submit">حفظ الفاتورة وزيادة المخزون</button><button class="btn secondary hidden" id="purchaseCancelEditBtn" type="button" onclick="resetPurchaseForm()">إلغاء التعديل</button></div>
             </div>
           </form>
         </div>
         <div class="panel">
           <div class="tools"><h2>آخر فواتير الشراء</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>المورد</th><th>المكان</th><th>رقم الفاتورة</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>المورد</th><th>المكان</th><th>رقم الفاتورة</th><th>الإجمالي</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
         </div>
       </section>
 
@@ -214,12 +214,12 @@
               </table>
             </div>
             <p class="mini">اختر المنتج من القائمة، ثم أدخل الكمية. النظام سيخصم من المكان الأول ويضيف للمكان الثاني.</p>
-            <button class="btn" type="submit">حفظ التحويل وتحديث المخزون</button>
+            <div class="row"><button class="btn" id="transferSubmitBtn" type="submit">حفظ التحويل وتحديث المخزون</button><button class="btn secondary hidden" id="transferCancelEditBtn" type="button" onclick="resetTransferForm()">إلغاء التعديل</button></div>
           </form>
         </div>
         <div class="panel">
           <div class="tools"><h2>آخر تحويلات المخزون</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>من</th><th>إلى</th><th>الحالة</th><th>ملاحظات</th></tr></thead><tbody id="transfersBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>من</th><th>إلى</th><th>الحالة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="transfersBody"></tbody></table></div>
         </div>
       </section>
 
@@ -245,6 +245,8 @@ const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0';
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
 let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[];
+let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
+let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 
 function q(id){return document.getElementById(id)}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -391,8 +393,8 @@ function renderPayments(){
 function renderPurchases(){
   q('purchasesBody').innerHTML = purchases.map(p=>{
     const s=suppliers.find(x=>x.id===p.supplier_id); const l=locations.find(x=>x.id===p.location_id);
-    return `<tr><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td></tr>`;
-  }).join('') || '<tr><td colspan="6">لا توجد فواتير شراء بعد.</td></tr>';
+    return `<tr><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td><td><button class="btn secondary" onclick="openPurchaseForEdit('${p.id}')">فتح / تعديل</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7">لا توجد فواتير شراء بعد.</td></tr>';
 }
 function renderStock(){
   const loc=q('stockLocationFilter')?.value||''; const term=(q('stockSearch')?.value||'').trim().toLowerCase();
@@ -419,8 +421,8 @@ async function adjustStock(location_id, item, qtyChange, movementType, reference
 function renderTransfers(){
   q('transfersBody').innerHTML = transfers.map(t=>{
     const from=locations.find(x=>x.id===t.from_location_id); const to=locations.find(x=>x.id===t.to_location_id);
-    return `<tr><td>${t.transfer_date}</td><td>${from?.name||''}</td><td>${to?.name||''}</td><td><span class="badge green">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td></tr>`;
-  }).join('') || '<tr><td colspan="5">لا توجد تحويلات مخزون بعد.</td></tr>';
+    return `<tr><td>${t.transfer_date}</td><td>${from?.name||''}</td><td>${to?.name||''}</td><td><span class="badge green">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td><td><button class="btn secondary" onclick="openTransferForEdit('${t.id}')">فتح / تعديل</button></td></tr>`;
+  }).join('') || '<tr><td colspan="6">لا توجد تحويلات مخزون بعد.</td></tr>';
 }
 function addTransferRow(item={}){
   const tr=document.createElement('tr');
@@ -520,6 +522,39 @@ q('paymentForm').addEventListener('submit', async e=>{
   }catch(err){console.error(err);toast('خطأ في حفظ الدفعة: '+err.message)} finally{showLoading(false)}
 });
 
+
+function resetPurchaseForm(){
+  editingPurchaseId=null; originalPurchase=null; originalPurchaseItems=[];
+  q('purchaseForm').reset(); q('purchaseItemsBody').innerHTML=''; addPurchaseRow(); setToday();
+  q('purchaseSubmitBtn').textContent='حفظ الفاتورة وزيادة المخزون';
+  q('purchaseCancelEditBtn').classList.add('hidden');
+}
+async function openPurchaseForEdit(id){
+  try{
+    showLoading(true);
+    const rows=await api('pos_purchase_items',{qs:`?select=*&purchase_id=eq.${id}&order=created_at.asc`});
+    const p=purchases.find(x=>x.id===id) || (await api('pos_purchases',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
+    if(!p){toast('لم يتم العثور على الفاتورة'); return;}
+    editingPurchaseId=id; originalPurchase={...p}; originalPurchaseItems=rows.map(x=>({...x}));
+    document.querySelector('[data-tab="purchases"]').click();
+    q('purchaseSupplier').value=p.supplier_id||''; q('purchaseLocation').value=p.location_id||''; q('purchaseDate').value=p.purchase_date||'';
+    q('purchaseInvoiceNo').value=p.invoice_no||''; q('purchaseNotes').value=p.notes||''; q('purchaseDiscount').value=Number(p.discount||0);
+    q('purchaseItemsBody').innerHTML='';
+    rows.forEach(it=>addPurchaseRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty, unit_cost:it.unit_cost}));
+    updatePurchaseTotal();
+    q('purchaseSubmitBtn').textContent='حفظ التعديل وتحديث المخزون';
+    q('purchaseCancelEditBtn').classList.remove('hidden');
+    toast('تم فتح فاتورة الشراء للتعديل');
+  }catch(err){console.error(err);toast('خطأ في فتح الفاتورة: '+err.message)} finally{showLoading(false)}
+}
+async function reversePurchaseEffects(){
+  if(!editingPurchaseId || !originalPurchase) return;
+  for(const it of originalPurchaseItems){
+    await updateStock(originalPurchase.location_id,{product_code:it.product_code,product_name:it.product_name,qty:-Math.abs(Number(it.qty||0))},editingPurchaseId);
+  }
+  await api('pos_supplier_ledger',{method:'DELETE',qs:`?reference_table=eq.pos_purchases&reference_id=eq.${editingPurchaseId}`});
+}
+
 q('purchaseForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const items=getPurchaseItems();
@@ -529,17 +564,56 @@ q('purchaseForm').addEventListener('submit', async e=>{
     updatePurchaseTotal();
     const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=Number(q('purchaseDiscount').value||0); const total=Math.max(0, subtotal-discount);
     const body={supplier_id:q('purchaseSupplier').value,location_id:q('purchaseLocation').value,invoice_no:q('purchaseInvoiceNo').value.trim(),purchase_date:q('purchaseDate').value,subtotal,discount,total,paid_amount:0,status:'posted',notes:q('purchaseNotes').value.trim()};
-    const purchase=await api('pos_purchases',{method:'POST',body}); const purchaseId=purchase[0].id;
+    let purchaseId=editingPurchaseId;
+    if(editingPurchaseId){
+      await reversePurchaseEffects();
+      await api('pos_purchases',{method:'PATCH',qs:`?id=eq.${editingPurchaseId}`,body:{...body,updated_at:new Date().toISOString()}});
+      await api('pos_purchase_items',{method:'DELETE',qs:`?purchase_id=eq.${editingPurchaseId}`});
+    }else{
+      const purchase=await api('pos_purchases',{method:'POST',body}); purchaseId=purchase[0].id;
+    }
     await api('pos_purchase_items',{method:'POST',body:items.map(it=>({...it,purchase_id:purchaseId}))});
     for(const it of items){ await updateStock(body.location_id,it,purchaseId); }
     if(total>0){
       await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',description:body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء',debit:0,credit:total,reference_table:'pos_purchases',reference_id:purchaseId}});
     }
-    e.target.reset(); q('purchaseItemsBody').innerHTML=''; addPurchaseRow(); setToday(); toast('تم حفظ فاتورة الشراء وزيادة المخزون'); await loadAll();
+    const msg=editingPurchaseId?'تم تعديل فاتورة الشراء وتحديث المخزون':'تم حفظ فاتورة الشراء وزيادة المخزون';
+    resetPurchaseForm(); toast(msg); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ فاتورة الشراء: '+err.message)} finally{showLoading(false)}
 });
 
 
+function resetTransferForm(){
+  editingTransferId=null; originalTransfer=null; originalTransferItems=[];
+  q('transferForm').reset(); q('transferItemsBody').innerHTML=''; addTransferRow(); setToday();
+  q('transferSubmitBtn').textContent='حفظ التحويل وتحديث المخزون';
+  q('transferCancelEditBtn').classList.add('hidden');
+}
+async function openTransferForEdit(id){
+  try{
+    showLoading(true);
+    const rows=await api('pos_stock_transfer_items',{qs:`?select=*&transfer_id=eq.${id}&order=created_at.asc`});
+    const t=transfers.find(x=>x.id===id) || (await api('pos_stock_transfers',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
+    if(!t){toast('لم يتم العثور على التحويل'); return;}
+    editingTransferId=id; originalTransfer={...t}; originalTransferItems=rows.map(x=>({...x}));
+    document.querySelector('[data-tab="transfers"]').click();
+    q('transferFrom').value=t.from_location_id||''; q('transferTo').value=t.to_location_id||''; q('transferDate').value=t.transfer_date||''; q('transferNotes').value=t.notes||'';
+    q('transferItemsBody').innerHTML='';
+    rows.forEach(it=>addTransferRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty}));
+    refreshTransferAvailability();
+    q('transferSubmitBtn').textContent='حفظ التعديل وتحديث المخزون';
+    q('transferCancelEditBtn').classList.remove('hidden');
+    toast('تم فتح التحويل للتعديل');
+  }catch(err){console.error(err);toast('خطأ في فتح التحويل: '+err.message)} finally{showLoading(false)}
+}
+async function reverseTransferEffects(){
+  if(!editingTransferId || !originalTransfer) return;
+  for(const it of originalTransferItems){
+    // Reverse old transfer: add back to source, subtract from destination.
+    await adjustStock(originalTransfer.from_location_id,it,Math.abs(Number(it.qty||0)),'transfer_in',editingTransferId,'عكس تحويل سابق قبل التعديل');
+    await adjustStock(originalTransfer.to_location_id,it,-Math.abs(Number(it.qty||0)),'transfer_out',editingTransferId,'عكس تحويل سابق قبل التعديل');
+  }
+}
 
 q('transferForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -548,22 +622,40 @@ q('transferForm').addEventListener('submit', async e=>{
   if(from===to){toast('لا يمكن التحويل إلى نفس المكان'); return;}
   const items=getTransferItems();
   if(!items.length){toast('أضف صنف واحد على الأقل'); return;}
+  // In edit mode, available stock should include the old transfer quantities reversed first.
+  const virtualStock = new Map(stock.map(r=>[`${r.location_id}|${String(r.product_code).toLowerCase()}`, Number(r.qty||0)]));
+  if(editingTransferId && originalTransfer){
+    for(const it of originalTransferItems){
+      const c=String(it.product_code||'').toLowerCase();
+      virtualStock.set(`${originalTransfer.from_location_id}|${c}`,(virtualStock.get(`${originalTransfer.from_location_id}|${c}`)||0)+Number(it.qty||0));
+      virtualStock.set(`${originalTransfer.to_location_id}|${c}`,(virtualStock.get(`${originalTransfer.to_location_id}|${c}`)||0)-Number(it.qty||0));
+    }
+  }
   for(const it of items){
-    const available=getStockQty(from,it.product_code);
+    const available=virtualStock.get(`${from}|${String(it.product_code||'').toLowerCase()}`)||0;
     if(available < it.qty){toast(`الكمية غير كافية للمنتج ${it.product_code}. المتوفر ${money(available)}`); return;}
   }
   try{
     showLoading(true);
     const body={from_location_id:from,to_location_id:to,transfer_date:q('transferDate').value,status:'posted',notes:q('transferNotes').value.trim()};
-    const transfer=await api('pos_stock_transfers',{method:'POST',body}); const transferId=transfer[0].id;
+    let transferId=editingTransferId;
+    if(editingTransferId){
+      await reverseTransferEffects();
+      await api('pos_stock_transfers',{method:'PATCH',qs:`?id=eq.${editingTransferId}`,body:{...body,updated_at:new Date().toISOString()}});
+      await api('pos_stock_transfer_items',{method:'DELETE',qs:`?transfer_id=eq.${editingTransferId}`});
+    }else{
+      const transfer=await api('pos_stock_transfers',{method:'POST',body}); transferId=transfer[0].id;
+    }
     await api('pos_stock_transfer_items',{method:'POST',body:items.map(it=>({...it,transfer_id:transferId}))});
     for(const it of items){
       await adjustStock(from,it,-Math.abs(it.qty),'transfer_out',transferId,'تحويل مخزون صادر');
       await adjustStock(to,it,Math.abs(it.qty),'transfer_in',transferId,'تحويل مخزون وارد');
     }
-    e.target.reset(); q('transferItemsBody').innerHTML=''; addTransferRow(); setToday(); toast('تم حفظ التحويل وتحديث المخزون'); await loadAll();
+    const msg=editingTransferId?'تم تعديل التحويل وتحديث المخزون':'تم حفظ التحويل وتحديث المخزون';
+    resetTransferForm(); toast(msg); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ التحويل: '+err.message)} finally{showLoading(false)}
 });
+
 q('transferFrom').addEventListener('change', refreshTransferAvailability);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d}
