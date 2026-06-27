@@ -29,6 +29,8 @@
     .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:900;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
     .ltr{direction:ltr;unicode-bidi:embed}.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:10px 0}.hidden{display:none!important}
     .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:white;border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
+    .mini{font-size:12px;color:var(--muted)}.totalBox{background:#f8fbff;border:1px solid #d9e6ff;border-radius:16px;padding:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.totalBox b{font-size:24px;color:var(--blue)}
+    .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.stock-negative{color:var(--bad);font-weight:900}.stock-positive{color:var(--good);font-weight:900}
     @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}th,td{padding:9px}.table-scroll{overflow:auto}}
   </style>
 </head>
@@ -47,6 +49,8 @@
       <button data-tab="suppliers">الموردون</button>
       <button data-tab="ledger">كشف حساب المورد</button>
       <button data-tab="payments">دفعات الموردين</button>
+      <button data-tab="purchases">فواتير الشراء</button>
+      <button data-tab="stock">المخزون الحالي</button>
       <button data-tab="next">المرحلة القادمة</button>
     </nav>
 
@@ -60,7 +64,7 @@
         </div>
         <div class="panel">
           <h2>ملخص سريع</h2>
-          <p class="muted">هذه أول نسخة منفصلة للنظام الجديد. ابدأ بإضافة الموردين والأرصدة الافتتاحية ثم سجل الدفعات. المرحلة التالية ستكون فواتير الشراء وزيادة المخزون في الفروع والمخازن.</p>
+          <p class="muted">هذه النسخة تشمل الموردين، كشف حساب المورد، دفعات الموردين، فواتير الشراء، وزيادة المخزون تلقائيًا في الفروع والمخازن.</p>
         </div>
       </section>
 
@@ -112,15 +116,64 @@
         <div class="panel"><h2>آخر الدفعات</h2><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>المورد</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead><tbody id="paymentsBody"></tbody></table></div></div>
       </section>
 
+
+      <section id="purchases" class="section">
+        <div class="panel">
+          <h2>فاتورة شراء جديدة</h2>
+          <form id="purchaseForm">
+            <div class="form">
+              <div><label>المورد</label><select id="purchaseSupplier" required></select></div>
+              <div><label>مكان دخول البضاعة</label><select id="purchaseLocation" required></select></div>
+              <div><label>تاريخ الفاتورة</label><input id="purchaseDate" type="date" required></div>
+              <div><label>رقم فاتورة المورد</label><input id="purchaseInvoiceNo" placeholder="اختياري"></div>
+              <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="purchaseNotes" placeholder="اختياري"></textarea></div>
+            </div>
+
+            <div class="tools" style="margin-top:16px">
+              <h2 style="font-size:18px;margin:0">الأصناف</h2>
+              <button class="btn secondary" type="button" onclick="addPurchaseRow()">+ إضافة صنف</button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>كود المنتج</th><th>اسم المنتج</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th><th></th></tr></thead>
+                <tbody id="purchaseItemsBody"></tbody>
+              </table>
+            </div>
+            <div class="form" style="margin-top:12px">
+              <div><label>خصم</label><input id="purchaseDiscount" type="number" step="0.001" value="0" oninput="updatePurchaseTotal()"></div>
+              <div class="totalBox"><span>إجمالي الفاتورة</span><b id="purchaseTotal">0.00</b></div>
+              <div><button class="btn" type="submit">حفظ الفاتورة وزيادة المخزون</button></div>
+            </div>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="tools"><h2>آخر فواتير الشراء</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>المورد</th><th>المكان</th><th>رقم الفاتورة</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="stock" class="section">
+        <div class="panel">
+          <div class="tools">
+            <h2>المخزون الحالي</h2>
+            <div class="row">
+              <select id="stockLocationFilter" onchange="renderStock()" style="min-width:210px"></select>
+              <input id="stockSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderStock()" style="max-width:260px">
+              <button class="btn secondary" onclick="loadAll()">تحديث</button>
+            </div>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>كود المنتج</th><th>اسم المنتج</th><th>الكمية</th><th>آخر تحديث</th></tr></thead><tbody id="stockBody"></tbody></table></div>
+        </div>
+      </section>
+
       <section id="next" class="section">
         <div class="panel">
           <h2>المرحلة القادمة</h2>
           <ul>
-            <li>إضافة فواتير الشراء وربطها بالمورد.</li>
-            <li>اختيار مكان دخول البضاعة: فرع 11 يونيو، فرع السراج، مخزن جنزور.</li>
-            <li>زيادة المخزون تلقائيًا عند حفظ فاتورة الشراء.</li>
-            <li>تحويل مخزون من مخزن جنزور إلى الفروع.</li>
-            <li>شاشة البيع اليومية والفاتورة العربية.</li>
+            <li>الخطوة التالية: التحويلات بين مخزن جنزور والفروع.</li>
+            <li>بعدها: شاشة البيع اليومية والفاتورة العربية.</li>
+            <li>بعدها: العملاء وديون العملاء.</li>
+            <li>بعدها: تقارير المبيعات والمخزون والموردين.</li>
           </ul>
         </div>
       </section>
@@ -134,14 +187,14 @@
 const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0';
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[];
 
 function q(id){return document.getElementById(id)}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function showLoading(v){q('loading').style.display=v?'block':'none'; q('syncState').textContent=v?'جاري المزامنة...':'متصل مع Supabase'}
 function toast(msg){const t=q('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
-function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة'}[t]||t}
+function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة'}[t]||t}
 
 async function api(table, opts={}){
   const qs = opts.qs || '';
@@ -155,18 +208,20 @@ async function api(table, opts={}){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
-      api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'})
+      api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
+      api('pos_stock',{qs:'?select=*&order=updated_at.desc'}),
+      api('pos_purchases',{qs:'?select=*&order=purchase_date.desc,created_at.desc&limit=50'})
     ]);
     renderAll();
   }catch(e){ console.error(e); toast('خطأ: '+e.message+' - تأكد من تشغيل ملف SQL أولاً'); }
   finally{showLoading(false)}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderSuppliers();fillSupplierSelects();renderLedger();renderPayments()}
+function renderAll(){renderDashboard();renderLocations();renderSuppliers();fillSupplierSelects();renderLedger();renderPayments();renderPurchases();renderStock()}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -185,6 +240,10 @@ function fillSupplierSelects(){
   const options = '<option value="">اختر المورد</option>' + suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   q('ledgerSupplier').innerHTML = options;
   q('paymentSupplier').innerHTML = options;
+  q('purchaseSupplier').innerHTML = options;
+  const locOptions = '<option value="">اختر المكان</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+  q('purchaseLocation').innerHTML = locOptions;
+  q('stockLocationFilter').innerHTML = '<option value="">كل الفروع والمخازن</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
 }
 function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id; renderLedger()}
 function renderLedger(){
@@ -198,6 +257,50 @@ function renderLedger(){
 }
 function renderPayments(){
   q('paymentsBody').innerHTML = payments.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);return `<tr><td>${p.payment_date}</td><td>${s?.name||''}</td><td><b>${money(p.amount)}</b></td><td>${typeLabel(p.payment_method)}</td><td>${p.notes||''}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد دفعات بعد.</td></tr>';
+}
+
+function renderPurchases(){
+  q('purchasesBody').innerHTML = purchases.map(p=>{
+    const s=suppliers.find(x=>x.id===p.supplier_id); const l=locations.find(x=>x.id===p.location_id);
+    return `<tr><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td></tr>`;
+  }).join('') || '<tr><td colspan="6">لا توجد فواتير شراء بعد.</td></tr>';
+}
+function renderStock(){
+  const loc=q('stockLocationFilter')?.value||''; const term=(q('stockSearch')?.value||'').trim().toLowerCase();
+  const rows=stock.filter(r=>(!loc||r.location_id===loc) && (!term || (r.product_code||'').toLowerCase().includes(term) || (r.product_name||'').toLowerCase().includes(term)));
+  q('stockBody').innerHTML = rows.map(r=>{const l=locations.find(x=>x.id===r.location_id); const qty=Number(r.qty||0); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${r.product_code}</b></td><td>${r.product_name||''}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td class="mini">${(r.updated_at||'').replace('T',' ').slice(0,19)}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون حتى الآن. أدخل فاتورة شراء أولاً.</td></tr>';
+}
+function addPurchaseRow(item={}){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input class="pi-code ltr" value="${item.product_code||''}" placeholder="Code"></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="number" step="0.001" min="0" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
+  q('purchaseItemsBody').appendChild(tr); updatePurchaseTotal();
+}
+function getPurchaseItems(){
+  return [...q('purchaseItemsBody').querySelectorAll('tr')].map(tr=>{
+    const code=tr.querySelector('.pi-code').value.trim(); const name=tr.querySelector('.pi-name').value.trim();
+    const qty=Number(tr.querySelector('.pi-qty').value||0); const unit_cost=Number(tr.querySelector('.pi-cost').value||0);
+    return {product_code:code||name, product_name:name, qty, unit_cost, line_total:qty*unit_cost};
+  }).filter(x=>x.product_name && x.qty>0);
+}
+function updatePurchaseTotal(){
+  let subtotal=0;
+  [...q('purchaseItemsBody').querySelectorAll('tr')].forEach(tr=>{
+    const qty=Number(tr.querySelector('.pi-qty').value||0); const cost=Number(tr.querySelector('.pi-cost').value||0); const line=qty*cost; subtotal+=line;
+    tr.querySelector('.pi-line').innerHTML=`<b>${money(line)}</b>`;
+  });
+  const discount=Number(q('purchaseDiscount').value||0); q('purchaseTotal').textContent=money(Math.max(0, subtotal-discount));
+}
+async function updateStock(location_id, item, purchaseId){
+  const code=encodeURIComponent(item.product_code);
+  const loc=encodeURIComponent(location_id);
+  const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
+  if(found && found.length){
+    const newQty=Number(found[0].qty||0)+Number(item.qty||0);
+    await api('pos_stock',{method:'PATCH',qs:`?id=eq.${found[0].id}`,body:{qty:newQty,product_name:item.product_name,updated_at:new Date().toISOString()}});
+  }else{
+    await api('pos_stock',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,qty:item.qty}});
+  }
+  await api('pos_stock_movements',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,movement_type:'purchase',qty_change:item.qty,reference_table:'pos_purchases',reference_id:purchaseId,notes:'فاتورة شراء'}});
 }
 
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active')}));
@@ -227,9 +330,29 @@ q('paymentForm').addEventListener('submit', async e=>{
     e.target.reset(); setToday(); toast('تم حفظ الدفعة وتحديث كشف الحساب'); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ الدفعة: '+err.message)} finally{showLoading(false)}
 });
-function setToday(){q('paymentDate').value=new Date().toISOString().slice(0,10)}
-setToday(); loadAll();
+
+q('purchaseForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const items=getPurchaseItems();
+  if(!items.length){toast('أضف صنف واحد على الأقل'); return;}
+  try{
+    showLoading(true);
+    updatePurchaseTotal();
+    const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=Number(q('purchaseDiscount').value||0); const total=Math.max(0, subtotal-discount);
+    const body={supplier_id:q('purchaseSupplier').value,location_id:q('purchaseLocation').value,invoice_no:q('purchaseInvoiceNo').value.trim(),purchase_date:q('purchaseDate').value,subtotal,discount,total,paid_amount:0,status:'posted',notes:q('purchaseNotes').value.trim()};
+    const purchase=await api('pos_purchases',{method:'POST',body}); const purchaseId=purchase[0].id;
+    await api('pos_purchase_items',{method:'POST',body:items.map(it=>({...it,purchase_id:purchaseId}))});
+    for(const it of items){ await updateStock(body.location_id,it,purchaseId); }
+    if(total>0){
+      await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',description:body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء',debit:0,credit:total,reference_table:'pos_purchases',reference_id:purchaseId}});
+    }
+    e.target.reset(); q('purchaseItemsBody').innerHTML=''; addPurchaseRow(); setToday(); toast('تم حفظ فاتورة الشراء وزيادة المخزون'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ فاتورة الشراء: '+err.message)} finally{showLoading(false)}
+});
+
+function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d}
+setToday(); addPurchaseRow(); loadAll();
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a126302c1ed79e89',t:'MTc4MjU4MTUxNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
