@@ -52,6 +52,7 @@
       <button data-tab="payments">دفعات الموردين</button>
       <button data-tab="purchases">فواتير الشراء</button>
       <button data-tab="stock">المخزون الحالي</button>
+      <button data-tab="transfers">تحويلات المخزون</button>
       <button data-tab="next">المرحلة القادمة</button>
     </nav>
 
@@ -191,12 +192,42 @@
         </div>
       </section>
 
+
+      <section id="transfers" class="section">
+        <div class="panel">
+          <h2>تحويل مخزون بين الفروع والمخازن</h2>
+          <form id="transferForm">
+            <div class="form">
+              <div><label>من</label><select id="transferFrom" required></select></div>
+              <div><label>إلى</label><select id="transferTo" required></select></div>
+              <div><label>تاريخ التحويل</label><input id="transferDate" type="date" required></div>
+              <div><label>ملاحظات</label><input id="transferNotes" placeholder="اختياري"></div>
+            </div>
+            <div class="tools" style="margin-top:16px">
+              <h2 style="font-size:18px;margin:0">الأصناف المحولة</h2>
+              <button class="btn secondary" type="button" onclick="addTransferRow()">+ إضافة صنف</button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>المتوفر في المصدر</th><th></th></tr></thead>
+                <tbody id="transferItemsBody"></tbody>
+              </table>
+            </div>
+            <p class="mini">اختر المنتج من القائمة، ثم أدخل الكمية. النظام سيخصم من المكان الأول ويضيف للمكان الثاني.</p>
+            <button class="btn" type="submit">حفظ التحويل وتحديث المخزون</button>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="tools"><h2>آخر تحويلات المخزون</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>من</th><th>إلى</th><th>الحالة</th><th>ملاحظات</th></tr></thead><tbody id="transfersBody"></tbody></table></div>
+        </div>
+      </section>
+
       <section id="next" class="section">
         <div class="panel">
           <h2>المرحلة القادمة</h2>
           <ul>
-            <li>الخطوة التالية: التحويلات بين مخزن جنزور والفروع.</li>
-            <li>بعدها: شاشة البيع اليومية والفاتورة العربية.</li>
+            <li>الخطوة التالية: شاشة البيع اليومية والفاتورة العربية.</li>
             <li>بعدها: العملاء وديون العملاء.</li>
             <li>بعدها: تقارير المبيعات والمخزون والموردين.</li>
           </ul>
@@ -213,7 +244,7 @@
 const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0';
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[];
 
 function q(id){return document.getElementById(id)}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -249,14 +280,15 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, products] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, products, transfers] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
       api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
       apiAll('pos_stock','?select=*&order=updated_at.desc'),
       api('pos_purchases',{qs:'?select=*&order=purchase_date.desc,created_at.desc&limit=50'}),
-      apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []})
+      apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
+      api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'})
     ]);
     if(q('productCategoryFilter')) q('productCategoryFilter').dataset.ready='';
     renderAll();
@@ -264,7 +296,7 @@ async function loadAll(){
   finally{showLoading(false)}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();fillSupplierSelects();renderLedger();renderPayments();renderPurchases();renderStock()}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();fillSupplierSelects();renderLedger();renderPayments();renderPurchases();renderStock();renderTransfers()}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -338,6 +370,8 @@ function fillSupplierSelects(){
   q('purchaseSupplier').innerHTML = options;
   const locOptions = '<option value="">اختر المكان</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
   q('purchaseLocation').innerHTML = locOptions;
+  q('transferFrom').innerHTML = locOptions;
+  q('transferTo').innerHTML = locOptions;
   q('stockLocationFilter').innerHTML = '<option value="">كل الفروع والمخازن</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
 }
 function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id; renderLedger()}
@@ -365,6 +399,63 @@ function renderStock(){
   const rows=stock.filter(r=>(!loc||r.location_id===loc) && (!term || (r.product_code||'').toLowerCase().includes(term) || (r.product_name||'').toLowerCase().includes(term)));
   q('stockBody').innerHTML = rows.map(r=>{const l=locations.find(x=>x.id===r.location_id); const qty=Number(r.qty||0); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${r.product_code}</b></td><td>${r.product_name||''}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td class="mini">${(r.updated_at||'').replace('T',' ').slice(0,19)}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون حتى الآن. أدخل فاتورة شراء أولاً.</td></tr>';
 }
+
+function getStockQty(location_id, product_code){
+  const r=stock.find(x=>x.location_id===location_id && String(x.product_code||'').toLowerCase()===String(product_code||'').toLowerCase());
+  return Number(r?.qty||0);
+}
+async function adjustStock(location_id, item, qtyChange, movementType, referenceId, notes){
+  const code=encodeURIComponent(item.product_code);
+  const loc=encodeURIComponent(location_id);
+  const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
+  if(found && found.length){
+    const newQty=Number(found[0].qty||0)+Number(qtyChange||0);
+    await api('pos_stock',{method:'PATCH',qs:`?id=eq.${found[0].id}`,body:{qty:newQty,product_name:item.product_name,updated_at:new Date().toISOString()}});
+  }else{
+    await api('pos_stock',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,qty:qtyChange}});
+  }
+  await api('pos_stock_movements',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,movement_type:movementType,qty_change:qtyChange,reference_table:'pos_stock_transfers',reference_id:referenceId,notes}});
+}
+function renderTransfers(){
+  q('transfersBody').innerHTML = transfers.map(t=>{
+    const from=locations.find(x=>x.id===t.from_location_id); const to=locations.find(x=>x.id===t.to_location_id);
+    return `<tr><td>${t.transfer_date}</td><td>${from?.name||''}</td><td>${to?.name||''}</td><td><span class="badge green">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td></tr>`;
+  }).join('') || '<tr><td colspan="5">لا توجد تحويلات مخزون بعد.</td></tr>';
+}
+function addTransferRow(item={}){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"><div class="mini ti-product-note"></div></td><td><input class="ti-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
+  q('transferItemsBody').appendChild(tr); updateTransferAvailable(tr.querySelector('.ti-qty'));
+}
+function fillTransferRow(input){
+  const p=findProductByInput(input.value);
+  if(!p) return;
+  const tr=input.closest('tr');
+  tr.querySelector('.ti-code').value=p.code||'';
+  tr.querySelector('.ti-name').value=p.name||'';
+  const brandModel=[p.brand,p.model].filter(Boolean).join(' / ');
+  const note=tr.querySelector('.ti-product-note');
+  if(note) note.textContent = [brandModel, p.supplier_name, p.category].filter(Boolean).join(' - ');
+  updateTransferAvailable(input);
+}
+function updateTransferAvailable(el){
+  const tr=el.closest('tr'); const from=q('transferFrom').value;
+  let code=tr.querySelector('.ti-code').value.trim(); const picked=findProductByInput(code); if(picked) code=picked.code; if(code.includes('|')) code=code.split('|')[0].trim();
+  const available=from && code ? getStockQty(from, code) : 0;
+  tr.querySelector('.ti-available').innerHTML=`<b class="${available>0?'stock-positive':available<0?'stock-negative':''}">${money(available)}</b>`;
+}
+function refreshTransferAvailability(){[...q('transferItemsBody').querySelectorAll('.ti-qty')].forEach(updateTransferAvailable)}
+function getTransferItems(){
+  return [...q('transferItemsBody').querySelectorAll('tr')].map(tr=>{
+    let code=tr.querySelector('.ti-code').value.trim(); let name=tr.querySelector('.ti-name').value.trim();
+    const picked=findProductByInput(code);
+    if(picked){ code=picked.code||code; if(!name) name=picked.name||name; }
+    if(code.includes('|')) code=code.split('|')[0].trim();
+    const qty=Number(tr.querySelector('.ti-qty').value||0);
+    return {product_code:code||name, product_name:name, qty};
+  }).filter(x=>x.product_name && x.qty>0);
+}
+
 function addPurchaseRow(item={}){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="number" step="0.001" min="0" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
@@ -448,8 +539,35 @@ q('purchaseForm').addEventListener('submit', async e=>{
   }catch(err){console.error(err);toast('خطأ في حفظ فاتورة الشراء: '+err.message)} finally{showLoading(false)}
 });
 
-function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d}
-setToday(); addPurchaseRow(); loadAll();
+
+
+q('transferForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const from=q('transferFrom').value, to=q('transferTo').value;
+  if(!from || !to){toast('اختر مكان التحويل من وإلى'); return;}
+  if(from===to){toast('لا يمكن التحويل إلى نفس المكان'); return;}
+  const items=getTransferItems();
+  if(!items.length){toast('أضف صنف واحد على الأقل'); return;}
+  for(const it of items){
+    const available=getStockQty(from,it.product_code);
+    if(available < it.qty){toast(`الكمية غير كافية للمنتج ${it.product_code}. المتوفر ${money(available)}`); return;}
+  }
+  try{
+    showLoading(true);
+    const body={from_location_id:from,to_location_id:to,transfer_date:q('transferDate').value,status:'posted',notes:q('transferNotes').value.trim()};
+    const transfer=await api('pos_stock_transfers',{method:'POST',body}); const transferId=transfer[0].id;
+    await api('pos_stock_transfer_items',{method:'POST',body:items.map(it=>({...it,transfer_id:transferId}))});
+    for(const it of items){
+      await adjustStock(from,it,-Math.abs(it.qty),'transfer_out',transferId,'تحويل مخزون صادر');
+      await adjustStock(to,it,Math.abs(it.qty),'transfer_in',transferId,'تحويل مخزون وارد');
+    }
+    e.target.reset(); q('transferItemsBody').innerHTML=''; addTransferRow(); setToday(); toast('تم حفظ التحويل وتحديث المخزون'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ التحويل: '+err.message)} finally{showLoading(false)}
+});
+q('transferFrom').addEventListener('change', refreshTransferAvailability);
+
+function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d}
+setToday(); addPurchaseRow(); addTransferRow(); loadAll();
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
