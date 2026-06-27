@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>نظام البيع - مجموعة بن عمر</title>
+  <style>
+    :root{
+      --blue:#082b9e;--blue2:#0f4cbd;--bg:#f4f7fb;--card:#fff;--text:#0f172a;--muted:#475569;
+      --border:#dbe3ef;--good:#087f5b;--bad:#b42318;--warn:#b7791f;--shadow:0 14px 40px rgba(15,23,42,.08);
+      --radius:18px;
+    }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Tahoma,Arial,sans-serif;color:var(--text)}
+    header{background:linear-gradient(135deg,var(--blue),var(--blue2));color:white;padding:18px 22px;position:sticky;top:0;z-index:20;box-shadow:0 10px 28px rgba(8,43,158,.22)}
+    .top{display:flex;align-items:center;justify-content:space-between;gap:14px;max-width:1320px;margin:auto}
+    .brand{display:flex;flex-direction:column;gap:4px}.brand h1{font-size:24px;margin:0;font-weight:900}.brand p{margin:0;opacity:.85;font-size:13px}
+    .pill{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:9px 13px;font-size:13px}
+    .wrap{max-width:1320px;margin:22px auto;padding:0 16px;display:grid;grid-template-columns:250px 1fr;gap:18px}
+    nav{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow);height:max-content;position:sticky;top:90px}
+    nav button{width:100%;border:0;background:transparent;color:var(--text);font-weight:800;text-align:right;padding:13px 14px;border-radius:14px;cursor:pointer;margin:3px 0;font-size:15px}
+    nav button.active,nav button:hover{background:linear-gradient(135deg,#eaf1ff,#f8fbff);color:var(--blue)}
+    main{min-width:0}.section{display:none}.section.active{display:block}.grid{display:grid;gap:14px}.cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}.card h3{margin:0 0 8px;font-size:15px;color:var(--muted)}.num{font-size:28px;font-weight:900;color:var(--blue)}
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:16px}.panel h2{margin:0 0 14px;font-size:20px}
+    label{display:block;font-size:13px;color:var(--muted);font-weight:800;margin-bottom:6px}.form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}
+    input,select,textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:11px 12px;font:inherit;background:white;color:var(--text)}textarea{min-height:72px;resize:vertical}
+    .btn{border:0;border-radius:13px;padding:12px 15px;font-weight:900;cursor:pointer;background:linear-gradient(135deg,var(--blue),#1d6bff);color:white}.btn.secondary{background:#edf2ff;color:var(--blue);border:1px solid #c8d7ff}.btn.danger{background:#fff0f0;color:var(--bad);border:1px solid #ffd0d0}
+    table{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:14px;border:1px solid var(--border);font-size:14px}th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:#f8fafc;color:#334155;font-size:13px}tr:last-child td{border-bottom:0}
+    .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:900;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
+    .ltr{direction:ltr;unicode-bidi:embed}.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:10px 0}.hidden{display:none!important}
+    .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:white;border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
+    @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}th,td{padding:9px}.table-scroll{overflow:auto}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="top">
+      <div class="brand"><h1>نظام البيع والمخزون</h1><p>مجموعة بن عمر - مرحلة الموردين والفروع</p></div>
+      <div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <nav>
+      <button class="active" data-tab="dashboard">الرئيسية</button>
+      <button data-tab="locations">الفروع والمخازن</button>
+      <button data-tab="suppliers">الموردون</button>
+      <button data-tab="ledger">كشف حساب المورد</button>
+      <button data-tab="payments">دفعات الموردين</button>
+      <button data-tab="next">المرحلة القادمة</button>
+    </nav>
+
+    <main>
+      <section id="dashboard" class="section active">
+        <div class="grid cards">
+          <div class="card"><h3>الفروع</h3><div class="num" id="branchesCount">0</div></div>
+          <div class="card"><h3>المخازن</h3><div class="num" id="warehousesCount">0</div></div>
+          <div class="card"><h3>الموردون</h3><div class="num" id="suppliersCount">0</div></div>
+          <div class="card"><h3>إجمالي أرصدة الموردين</h3><div class="num" id="suppliersBalance">0</div></div>
+        </div>
+        <div class="panel">
+          <h2>ملخص سريع</h2>
+          <p class="muted">هذه أول نسخة منفصلة للنظام الجديد. ابدأ بإضافة الموردين والأرصدة الافتتاحية ثم سجل الدفعات. المرحلة التالية ستكون فواتير الشراء وزيادة المخزون في الفروع والمخازن.</p>
+        </div>
+      </section>
+
+      <section id="locations" class="section">
+        <div class="panel">
+          <div class="tools"><h2>الفروع والمخازن</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="table-scroll"><table><thead><tr><th>الاسم</th><th>النوع</th><th>البيع</th><th>الحالة</th><th>ملاحظات</th></tr></thead><tbody id="locationsBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="suppliers" class="section">
+        <div class="panel">
+          <h2>إضافة مورد</h2>
+          <form class="form" id="supplierForm">
+            <div><label>اسم المورد</label><input id="supplierName" required placeholder="مثال: شركة ..."></div>
+            <div><label>الهاتف</label><input id="supplierPhone" class="ltr" placeholder="+218..."></div>
+            <div><label>الرصيد الافتتاحي</label><input id="supplierOpening" type="number" step="0.001" value="0"></div>
+            <div><label>نوع الرصيد</label><select id="openingType"><option value="credit">علينا للمورد</option><option value="debit">لنا عند المورد</option></select></div>
+            <div style="grid-column:1/-1"><label>العنوان / ملاحظات</label><textarea id="supplierNotes" placeholder="اختياري"></textarea></div>
+            <button class="btn" type="submit">حفظ المورد</button>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="tools"><h2>قائمة الموردين</h2><input id="supplierSearch" placeholder="بحث عن مورد..." style="max-width:300px" oninput="renderSuppliers()"></div>
+          <div class="table-scroll"><table><thead><tr><th>المورد</th><th>الهاتف</th><th>الرصيد</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="suppliersBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="ledger" class="section">
+        <div class="panel">
+          <div class="tools"><h2>كشف حساب المورد</h2><select id="ledgerSupplier" style="max-width:340px" onchange="renderLedger()"></select></div>
+          <div class="card" style="box-shadow:none;margin-bottom:12px"><h3>الرصيد الحالي</h3><div class="num" id="ledgerBalance">0</div><div id="ledgerStatus" class="muted"></div></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد بعد الحركة</th></tr></thead><tbody id="ledgerBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="payments" class="section">
+        <div class="panel">
+          <h2>تسجيل دفعة للمورد</h2>
+          <form class="form" id="paymentForm">
+            <div><label>المورد</label><select id="paymentSupplier" required></select></div>
+            <div><label>التاريخ</label><input id="paymentDate" type="date" required></div>
+            <div><label>المبلغ</label><input id="paymentAmount" type="number" step="0.001" min="0.001" required></div>
+            <div><label>طريقة الدفع</label><select id="paymentMethod"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
+            <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="paymentNotes" placeholder="اختياري"></textarea></div>
+            <button class="btn" type="submit">حفظ الدفعة</button>
+          </form>
+        </div>
+        <div class="panel"><h2>آخر الدفعات</h2><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>المورد</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead><tbody id="paymentsBody"></tbody></table></div></div>
+      </section>
+
+      <section id="next" class="section">
+        <div class="panel">
+          <h2>المرحلة القادمة</h2>
+          <ul>
+            <li>إضافة فواتير الشراء وربطها بالمورد.</li>
+            <li>اختيار مكان دخول البضاعة: فرع 11 يونيو، فرع السراج، مخزن جنزور.</li>
+            <li>زيادة المخزون تلقائيًا عند حفظ فاتورة الشراء.</li>
+            <li>تحويل مخزون من مخزن جنزور إلى الفروع.</li>
+            <li>شاشة البيع اليومية والفاتورة العربية.</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="loading" id="loading">جاري التحميل...</div>
+  <div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NzQ0MCwiZXhwIjoyMDk3MzUzNDQwfQ.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0';
+const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
+let locations=[], suppliers=[], ledger=[], payments=[];
+
+function q(id){return document.getElementById(id)}
+function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function showLoading(v){q('loading').style.display=v?'block':'none'; q('syncState').textContent=v?'جاري المزامنة...':'متصل مع Supabase'}
+function toast(msg){const t=q('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
+function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
+function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة'}[t]||t}
+
+async function api(table, opts={}){
+  const qs = opts.qs || '';
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method: opts.method||'GET', headers:H, body: opts.body?JSON.stringify(opts.body):undefined });
+  const text = await res.text();
+  let data = text ? JSON.parse(text) : null;
+  if(!res.ok) throw new Error(data?.message || text || 'Supabase error');
+  return data;
+}
+
+async function loadAll(){
+  try{
+    showLoading(true);
+    [locations, suppliers, ledger, payments] = await Promise.all([
+      api('pos_locations',{qs:'?select=*&order=name.asc'}),
+      api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
+      api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
+      api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'})
+    ]);
+    renderAll();
+  }catch(e){ console.error(e); toast('خطأ: '+e.message+' - تأكد من تشغيل ملف SQL أولاً'); }
+  finally{showLoading(false)}
+}
+
+function renderAll(){renderDashboard();renderLocations();renderSuppliers();fillSupplierSelects();renderLedger();renderPayments()}
+function renderDashboard(){
+  q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
+  q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
+  q('suppliersCount').textContent=suppliers.length;
+  q('suppliersBalance').textContent=money(suppliers.reduce((a,s)=>a+Number(s.balance||0),0));
+}
+function renderLocations(){
+  q('locationsBody').innerHTML = locations.map(l=>`<tr><td><b>${l.name}</b></td><td>${typeLabel(l.location_type)}</td><td>${l.is_sales_location?'<span class="badge green">نعم</span>':'<span class="badge yellow">لا</span>'}</td><td>${l.active?'<span class="badge green">نشط</span>':'<span class="badge gray">غير نشط</span>'}</td><td>${l.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد بيانات. شغل ملف SQL.</td></tr>';
+}
+function renderSuppliers(){
+  const term=(q('supplierSearch')?.value||'').trim();
+  const rows=suppliers.filter(s=>!term || (s.name||'').includes(term) || (s.phone||'').includes(term));
+  q('suppliersBody').innerHTML = rows.map(s=>`<tr><td><b>${s.name}</b><div class="muted">${s.notes||''}</div></td><td class="ltr">${s.phone||''}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td><td><button class="btn secondary" onclick="openLedger('${s.id}')">كشف الحساب</button></td></tr>`).join('') || '<tr><td colspan="5">لا يوجد موردون بعد.</td></tr>';
+}
+function fillSupplierSelects(){
+  const options = '<option value="">اختر المورد</option>' + suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  q('ledgerSupplier').innerHTML = options;
+  q('paymentSupplier').innerHTML = options;
+}
+function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id; renderLedger()}
+function renderLedger(){
+  const sid=q('ledgerSupplier').value;
+  const rows = ledger.filter(l=>l.supplier_id===sid).sort((a,b)=> new Date(a.entry_date+'T00:00:00')-new Date(b.entry_date+'T00:00:00') || new Date(a.created_at)-new Date(b.created_at));
+  let running=0;
+  const rendered = rows.map(l=>{running += Number(l.credit||0)-Number(l.debit||0); return `<tr><td>${l.entry_date}</td><td>${typeLabel(l.entry_type)}</td><td>${l.description||''}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
+  const bal = rows.reduce((a,l)=>a+Number(l.credit||0)-Number(l.debit||0),0);
+  q('ledgerBalance').textContent=money(bal); q('ledgerStatus').innerHTML=badgeStatus(bal);
+  q('ledgerBody').innerHTML = sid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا المورد.</td></tr>') : '<tr><td colspan="6">اختر المورد أولاً.</td></tr>';
+}
+function renderPayments(){
+  q('paymentsBody').innerHTML = payments.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);return `<tr><td>${p.payment_date}</td><td>${s?.name||''}</td><td><b>${money(p.amount)}</b></td><td>${typeLabel(p.payment_method)}</td><td>${p.notes||''}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد دفعات بعد.</td></tr>';
+}
+
+document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active')}));
+
+q('supplierForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  try{
+    showLoading(true);
+    const opening=Math.abs(Number(q('supplierOpening').value||0));
+    const supplier = await api('pos_suppliers',{method:'POST',body:{name:q('supplierName').value.trim(),phone:q('supplierPhone').value.trim(),notes:q('supplierNotes').value.trim(),opening_balance:opening}});
+    const s=supplier[0];
+    if(opening>0){
+      const isCredit=q('openingType').value==='credit';
+      await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:s.id,entry_type:'opening',description:'رصيد افتتاحي',credit:isCredit?opening:0,debit:isCredit?0:opening}});
+    }
+    e.target.reset(); q('supplierOpening').value=0; toast('تم حفظ المورد'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ المورد: '+err.message)} finally{showLoading(false)}
+});
+
+q('paymentForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  try{
+    showLoading(true);
+    const body={supplier_id:q('paymentSupplier').value,payment_date:q('paymentDate').value,amount:Number(q('paymentAmount').value),payment_method:q('paymentMethod').value,notes:q('paymentNotes').value.trim()};
+    const pay=await api('pos_supplier_payments',{method:'POST',body});
+    await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.payment_date,entry_type:'payment',description:body.notes||'دفعة للمورد',debit:body.amount,credit:0,reference_table:'pos_supplier_payments',reference_id:pay[0].id}});
+    e.target.reset(); setToday(); toast('تم حفظ الدفعة وتحديث كشف الحساب'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ الدفعة: '+err.message)} finally{showLoading(false)}
+});
+function setToday(){q('paymentDate').value=new Date().toISOString().slice(0,10)}
+setToday(); loadAll();
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
