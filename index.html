@@ -61,7 +61,7 @@
     .btn.secondary{background:var(--accent-soft);color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 22%,var(--border))}.btn.danger{background:#fff0f0;color:var(--bad);border:1px solid #ffd0d0}
     html[data-theme="dark"] .btn.danger{background:rgba(180,35,24,.14);border-color:rgba(180,35,24,.35)}
     table{width:100%;border-collapse:collapse;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:var(--radius);border:1px solid var(--border);font-size:14px;background:var(--card)}
-    th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:var(--table-head);color:var(--muted);font-size:13px;font-weight:700}td{color:var(--text)}tbody tr:hover{background:var(--hover)}tr:last-child td{border-bottom:0} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}
+    th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:var(--table-head);color:var(--muted);font-size:13px;font-weight:700}td{color:var(--text)}tbody tr:hover{background:var(--hover)} tbody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 35%,transparent);outline-offset:-2px}.picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end;margin-bottom:12px}tr:last-child td{border-bottom:0} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}
     td b,.num,.ltr,[class$="-line"],td:nth-child(n+4){font-variant-numeric:tabular-nums}.ltr,td .ltr,td:first-child b{direction:ltr;unicode-bidi:embed;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
     td[colspan]{text-align:center!important;color:var(--muted);padding:28px 12px!important;font-weight:600}td[colspan]::before{content:"\ea82";font-family:"tabler-icons";display:block;font-size:26px;margin-bottom:8px;color:var(--muted);opacity:.7}
     .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:700;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
@@ -70,7 +70,7 @@
     .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:var(--card);color:var(--text);border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
     .mini{font-size:12px;color:var(--muted)}.totalBox{background:var(--accent-soft);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.totalBox b{font-size:23px;color:var(--blue);font-variant-numeric:tabular-nums}
     .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.modal{position:fixed;inset:0;background:rgba(15,23,42,.54);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.modal-card{background:var(--card);color:var(--text);border-radius:calc(var(--radius) + 6px);box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(1100px,96vw);max-height:88vh;overflow:auto;padding:18px;border:1px solid var(--border)}.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.stock-negative{color:var(--bad);font-weight:700}.stock-positive{color:var(--good);font-weight:700}
-    @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}.table-scroll{overflow:auto}}
+    @media(max-width:900px){.picker-grid{grid-template-columns:1fr}.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}.table-scroll{overflow:auto}}
   </style>
 </head>
 <body>
@@ -153,11 +153,17 @@
               <select id="productSupplierFilter" onchange="renderProducts()" style="min-width:180px"></select>
               <button class="btn secondary" onclick="loadAll()">تحديث</button>
             </div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn secondary" type="button" onclick="viewSelectedProduct()">مشاهدة المنتج</button>
+              <button class="btn secondary" type="button" onclick="editSelectedProduct()">تعديل المنتج المحدد</button>
+              <button class="btn secondary" type="button" onclick="openSelectedProductMovements()">حركات المنتج المحدد</button>
+              <span class="mini" id="selectedProductInfo">اختر منتجًا من الجدول أولاً</span>
+            </div>
           </div>
           <p class="muted">هذه البيانات مستوردة من ملفك: الكود، الصنف، الماركة، الموديل، المورد، التصنيف، سعر الشراء، سعر البيع، والمخزون حسب المكان.</p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th><th>إجراء</th></tr></thead>
+              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th></tr></thead>
               <tbody id="productsBody"></tbody>
             </table>
           </div>
@@ -225,7 +231,7 @@
             </div>
             <div class="tools" style="margin-top:16px">
               <h2 style="font-size:18px;margin:0">الأصناف</h2>
-              <button class="btn secondary" type="button" onclick="addSaleRow()">+ إضافة صنف</button>
+              <button class="btn secondary" type="button" onclick="addSaleRow()">+ إضافة صنف يدوي</button><button class="btn secondary" type="button" onclick="openSaleProductPicker()">قائمة المنتجات F3</button>
             </div>
             <div class="table-scroll">
               <table>
@@ -469,6 +475,35 @@
   <datalist id="brandDatalist"></datalist>
   <datalist id="modelDatalist"></datalist>
   <datalist id="colorDatalist"></datalist>
+
+  <div class="modal" id="productViewModal">
+    <div class="modal-card" style="max-width:760px">
+      <div class="modal-head">
+        <div><h2 id="productViewTitle" style="margin:0">مشاهدة المنتج</h2><div class="mini" id="productViewSub"></div></div>
+        <button class="btn secondary" onclick="closeProductViewModal()">إغلاق</button>
+      </div>
+      <div id="productViewBody"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="saleProductPickerModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><h2 style="margin:0">قائمة المنتجات للبيع</h2><div class="mini">اختصار الفتح: F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة</div></div>
+        <button class="btn secondary" onclick="closeSaleProductPicker()">إغلاق</button>
+      </div>
+      <div class="picker-grid">
+        <div><label>بحث</label><input id="salePickerSearch" placeholder="كود، اسم، ماركة، لون، مورد..." oninput="renderSaleProductPicker()"></div>
+        <div><label>التصنيف</label><select id="salePickerCategory" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>الماركة</label><select id="salePickerBrand" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>اللون</label><select id="salePickerColor" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>المورد</label><select id="salePickerSupplier" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>الكمية</label><input id="salePickerQty" type="number" step="0.001" min="0.001" value="1"></div>
+      </div>
+      <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>المتوفر في الفرع</th><th>سعر البيع</th><th>إجراء</th></tr></thead><tbody id="salePickerBody"></tbody></table></div>
+      <div class="mini" id="salePickerInfo" style="margin-top:10px"></div>
+    </div>
+  </div>
   <div class="modal" id="movementsModal">
     <div class="modal-card">
       <div class="modal-head">
@@ -494,6 +529,7 @@ let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), currentRole=nul
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
+let selectedProductCode=null;
 
 function q(id){return document.getElementById(id)}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -682,10 +718,82 @@ function renderProducts(){
     return (!cat || p.category===cat) && (!brand || p.brand===brand) && (!color || p.color===color) && (!supplier || p.supplier_name===supplier) && (!term || hay.includes(term));
   });
   const shown=rows.slice(0,300);
-  q('productsBody').innerHTML = shown.map(p=>`<tr><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.color||''}</td><td>${p.supplier_name||''}</td><td>${p.category||''}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td><td><div class="row"><button class="btn secondary" onclick="editProduct('${String(p.code||'').replace(/'/g,"\'")}')">تعديل</button><button class="btn secondary" onclick="openProductMovements('${String(p.code||'').replace(/'/g,"\'")}')">الحركات</button></div></td></tr>`).join('') || '<tr><td colspan="13">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
+  q('productsBody').innerHTML = shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\'"); return `<tr class="${selectedProductCode===p.code?'selected-row':''}" onclick="selectProductRow('${safe}')"><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.color||''}</td><td>${p.supplier_name||''}</td><td>${p.category||''}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td></tr>`}).join('') || '<tr><td colspan="12">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
+  const sp=selectedProductCode?products.find(p=>p.code===selectedProductCode):null;
+  if(q('selectedProductInfo')) q('selectedProductInfo').textContent=sp?`المحدد: ${sp.code} - ${sp.name}`:'اختر منتجًا من الجدول أولاً';
   q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج` + (rows.length>300 ? ' - اكتب في البحث لتضييق النتائج' : '');
 }
 
+
+
+function selectProductRow(code){selectedProductCode=code; renderProducts()}
+function getSelectedProduct(){
+  const p=products.find(x=>String(x.code)===String(selectedProductCode));
+  if(!p){toast('اختر منتجًا من الجدول أولاً'); return null;}
+  return p;
+}
+function editSelectedProduct(){const p=getSelectedProduct(); if(p) editProduct(p.code)}
+function openSelectedProductMovements(){const p=getSelectedProduct(); if(p) openProductMovements(p.code)}
+function viewSelectedProduct(){
+  const p=getSelectedProduct(); if(!p) return;
+  q('productViewTitle').textContent=p.name||'مشاهدة المنتج';
+  q('productViewSub').textContent=p.code||'';
+  q('productViewBody').innerHTML=`<div class="grid cards" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+    <div class="card"><h3>الكود</h3><div class="ltr"><b>${p.code||''}</b></div></div>
+    <div class="card"><h3>التصنيف</h3><div>${p.category||''}</div></div>
+    <div class="card"><h3>الماركة</h3><div>${p.brand||''}</div></div>
+    <div class="card"><h3>الموديل</h3><div class="ltr">${p.model||''}</div></div>
+    <div class="card"><h3>اللون</h3><div>${p.color||''}</div></div>
+    <div class="card"><h3>المورد</h3><div>${p.supplier_name||''}</div></div>
+    <div class="card"><h3>سعر الشراء</h3><div class="num">${money(p.purchase_price)}</div></div>
+    <div class="card"><h3>سعر البيع</h3><div class="num">${money(p.retail_price)}</div></div>
+    <div class="card"><h3>فرع 11 يونيو</h3><div class="num">${money(p.stock_11_june)}</div></div>
+    <div class="card"><h3>فرع السراج</h3><div class="num">${money(p.stock_sarraj)}</div></div>
+    <div class="card"><h3>مخزن جنزور</h3><div class="num">${money(p.stock_janzour)}</div></div>
+    <div class="card"><h3>الإجمالي</h3><div class="num">${money(p.total_stock)}</div></div>
+  </div>`;
+  q('productViewModal').classList.add('show');
+}
+function closeProductViewModal(){q('productViewModal').classList.remove('show')}
+function fillPickerSelect(id,key,label){
+  const el=q(id); if(!el) return;
+  const old=el.value;
+  const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort();
+  el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');
+  if(vals.includes(old)) el.value=old;
+}
+function openSaleProductPicker(){
+  if(!q('saleLocation').value){toast('اختر فرع البيع أولاً'); return;}
+  fillPickerSelect('salePickerCategory','category','كل التصنيفات');
+  fillPickerSelect('salePickerBrand','brand','كل الماركات');
+  fillPickerSelect('salePickerColor','color','كل الألوان');
+  fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
+  q('saleProductPickerModal').classList.add('show');
+  renderSaleProductPicker();
+  setTimeout(()=>q('salePickerSearch')?.focus(),50);
+}
+function closeSaleProductPicker(){q('saleProductPickerModal').classList.remove('show')}
+function renderSaleProductPicker(){
+  const term=(q('salePickerSearch')?.value||'').trim().toLowerCase();
+  const cat=q('salePickerCategory')?.value||'', brand=q('salePickerBrand')?.value||'', color=q('salePickerColor')?.value||'', supplier=q('salePickerSupplier')?.value||'';
+  const loc=q('saleLocation')?.value||'';
+  const rows=products.filter(p=>{
+    const hay=[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].join(' ').toLowerCase();
+    return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&(!term||hay.includes(term));
+  });
+  const shown=rows.slice(0,250);
+  q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.color||''}</td><td>${p.supplier_name||''}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="8">لا توجد منتجات مطابقة للفلاتر.</td></tr>';
+  q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
+  setupTableSorting();
+}
+function addSaleProductFromPicker(code){
+  const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
+  const qty=Math.max(0.001,Number(q('salePickerQty').value||1));
+  addSaleRow({product_code:p.code,product_name:p.name,qty,unit_price:Number(p.retail_price||0)});
+  const last=q('saleItemsBody').lastElementChild;
+  if(last){const note=last.querySelector('.si-product-note'); if(note) note.textContent=[p.brand,p.model,p.color,p.category].filter(Boolean).join(' - '); updateSaleAvailable(last.querySelector('.si-qty'));}
+  toast('تمت إضافة المنتج للفاتورة');
+}
 
 function resetProductForm(){
   q('productForm').reset(); q('productPurchasePrice').value=0; q('productRetailPrice').value=0;
@@ -1005,6 +1113,7 @@ async function updateStock(location_id, item, purchaseId){
 }
 
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active')}));
+document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault();openSaleProductPicker();} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();}});
 
 
 
