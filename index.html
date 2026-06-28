@@ -25,7 +25,7 @@
     label{display:block;font-size:13px;color:var(--muted);font-weight:800;margin-bottom:6px}.form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}
     input,select,textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:11px 12px;font:inherit;background:white;color:var(--text)}textarea{min-height:72px;resize:vertical}
     .btn{border:0;border-radius:13px;padding:12px 15px;font-weight:900;cursor:pointer;background:linear-gradient(135deg,var(--blue),#1d6bff);color:white}.btn.secondary{background:#edf2ff;color:var(--blue);border:1px solid #c8d7ff}.btn.danger{background:#fff0f0;color:var(--bad);border:1px solid #ffd0d0}
-    table{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:14px;border:1px solid var(--border);font-size:14px}th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:#f8fafc;color:#334155;font-size:13px}tr:last-child td{border-bottom:0}
+    table{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:14px;border:1px solid var(--border);font-size:14px}th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:#f8fafc;color:#334155;font-size:13px} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}tr:last-child td{border-bottom:0}
     .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:900;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
     .ltr{direction:ltr;unicode-bidi:embed}.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:10px 0}.hidden{display:none!important}
     .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:white;border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
@@ -51,6 +51,7 @@
       <button data-tab="ledger">كشف حساب المورد</button>
       <button data-tab="payments">دفعات الموردين</button>
       <button data-tab="sales">البيع اليومي</button>
+      <button data-tab="salesList">فواتير البيع</button>
       <button data-tab="customers">العملاء والديون</button>
       <button data-tab="purchases">فواتير الشراء</button>
       <button data-tab="stock">المخزون الحالي</button>
@@ -93,8 +94,9 @@
             <div><label>اسم المنتج</label><input id="productName" required placeholder="اسم الصنف"></div>
             <div><label>التصنيف</label><input id="productCategory" list="categoryDatalist" placeholder="مثال: مقعد معلق"></div>
             <div><label>المورد</label><select id="productSupplier"></select></div>
-            <div><label>الماركة</label><input id="productBrand" placeholder="اختياري"></div>
-            <div><label>الموديل</label><input id="productModel" placeholder="اختياري"></div>
+            <div><label>الماركة</label><input id="productBrand" list="brandDatalist" placeholder="اختر أو أضف ماركة"></div>
+            <div><label>الموديل</label><input id="productModel" list="modelDatalist" placeholder="اختر أو أضف موديل"></div>
+            <div><label>اللون</label><input id="productColor" list="colorDatalist" placeholder="مثال: أبيض / أسود / ذهبي"></div>
             <div><label>سعر الشراء</label><input id="productPurchasePrice" type="number" step="0.001" value="0"></div>
             <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="number" step="0.001" value="0"></div>
             <div class="row"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
@@ -105,15 +107,18 @@
           <div class="tools">
             <h2>قاعدة المنتجات</h2>
             <div class="row">
-              <input id="productSearch" placeholder="بحث بالكود، الاسم، الماركة، المورد..." oninput="renderProducts()" style="max-width:360px">
-              <select id="productCategoryFilter" onchange="renderProducts()" style="min-width:190px"></select>
+              <input id="productSearch" placeholder="بحث بالكود، الاسم، الماركة، اللون، المورد..." oninput="renderProducts()" style="max-width:360px">
+              <select id="productCategoryFilter" onchange="renderProducts()" style="min-width:170px"></select>
+              <select id="productBrandFilter" onchange="renderProducts()" style="min-width:150px"></select>
+              <select id="productColorFilter" onchange="renderProducts()" style="min-width:140px"></select>
+              <select id="productSupplierFilter" onchange="renderProducts()" style="min-width:180px"></select>
               <button class="btn secondary" onclick="loadAll()">تحديث</button>
             </div>
           </div>
           <p class="muted">هذه البيانات مستوردة من ملفك: الكود، الصنف، الماركة، الموديل، المورد، التصنيف، سعر الشراء، سعر البيع، والمخزون حسب المكان.</p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th><th>إجراء</th></tr></thead>
+              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th><th>إجراء</th></tr></thead>
               <tbody id="productsBody"></tbody>
             </table>
           </div>
@@ -177,6 +182,7 @@
               <div><label>أو اسم عميل جديد</label><input id="saleNewCustomerName" placeholder="مطلوب إذا يوجد دين"></div>
               <div><label>هاتف العميل</label><input id="saleNewCustomerPhone" class="ltr" placeholder="اختياري"></div>
               <div><label>ملاحظات</label><input id="saleNotes" placeholder="اختياري"></div>
+              <div><label>الطباعة</label><select id="salePrintAfterSave"><option value="yes">اطبع بعد الحفظ</option><option value="no">حفظ بدون طباعة</option></select></div>
             </div>
             <div class="tools" style="margin-top:16px">
               <h2 style="font-size:18px;margin:0">الأصناف</h2>
@@ -194,12 +200,15 @@
               <div><label>المدفوع</label><input id="salePaidAmount" type="number" step="0.001" value="0" oninput="updateSaleTotal()"></div>
               <div class="totalBox"><span>إجمالي البيع</span><b id="saleTotal">0.00</b></div>
               <div class="totalBox"><span>المتبقي / دين</span><b id="saleBalance">0.00</b></div>
-              <div class="row"><button class="btn" id="saleSubmitBtn" type="submit">حفظ البيع وطباعة الفاتورة</button><button class="btn secondary hidden" id="saleCancelEditBtn" type="button" onclick="resetSaleForm()">إلغاء التعديل</button></div>
+              <div class="row"><button class="btn" id="saleSubmitBtn" type="submit">حفظ البيع</button><button class="btn secondary hidden" id="saleCancelEditBtn" type="button" onclick="resetSaleForm()">إلغاء التعديل</button></div>
             </div>
           </form>
         </div>
+      </section>
+
+      <section id="salesList" class="section">
         <div class="panel">
-          <div class="tools"><h2>آخر فواتير البيع</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="tools"><h2>فواتير البيع</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
           <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
         </div>
       </section>
@@ -418,6 +427,9 @@
   <div class="toast" id="toast"></div>
   <datalist id="productsDatalist"></datalist>
   <datalist id="categoryDatalist"></datalist>
+  <datalist id="brandDatalist"></datalist>
+  <datalist id="modelDatalist"></datalist>
+  <datalist id="colorDatalist"></datalist>
   <div class="modal" id="movementsModal">
     <div class="modal-card">
       <div class="modal-head">
@@ -494,13 +506,13 @@ async function loadAll(){
       apiAll('pos_customer_ledger','?select=*&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
       apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []})
     ]);
-    if(q('productCategoryFilter')) q('productCategoryFilter').dataset.ready='';
+    ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
     renderAll();
   }catch(e){ console.error(e); toast('خطأ: '+e.message+' - تأكد من تشغيل ملف SQL أولاً'); }
   finally{showLoading(false)}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderPurchases();renderStock();renderTransfers();renderReports();renderRoles();applyPermissions()}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderPurchases();renderStock();renderTransfers();renderReports();renderRoles();applyPermissions();setTimeout(setupTableSorting,0)}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -513,9 +525,9 @@ function renderDashboard(){
 
 const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
 const ROLE_TABS={
-  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','customers','purchases','stock','transfers','reports','users','next'],
-  seller_11:['dashboard','products','sales','stock'],
-  seller_sarraj:['dashboard','products','sales','stock'],
+  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','customers','purchases','stock','transfers','reports','users','next'],
+  seller_11:['dashboard','products','sales','salesList','stock'],
+  seller_sarraj:['dashboard','products','sales','salesList','stock'],
   warehouse:['dashboard','products','stock','transfers','purchases'],
   accountant:['dashboard','suppliers','ledger','payments','customers','reports'],
   viewer:['dashboard','products','stock','reports']
@@ -582,7 +594,7 @@ function renderProductDatalist(){
   if(!dl) return;
   // Limit text length to keep the page fast, but include all products for selection.
   dl.innerHTML = products.map(p=>{
-    const label = `${p.name||''} ${p.brand?'- '+p.brand:''} ${p.model?'- '+p.model:''}`.replace(/"/g,'&quot;');
+    const label = `${p.name||''} ${p.brand?'- '+p.brand:''} ${p.model?'- '+p.model:''} ${p.color?'- '+p.color:''} ${p.supplier_name?'- '+p.supplier_name:''}`.replace(/"/g,'&quot;');
     const value = `${p.code} | ${p.name||''}`.replace(/"/g,'&quot;');
     return `<option value="${value}" label="${label}"></option>`;
   }).join('');
@@ -591,6 +603,8 @@ function renderProductDatalist(){
     const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();
     cdl.innerHTML=cats.map(c=>`<option value="${String(c).replace(/"/g,'&quot;')}"></option>`).join('');
   }
+  const lists={brandDatalist:'brand',modelDatalist:'model',colorDatalist:'color'};
+  Object.entries(lists).forEach(([id,key])=>{const el=q(id); if(el){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=vals.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join('')}});
 }
 function findProductByInput(value){
   value=(value||'').trim();
@@ -614,20 +628,16 @@ function fillPurchaseRow(input){
 }
 
 function renderProducts(){
-  const catSel=q('productCategoryFilter');
-  if(catSel && !catSel.dataset.ready){
-    const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();
-    catSel.innerHTML='<option value="">كل التصنيفات</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
-    catSel.dataset.ready='1';
-  }
+  const filterDefs=[['productCategoryFilter','category','كل التصنيفات'],['productBrandFilter','brand','كل الماركات'],['productColorFilter','color','كل الألوان'],['productSupplierFilter','supplier_name','كل الموردين']];
+  filterDefs.forEach(([id,key,label])=>{const el=q(id); if(el && !el.dataset.ready){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${v}">${v}</option>`).join(''); el.dataset.ready='1';}});
   const term=(q('productSearch')?.value||'').trim().toLowerCase();
-  const cat=q('productCategoryFilter')?.value||'';
+  const cat=q('productCategoryFilter')?.value||'', brand=q('productBrandFilter')?.value||'', color=q('productColorFilter')?.value||'', supplier=q('productSupplierFilter')?.value||'';
   const rows=products.filter(p=>{
-    const hay=[p.code,p.name,p.brand,p.model,p.category,p.supplier_name].join(' ').toLowerCase();
-    return (!cat || p.category===cat) && (!term || hay.includes(term));
+    const hay=[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].join(' ').toLowerCase();
+    return (!cat || p.category===cat) && (!brand || p.brand===brand) && (!color || p.color===color) && (!supplier || p.supplier_name===supplier) && (!term || hay.includes(term));
   });
   const shown=rows.slice(0,300);
-  q('productsBody').innerHTML = shown.map(p=>`<tr><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.supplier_name||''}</td><td>${p.category||''}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td><td><div class="row"><button class="btn secondary" onclick="editProduct('${String(p.code||'').replace(/'/g,"\'")}')">تعديل</button><button class="btn secondary" onclick="openProductMovements('${String(p.code||'').replace(/'/g,"\'")}')">الحركات</button></div></td></tr>`).join('') || '<tr><td colspan="12">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
+  q('productsBody').innerHTML = shown.map(p=>`<tr><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.color||''}</td><td>${p.supplier_name||''}</td><td>${p.category||''}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td><td><div class="row"><button class="btn secondary" onclick="editProduct('${String(p.code||'').replace(/'/g,"\'")}')">تعديل</button><button class="btn secondary" onclick="openProductMovements('${String(p.code||'').replace(/'/g,"\'")}')">الحركات</button></div></td></tr>`).join('') || '<tr><td colspan="13">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
   q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج` + (rows.length>300 ? ' - اكتب في البحث لتضييق النتائج' : '');
 }
 
@@ -640,7 +650,7 @@ function editProduct(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   document.querySelector('[data-tab="products"]').click();
   q('productCode').value=p.code||''; q('productName').value=p.name||''; q('productCategory').value=p.category||'';
-  q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0);
+  q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productColor').value=p.color||''; q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0);
   const sup=suppliers.find(s=>s.name===p.supplier_name); q('productSupplier').value=sup?.id||'';
   q('productSubmitBtn').textContent='حفظ تعديل المنتج';
   q('productCode').focus();
@@ -729,7 +739,7 @@ function renderPurchases(){
 }
 function renderStock(){
   const loc=q('stockLocationFilter')?.value||''; const term=(q('stockSearch')?.value||'').trim().toLowerCase();
-  const rows=stock.filter(r=>(!loc||r.location_id===loc) && (!term || (r.product_code||'').toLowerCase().includes(term) || (r.product_name||'').toLowerCase().includes(term)));
+  const rows=stock.filter(r=>{const p=products.find(x=>String(x.code||'').toLowerCase()===String(r.product_code||'').toLowerCase()); const hay=[r.product_code,r.product_name,p?.brand,p?.model,p?.color,p?.supplier_name,p?.category].join(' ').toLowerCase(); return (!loc||r.location_id===loc) && (!term || hay.includes(term));});
   q('stockBody').innerHTML = rows.map(r=>{const l=locations.find(x=>x.id===r.location_id); const qty=Number(r.qty||0); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${r.product_code}</b></td><td>${r.product_name||''}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td class="mini">${(r.updated_at||'').replace('T',' ').slice(0,19)}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون حتى الآن. أدخل فاتورة شراء أولاً.</td></tr>';
 }
 
@@ -876,7 +886,7 @@ async function ensureSaleCustomer(balanceDue){
 function resetSaleForm(){
   editingSaleId=null; originalSale=null; originalSaleItems=[];
   q('saleForm').reset(); q('saleItemsBody').innerHTML=''; addSaleRow(); setToday();
-  q('saleSubmitBtn').textContent='حفظ البيع وطباعة الفاتورة'; q('saleCancelEditBtn').classList.add('hidden'); updateSaleTotal();
+  q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); updateSaleTotal();
 }
 async function openSaleForEdit(id){
   try{
@@ -1036,7 +1046,7 @@ q('saleForm').addEventListener('submit', async e=>{
       await api('pos_customer_ledger',{method:'POST',body:{customer_id,entry_date:body.sale_date,entry_type:'sale',description:body.invoice_no?`فاتورة بيع رقم ${body.invoice_no}`:'فاتورة بيع',debit:balance_due,credit:0,reference_table:'pos_sales',reference_id:saleId}});
     }
     const msg=editingSaleId?'تم تعديل فاتورة البيع وتحديث المخزون':'تم حفظ فاتورة البيع وتحديث المخزون';
-    resetSaleForm(); await loadAll(); toast(msg); setTimeout(()=>printSale(saleId),300);
+    const shouldPrint=q('salePrintAfterSave').value==='yes'; resetSaleForm(); await loadAll(); toast(msg); if(shouldPrint) setTimeout(()=>printSale(saleId),300);
   }catch(err){console.error(err);toast('خطأ في حفظ البيع: '+err.message+' - تأكد من تشغيل ملف sales SQL')}
   finally{showLoading(false)}
 });
@@ -1051,6 +1061,7 @@ q('productForm').addEventListener('submit', async e=>{
       name:q('productName').value.trim(),
       brand:q('productBrand').value.trim()||null,
       model:q('productModel').value.trim()||null,
+      color:q('productColor').value.trim()||null,
       category:q('productCategory').value.trim()||null,
       supplier_id:q('productSupplier').value||null,
       purchase_price:Number(q('productPurchasePrice').value||0),
@@ -1285,8 +1296,29 @@ function printReports(){
   w.document.close();
 }
 
+
+function setupTableSorting(){
+  document.querySelectorAll('table').forEach(table=>{
+    const ths=table.querySelectorAll('thead th');
+    ths.forEach((th,idx)=>{
+      if(th.dataset.sortReady) return;
+      th.dataset.sortReady='1'; th.classList.add('sortable');
+      th.title='اضغط للترتيب تصاعدي/تنازلي';
+      th.addEventListener('click',()=>{
+        const tbody=table.querySelector('tbody'); if(!tbody) return;
+        const rows=[...tbody.querySelectorAll('tr')].filter(r=>r.children.length>1);
+        const dir=th.dataset.dir==='asc'?'desc':'asc'; th.dataset.dir=dir;
+        const val=(r)=>{let t=(r.children[idx]?.innerText||'').trim().replace(/,/g,''); let n=parseFloat(t); return isNaN(n)?t:n;};
+        rows.sort((a,b)=>{const va=val(a), vb=val(b); let c=(typeof va==='number'&&typeof vb==='number')?va-vb:String(va).localeCompare(String(vb),'ar'); return dir==='asc'?c:-c;});
+        rows.forEach(r=>tbody.appendChild(r));
+      });
+    });
+  });
+}
+
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d; if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
