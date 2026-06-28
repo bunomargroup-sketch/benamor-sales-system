@@ -30,7 +30,7 @@
     .ltr{direction:ltr;unicode-bidi:embed}.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:10px 0}.hidden{display:none!important}
     .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:white;border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
     .mini{font-size:12px;color:var(--muted)}.totalBox{background:#f8fbff;border:1px solid #d9e6ff;border-radius:16px;padding:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.totalBox b{font-size:24px;color:var(--blue)}
-    .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.stock-negative{color:var(--bad);font-weight:900}.stock-positive{color:var(--good);font-weight:900}
+    .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.modal{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.modal-card{background:white;border-radius:20px;box-shadow:0 24px 70px rgba(15,23,42,.25);width:min(1100px,96vw);max-height:88vh;overflow:auto;padding:18px;border:1px solid var(--border)}.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.stock-negative{color:var(--bad);font-weight:900}.stock-positive{color:var(--good);font-weight:900}
     @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}th,td{padding:9px}.table-scroll{overflow:auto}}
   </style>
 </head>
@@ -81,6 +81,21 @@
 
       <section id="products" class="section">
         <div class="panel">
+          <h2>إضافة / تعديل منتج</h2>
+          <form class="form" id="productForm">
+            <div><label>كود المنتج</label><input id="productCode" class="ltr" required placeholder="مثال: WS10880"></div>
+            <div><label>اسم المنتج</label><input id="productName" required placeholder="اسم الصنف"></div>
+            <div><label>التصنيف</label><input id="productCategory" list="categoryDatalist" placeholder="مثال: مقعد معلق"></div>
+            <div><label>المورد</label><select id="productSupplier"></select></div>
+            <div><label>الماركة</label><input id="productBrand" placeholder="اختياري"></div>
+            <div><label>الموديل</label><input id="productModel" placeholder="اختياري"></div>
+            <div><label>سعر الشراء</label><input id="productPurchasePrice" type="number" step="0.001" value="0"></div>
+            <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="number" step="0.001" value="0"></div>
+            <div class="row"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
+          </form>
+          <p class="mini">يمكنك إضافة التصنيف عند إنشاء المنتج. إذا كتبت كود منتج موجود سيتم تعديل بياناته.</p>
+        </div>
+        <div class="panel">
           <div class="tools">
             <h2>قاعدة المنتجات</h2>
             <div class="row">
@@ -92,7 +107,7 @@
           <p class="muted">هذه البيانات مستوردة من ملفك: الكود، الصنف، الماركة، الموديل، المورد، التصنيف، سعر الشراء، سعر البيع، والمخزون حسب المكان.</p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th></tr></thead>
+              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th><th>إجراء</th></tr></thead>
               <tbody id="productsBody"></tbody>
             </table>
           </div>
@@ -239,6 +254,16 @@
   <div class="loading" id="loading">جاري التحميل...</div>
   <div class="toast" id="toast"></div>
   <datalist id="productsDatalist"></datalist>
+  <datalist id="categoryDatalist"></datalist>
+  <div class="modal" id="movementsModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><h2 id="movementsTitle" style="margin:0">حركات الصنف</h2><div class="mini" id="movementsSub"></div></div>
+        <button class="btn secondary" onclick="closeMovementsModal()">إغلاق</button>
+      </div>
+      <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>المكان</th><th>الكمية</th><th>المرجع</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
+    </div>
+  </div>
 
 <script>
 const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
@@ -253,7 +278,7 @@ function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDig
 function showLoading(v){q('loading').style.display=v?'block':'none'; q('syncState').textContent=v?'جاري المزامنة...':'متصل مع Supabase'}
 function toast(msg){const t=q('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
-function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة'}[t]||t}
+function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع عميل'}[t]||t}
 
 async function api(table, opts={}){
   const qs = opts.qs || '';
@@ -320,6 +345,11 @@ function renderProductDatalist(){
     const value = `${p.code} | ${p.name||''}`.replace(/"/g,'&quot;');
     return `<option value="${value}" label="${label}"></option>`;
   }).join('');
+  const cdl=q('categoryDatalist');
+  if(cdl){
+    const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();
+    cdl.innerHTML=cats.map(c=>`<option value="${String(c).replace(/"/g,'&quot;')}"></option>`).join('');
+  }
 }
 function findProductByInput(value){
   value=(value||'').trim();
@@ -356,9 +386,39 @@ function renderProducts(){
     return (!cat || p.category===cat) && (!term || hay.includes(term));
   });
   const shown=rows.slice(0,300);
-  q('productsBody').innerHTML = shown.map(p=>`<tr><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.supplier_name||''}</td><td>${p.category||''}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td></tr>`).join('') || '<tr><td colspan="11">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
+  q('productsBody').innerHTML = shown.map(p=>`<tr><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.supplier_name||''}</td><td>${p.category||''}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td><td><div class="row"><button class="btn secondary" onclick="editProduct('${String(p.code||'').replace(/'/g,"\'")}')">تعديل</button><button class="btn secondary" onclick="openProductMovements('${String(p.code||'').replace(/'/g,"\'")}')">الحركات</button></div></td></tr>`).join('') || '<tr><td colspan="12">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
   q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج` + (rows.length>300 ? ' - اكتب في البحث لتضييق النتائج' : '');
 }
+
+
+function resetProductForm(){
+  q('productForm').reset(); q('productPurchasePrice').value=0; q('productRetailPrice').value=0;
+  q('productSubmitBtn').textContent='حفظ المنتج'; q('productCode').readOnly=false;
+}
+function editProduct(code){
+  const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
+  document.querySelector('[data-tab="products"]').click();
+  q('productCode').value=p.code||''; q('productName').value=p.name||''; q('productCategory').value=p.category||'';
+  q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0);
+  const sup=suppliers.find(s=>s.name===p.supplier_name); q('productSupplier').value=sup?.id||'';
+  q('productSubmitBtn').textContent='حفظ تعديل المنتج';
+  q('productCode').focus();
+}
+async function openProductMovements(code){
+  try{
+    showLoading(true);
+    const p=products.find(x=>String(x.code)===String(code));
+    q('movementsTitle').textContent='حركات الصنف: '+code;
+    q('movementsSub').textContent=p ? (p.name||'') : '';
+    const rows=await api('pos_stock_movements',{qs:`?select=*&product_code=eq.${encodeURIComponent(code)}&order=movement_date.desc&limit=300`});
+    q('movementsBody').innerHTML = rows.map(m=>{
+      const l=locations.find(x=>x.id===m.location_id); const qty=Number(m.qty_change||0);
+      return `<tr><td>${(m.movement_date||m.created_at||'').replace('T',' ').slice(0,19)}</td><td>${typeLabel(m.movement_type)}</td><td>${l?.name||''}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}"><b>${money(qty)}</b></td><td>${m.reference_table||''}<div class="mini ltr">${m.reference_id||''}</div></td><td>${m.notes||''}</td></tr>`;
+    }).join('') || '<tr><td colspan="6">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
+    q('movementsModal').classList.add('show');
+  }catch(err){console.error(err);toast('خطأ في تحميل حركات الصنف: '+err.message)} finally{showLoading(false)}
+}
+function closeMovementsModal(){q('movementsModal').classList.remove('show')}
 
 function renderSuppliers(){
   const term=(q('supplierSearch')?.value||'').trim();
@@ -370,6 +430,7 @@ function fillSupplierSelects(){
   q('ledgerSupplier').innerHTML = options;
   q('paymentSupplier').innerHTML = options;
   q('purchaseSupplier').innerHTML = options;
+  q('productSupplier').innerHTML = '<option value="">بدون مورد</option>' + suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   const locOptions = '<option value="">اختر المكان</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
   q('purchaseLocation').innerHTML = locOptions;
   q('transferFrom').innerHTML = locOptions;
@@ -495,6 +556,38 @@ async function updateStock(location_id, item, purchaseId){
 }
 
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active')}));
+
+
+q('productForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  try{
+    showLoading(true);
+    const code=q('productCode').value.trim();
+    const body={
+      code,
+      name:q('productName').value.trim(),
+      brand:q('productBrand').value.trim()||null,
+      model:q('productModel').value.trim()||null,
+      category:q('productCategory').value.trim()||null,
+      supplier_id:q('productSupplier').value||null,
+      purchase_price:Number(q('productPurchasePrice').value||0),
+      retail_price:Number(q('productRetailPrice').value||0),
+      active:true,
+      updated_at:new Date().toISOString()
+    };
+    const exists=await api('pos_products',{qs:`?select=code&code=eq.${encodeURIComponent(code)}&limit=1`});
+    if(exists && exists.length){
+      const patch={...body}; delete patch.code;
+      await api('pos_products',{method:'PATCH',qs:`?code=eq.${encodeURIComponent(code)}`,body:patch});
+      toast('تم تعديل المنتج');
+    }else{
+      await api('pos_products',{method:'POST',body});
+      toast('تم إنشاء المنتج');
+    }
+    resetProductForm(); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ المنتج: '+err.message+' - إذا ظهر pos_products غير موجود شغل ملف إعداد المنتجات')}
+  finally{showLoading(false)}
+});
 
 q('supplierForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -661,6 +754,6 @@ q('transferFrom').addEventListener('change', refreshTransferAvailability);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d}
 setToday(); addPurchaseRow(); addTransferRow(); loadAll();
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a12b6eda2d74a10c',t:'MTc4MjYzNjUxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
