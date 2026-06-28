@@ -37,8 +37,8 @@
 <body>
   <header>
     <div class="top">
-      <div class="brand"><h1>نظام البيع والمخزون</h1><p>مجموعة بن عمر - مرحلة الموردين والفروع</p></div>
-      <div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div>
+      <div class="brand"><h1>نظام البيع والمخزون</h1><p>مجموعة بن عمر - نظام بيع ومخزون</p></div>
+      <div class="row"><div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div><div class="pill hidden" id="userPill"><span id="userLabel"></span> <button class="btn secondary" style="padding:6px 10px" onclick="logoutPOS()">خروج</button></div></div>
     </div>
   </header>
 
@@ -56,6 +56,7 @@
       <button data-tab="stock">المخزون الحالي</button>
       <button data-tab="transfers">تحويلات المخزون</button>
       <button data-tab="reports">التقارير</button>
+      <button data-tab="users">المستخدمون والصلاحيات</button>
       <button data-tab="next">المرحلة القادمة</button>
     </nav>
 
@@ -324,6 +325,25 @@
       </section>
 
 
+
+      <section id="users" class="section">
+        <div class="panel">
+          <h2>المستخدمون والصلاحيات</h2>
+          <p class="muted">هذه صلاحيات داخل واجهة النظام. المدير يرى كل الأقسام، والبائع يرى البيع والمخزون حسب فرعه.</p>
+          <form class="form" id="roleForm">
+            <div><label>معرّف المستخدم</label><input id="roleIdentifier" required placeholder="مثال: ahmed" class="ltr"></div>
+            <div><label>الاسم الظاهر</label><input id="roleDisplayName" placeholder="اختياري"></div>
+            <div><label>الدور</label><select id="roleName"><option value="admin">مدير</option><option value="seller_11">بائع فرع 11 يونيو</option><option value="seller_sarraj">بائع فرع السراج</option><option value="warehouse">مخزن</option><option value="accountant">محاسب</option><option value="viewer">مشاهدة فقط</option></select></div>
+            <div><label>ملاحظات</label><input id="roleNotes" placeholder="اختياري"></div>
+            <button class="btn" type="submit">حفظ الصلاحية</button>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="tools"><h2>قائمة الصلاحيات</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="table-scroll"><table><thead><tr><th>المعرف</th><th>الاسم</th><th>الدور</th><th>الحالة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="rolesBody"></tbody></table></div>
+        </div>
+      </section>
+
       <section id="reports" class="section">
         <div class="panel">
           <div class="tools">
@@ -382,6 +402,18 @@
     </main>
   </div>
 
+
+  <div class="modal show" id="loginScreen">
+    <div class="modal-card" style="max-width:460px">
+      <h2>دخول نظام البيع</h2>
+      <p class="muted">اكتب المعرّف والكود. أول مستخدم يدخل سيصبح مدير تلقائيًا إذا لم توجد صلاحيات بعد.</p>
+      <div class="grid" style="gap:12px">
+        <div><label>المعرّف</label><input id="loginIdentifier" class="ltr" placeholder="مثال: admin"></div>
+        <div><label>الكود</label><input id="loginCode" type="password" class="ltr" placeholder="الكود"></div>
+        <div class="row"><button class="btn" onclick="loginPOS(false)">دخول</button><button class="btn secondary" onclick="loginPOS(true)">إنشاء مستخدم</button></div>
+      </div>
+    </div>
+  </div>
   <div class="loading" id="loading">جاري التحميل...</div>
   <div class="toast" id="toast"></div>
   <datalist id="productsDatalist"></datalist>
@@ -400,7 +432,8 @@
 const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0';
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], customers=[], customerLedger=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], customers=[], customerLedger=[], userRoles=[];
+let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
@@ -422,6 +455,13 @@ async function api(table, opts={}){
 }
 
 
+async function rpc(name, body){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:H,body:JSON.stringify(body)});
+  const text=await res.text(); let data=text?JSON.parse(text):null;
+  if(!res.ok) throw new Error(data?.message||text||'RPC error');
+  return data;
+}
+
 async function apiAll(table, qs='', batch=1000){
   let from=0, all=[];
   while(true){
@@ -439,7 +479,7 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, customers, customerLedger] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, customers, customerLedger, userRoles] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
@@ -451,7 +491,8 @@ async function loadAll(){
       apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(e=>{console.warn('sales not setup yet',e); return []}),
       apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
       apiAll('pos_customer_balances','?select=*&order=name.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
-      apiAll('pos_customer_ledger','?select=*&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []})
+      apiAll('pos_customer_ledger','?select=*&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
+      apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []})
     ]);
     if(q('productCategoryFilter')) q('productCategoryFilter').dataset.ready='';
     renderAll();
@@ -459,7 +500,7 @@ async function loadAll(){
   finally{showLoading(false)}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderPurchases();renderStock();renderTransfers();renderReports()}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderPurchases();renderStock();renderTransfers();renderReports();renderRoles();applyPermissions()}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -469,6 +510,68 @@ function renderDashboard(){
   q('customersDebtTotal').textContent=money(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0));
   q('suppliersBalance').textContent=money(suppliers.reduce((a,s)=>a+Number(s.balance||0),0));
 }
+
+const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
+const ROLE_TABS={
+  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','customers','purchases','stock','transfers','reports','users','next'],
+  seller_11:['dashboard','products','sales','stock'],
+  seller_sarraj:['dashboard','products','sales','stock'],
+  warehouse:['dashboard','products','stock','transfers','purchases'],
+  accountant:['dashboard','suppliers','ledger','payments','customers','reports'],
+  viewer:['dashboard','products','stock','reports']
+};
+function getUserRole(){
+  if(!appUser?.identifier) return null;
+  return userRoles.find(r=>(r.identifier||'').toLowerCase()===appUser.identifier.toLowerCase()) || null;
+}
+async function ensureRoleAfterLogin(){
+  let role=getUserRole();
+  if(!role && userRoles.length===0){
+    const created=await api('pos_user_roles',{method:'POST',body:{identifier:appUser.identifier,display_name:appUser.identifier,role:'admin',active:true,notes:'أول مستخدم - مدير تلقائي'}});
+    userRoles.push(created[0]); role=created[0];
+  }
+  currentRole=role || {identifier:appUser.identifier,role:'viewer',active:true};
+}
+async function loginPOS(create=false){
+  const identifier=q('loginIdentifier').value.trim().toLowerCase(); const code=q('loginCode').value.trim();
+  if(identifier.length<2||code.length<3){toast('اكتب المعرّف والكود');return;}
+  try{
+    showLoading(true);
+    const id=await rpc(create?'create_app_user':'login_app_user',{p_identifier:identifier,p_code:code});
+    appUser={id,identifier}; localStorage.setItem('posUser',JSON.stringify(appUser));
+    await loadAll(); await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); toast(create?'تم إنشاء المستخدم والدخول':'تم الدخول');
+  }catch(err){console.error(err);toast(create?'تعذر إنشاء المستخدم أو المعرّف موجود':'المعرّف أو الكود غير صحيح')}
+  finally{showLoading(false)}
+}
+function logoutPOS(){localStorage.removeItem('posUser'); appUser=null; currentRole=null; updateAuthUI(); q('loginScreen').classList.add('show')}
+function updateAuthUI(){
+  const logged=!!appUser?.id; q('loginScreen').classList.toggle('show',!logged); q('userPill').classList.toggle('hidden',!logged);
+  q('userLabel').textContent=logged?`${appUser.identifier} - ${ROLE_LABELS[currentRole?.role]||'بدون صلاحية'}`:'';
+}
+function canTab(tab){return (ROLE_TABS[currentRole?.role]||[]).includes(tab)}
+function applyPermissions(){
+  if(!appUser?.id){updateAuthUI();return;}
+  currentRole=getUserRole()||currentRole||{role:'viewer'}; updateAuthUI();
+  document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.style.display=canTab(b.dataset.tab)?'block':'none'});
+  const active=document.querySelector('nav button.active');
+  if(active && active.style.display==='none'){
+    const first=[...document.querySelectorAll('nav button[data-tab]')].find(b=>b.style.display!=='none'); if(first) first.click();
+  }
+  // Branch sellers are locked to their branch in sales screen.
+  if(currentRole?.role==='seller_11' || currentRole?.role==='seller_sarraj'){
+    const wanted=currentRole.role==='seller_11'?'فرع 11 يونيو':'فرع السراج'; const loc=locations.find(l=>l.name===wanted);
+    if(loc && q('saleLocation')){q('saleLocation').value=loc.id; q('saleLocation').disabled=true;}
+  }else if(q('saleLocation')) q('saleLocation').disabled=false;
+}
+function renderRoles(){
+  if(!q('rolesBody')) return;
+  q('rolesBody').innerHTML=userRoles.map(r=>`<tr><td class="ltr"><b>${r.identifier}</b></td><td>${r.display_name||''}</td><td>${ROLE_LABELS[r.role]||r.role}</td><td>${r.active?'<span class="badge green">نشط</span>':'<span class="badge gray">متوقف</span>'}</td><td>${r.notes||''}</td><td><button class="btn secondary" onclick="editRole('${r.id}')">تعديل</button></td></tr>`).join('') || '<tr><td colspan="6">لا توجد صلاحيات بعد. أول مستخدم يدخل يصبح مدير تلقائيًا.</td></tr>';
+}
+function editRole(id){
+  const r=userRoles.find(x=>x.id===id); if(!r)return;
+  q('roleIdentifier').value=r.identifier||''; q('roleDisplayName').value=r.display_name||''; q('roleName').value=r.role||'viewer'; q('roleNotes').value=r.notes||'';
+}
+
 function renderLocations(){
   q('locationsBody').innerHTML = locations.map(l=>`<tr><td><b>${l.name}</b></td><td>${typeLabel(l.location_type)}</td><td>${l.is_sales_location?'<span class="badge green">نعم</span>':'<span class="badge yellow">لا</span>'}</td><td>${l.active?'<span class="badge green">نشط</span>':'<span class="badge gray">غير نشط</span>'}</td><td>${l.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد بيانات. شغل ملف SQL.</td></tr>';
 }
@@ -835,6 +938,22 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
 
 
 
+
+q('roleForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(currentRole?.role!=='admin'){toast('هذه الصفحة للمدير فقط');return;}
+  try{
+    showLoading(true);
+    const identifier=q('roleIdentifier').value.trim().toLowerCase();
+    const body={identifier,display_name:q('roleDisplayName').value.trim()||null,role:q('roleName').value,location_name:null,active:true,notes:q('roleNotes').value.trim()||null,updated_at:new Date().toISOString()};
+    const found=userRoles.find(r=>r.identifier===identifier);
+    if(found){const patch={...body}; delete patch.identifier; await api('pos_user_roles',{method:'PATCH',qs:`?id=eq.${found.id}`,body:patch}); toast('تم تعديل الصلاحية');}
+    else {await api('pos_user_roles',{method:'POST',body}); toast('تم حفظ الصلاحية');}
+    e.target.reset(); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ الصلاحية: '+err.message+' - تأكد من تشغيل ملف users SQL')}
+  finally{showLoading(false)}
+});
+
 q('customerForm').addEventListener('submit', async e=>{
   e.preventDefault();
   try{
@@ -1148,7 +1267,7 @@ function printReports(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d; if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); loadAll();
+setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
