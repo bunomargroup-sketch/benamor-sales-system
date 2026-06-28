@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>نظام البيع - مجموعة بن عمر</title>
+  <title>نظام البيع</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -76,7 +76,7 @@
 <body>
   <header>
     <div class="top">
-      <div class="brand"><h1>نظام البيع والمخزون</h1><p>مجموعة بن عمر - نظام بيع ومخزون</p></div>
+      <div class="brand"><h1 id="brandTitle">نظام البيع والمخزون</h1><p id="brandTagline">نظام بيع ومخزون</p></div>
       <div class="row"><button class="icon-btn" id="themeToggle" type="button" onclick="toggleTheme()" title="تبديل الوضع"><i class="ti ti-moon"></i></button><div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div><div class="pill hidden" id="userPill"><span id="userLabel"></span> <button class="btn secondary" style="padding:6px 10px" onclick="logoutPOS()">خروج</button></div></div>
     </div>
   </header>
@@ -110,10 +110,15 @@
           <div class="card"><h3>فواتير البيع</h3><div class="num" id="salesCount">0</div></div>
           <div class="card"><h3>ديون العملاء</h3><div class="num" id="customersDebtTotal">0</div></div>
           <div class="card"><h3>إجمالي أرصدة الموردين</h3><div class="num" id="suppliersBalance">0</div></div>
+          <div class="card"><h3>أصناف تحت حد الطلب</h3><div class="num" id="reorderCount">0</div></div>
         </div>
         <div class="panel">
           <h2>ملخص سريع</h2>
           <p class="muted">هذه النسخة تشمل المنتجات، الموردين، فواتير الشراء، التحويلات، البيع اليومي، وطباعة فاتورة عربية.</p>
+        </div>
+        <div class="panel">
+          <h2>أصناف تحت حد الطلب</h2>
+          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المخزون الحالي</th><th>حد الطلب</th><th>المورد</th></tr></thead><tbody id="reorderBody"></tbody></table></div>
         </div>
       </section>
 
@@ -136,6 +141,8 @@
             <div><label>الماركة</label><input id="productBrand" list="brandDatalist" placeholder="اختر أو أضف ماركة"></div>
             <div><label>الموديل</label><input id="productModel" list="modelDatalist" placeholder="اختر أو أضف موديل"></div>
             <div><label>اللون</label><input id="productColor" list="colorDatalist" placeholder="مثال: أبيض / أسود / ذهبي"></div>
+            <div><label>الباركود</label><input id="productBarcode" class="ltr" placeholder="اختياري"></div>
+            <div><label>حد الطلب</label><input id="productReorderPoint" type="number" step="0.001" value="0"></div>
             <div><label>سعر الشراء</label><input id="productPurchasePrice" type="number" step="0.001" value="0"></div>
             <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="number" step="0.001" value="0"></div>
             <div class="row"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
@@ -163,7 +170,7 @@
           <p class="muted">هذه البيانات مستوردة من ملفك: الكود، الصنف، الماركة، الموديل، المورد، التصنيف، سعر الشراء، سعر البيع، والمخزون حسب المكان.</p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th></tr></thead>
+              <thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>الباركود</th><th>المورد</th><th>التصنيف</th><th>شراء</th><th>بيع</th><th>حد الطلب</th><th>11 يونيو</th><th>السراج</th><th>جنزور</th><th>الإجمالي</th></tr></thead>
               <tbody id="productsBody"></tbody>
             </table>
           </div>
@@ -228,6 +235,7 @@
               <div><label>هاتف العميل</label><input id="saleNewCustomerPhone" class="ltr" placeholder="اختياري"></div>
               <div><label>ملاحظات</label><input id="saleNotes" placeholder="اختياري"></div>
               <div><label>الطباعة</label><select id="salePrintAfterSave"><option value="yes">اطبع بعد الحفظ</option><option value="no">حفظ بدون طباعة</option></select></div>
+              <div><label>امسح الباركود</label><input id="saleBarcodeInput" class="ltr" placeholder="امسح الباركود ثم Enter" onkeydown="handleBarcodeKey(event)" oninput="handleBarcodeInput()"></div>
             </div>
             <div class="tools" style="margin-top:16px">
               <h2 style="font-size:18px;margin:0">الأصناف</h2>
@@ -235,7 +243,7 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
+                <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>خصم السطر</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
                 <tbody id="saleItemsBody"></tbody>
               </table>
             </div>
@@ -410,9 +418,10 @@
               <button class="btn secondary" onclick="printReports()">طباعة التقرير</button>
             </div>
           </div>
-          <p class="muted">تقارير سريعة للمبيعات، الأرباح التقديرية، المخزون، أرصدة الموردين، وأرصدة العملاء.</p>
+          <p class="muted">تقارير سريعة للمبيعات بعد خصم المرتجعات، الأرباح التقديرية، المخزون، أرصدة الموردين، وأرصدة العملاء.</p>
           <div class="grid cards">
             <div class="card"><h3>إجمالي المبيعات</h3><div class="num" id="repSalesTotal">0</div></div>
+            <div class="card"><h3>إجمالي المرتجعات</h3><div class="num" id="repReturnsTotal">0</div></div>
             <div class="card"><h3>عدد فواتير البيع</h3><div class="num" id="repSalesCount">0</div></div>
             <div class="card"><h3>ربح تقديري</h3><div class="num" id="repProfit">0</div></div>
             <div class="card"><h3>ديون العملاء</h3><div class="num" id="repCustomerDebt">0</div></div>
@@ -459,7 +468,7 @@
 
   <div class="modal show" id="loginScreen">
     <div class="modal-card" style="max-width:460px">
-      <h2>دخول نظام البيع</h2>
+      <h2 id="loginTitle">دخول نظام البيع</h2>
       <p class="muted">اكتب المعرّف والكود. أول مستخدم يدخل سيصبح مدير تلقائيًا إذا لم توجد صلاحيات بعد.</p>
       <div class="grid" style="gap:12px">
         <div><label>المعرّف</label><input id="loginIdentifier" class="ltr" placeholder="مثال: admin"></div>
@@ -483,6 +492,25 @@
         <button class="btn secondary" onclick="closeProductViewModal()">إغلاق</button>
       </div>
       <div id="productViewBody"></div>
+    </div>
+  </div>
+
+
+  <div class="modal" id="saleReturnModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><h2 id="saleReturnTitle" style="margin:0">مرتجع فاتورة بيع</h2><div class="mini" id="saleReturnSub"></div></div>
+        <button class="btn secondary" onclick="closeSaleReturnModal()">إغلاق</button>
+      </div>
+      <form id="saleReturnForm">
+        <div class="form">
+          <div><label>التاريخ</label><input id="saleReturnDate" type="date" required></div>
+          <div><label>طريقة الاسترداد</label><select id="saleReturnRefundMethod"><option value="cash">إرجاع نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="credit_reduction">تخفيض دين العميل</option><option value="none">بدون استرداد نقدي</option></select></div>
+          <div style="grid-column:1/-1"><label>ملاحظات</label><input id="saleReturnNotes" placeholder="اختياري"></div>
+        </div>
+        <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المباع</th><th>سعر البيع</th><th>خصم السطر</th><th>كمية المرتجع</th></tr></thead><tbody id="saleReturnItemsBody"></tbody></table></div>
+        <div class="row" style="margin-top:12px"><button class="btn" type="submit">حفظ المرتجع</button><span class="mini" id="saleReturnTotal">الإجمالي: 0</span></div>
+      </form>
     </div>
   </div>
 
@@ -521,17 +549,22 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 </script>
 
 <script>
-const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0';
+const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
+const SUPABASE_URL=APP_CONFIG.supabaseUrl;
+const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], customers=[], customerLedger=[], userRoles=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], saleReturns=[], saleReturnItems=[], customers=[], customerLedger=[], userRoles=[];
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
 let selectedProductCode=null;
+let returningSaleId=null, returningSale=null, returningSaleItems=[];
 
 function q(id){return document.getElementById(id)}
+function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function cfgText(v){return esc(v)}
+function initBranding(){document.title=APP_CONFIG.businessName+' - '+APP_CONFIG.tagline; if(q('brandTitle'))q('brandTitle').textContent=APP_CONFIG.businessName; if(q('brandTagline'))q('brandTagline').textContent=APP_CONFIG.tagline; if(q('loginTitle'))q('loginTitle').textContent='دخول '+APP_CONFIG.businessName;}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function showLoading(v){q('loading').style.display=v?'block':'none'; q('syncState').textContent=v?'جاري المزامنة...':'متصل مع Supabase'}
 function toast(msg){const t=q('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
@@ -572,7 +605,7 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, customers, customerLedger, userRoles] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, saleReturns, saleReturnItems, customers, customerLedger, userRoles] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
@@ -583,6 +616,8 @@ async function loadAll(){
       api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}),
       apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(e=>{console.warn('sales not setup yet',e); return []}),
       apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
+      apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('sale returns not setup yet',e); return []}),
+      apiAll('pos_sale_return_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale return items not setup yet',e); return []}),
       apiAll('pos_customer_balances','?select=*&order=name.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
       apiAll('pos_customer_ledger','?select=*&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
       apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []})
@@ -602,6 +637,7 @@ function renderDashboard(){
   q('salesCount').textContent=sales.length;
   q('customersDebtTotal').textContent=money(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0));
   q('suppliersBalance').textContent=money(suppliers.reduce((a,s)=>a+Number(s.balance||0),0));
+  renderReorderAlerts();
 }
 
 const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
@@ -665,6 +701,13 @@ function editRole(id){
   q('roleIdentifier').value=r.identifier||''; q('roleDisplayName').value=r.display_name||''; q('roleName').value=r.role||'viewer'; q('roleNotes').value=r.notes||'';
 }
 
+
+function renderReorderAlerts(){
+  const rows=products.filter(p=>Number(p.reorder_point||0)>0 && Number(p.total_stock||0)<=Number(p.reorder_point||0));
+  if(q('reorderCount')) q('reorderCount').textContent=rows.length;
+  if(q('reorderBody')) q('reorderBody').innerHTML=rows.slice(0,80).map(p=>`<tr><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(p.name)}</td><td><b>${money(p.total_stock)}</b></td><td>${money(p.reorder_point)}</td><td>${esc(p.supplier_name)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف تحت حد الطلب.</td></tr>';
+}
+
 function renderLocations(){
   q('locationsBody').innerHTML = locations.map(l=>`<tr><td><b>${l.name}</b></td><td>${typeLabel(l.location_type)}</td><td>${l.is_sales_location?'<span class="badge green">نعم</span>':'<span class="badge yellow">لا</span>'}</td><td>${l.active?'<span class="badge green">نشط</span>':'<span class="badge gray">غير نشط</span>'}</td><td>${l.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد بيانات. شغل ملف SQL.</td></tr>';
 }
@@ -718,7 +761,7 @@ function renderProducts(){
     return (!cat || p.category===cat) && (!brand || p.brand===brand) && (!color || p.color===color) && (!supplier || p.supplier_name===supplier) && (!term || hay.includes(term));
   });
   const shown=rows.slice(0,300);
-  q('productsBody').innerHTML = shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\'"); return `<tr class="${selectedProductCode===p.code?'selected-row':''}" onclick="selectProductRow('${safe}')"><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.color||''}</td><td>${p.supplier_name||''}</td><td>${p.category||''}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td></tr>`}).join('') || '<tr><td colspan="12">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
+  q('productsBody').innerHTML = shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\'"); return `<tr class="${selectedProductCode===p.code?'selected-row':''}" onclick="selectProductRow('${safe}')"><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td class="ltr">${esc(p.barcode)}</td><td>${esc(p.supplier_name)}</td><td>${esc(p.category)}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.reorder_point)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td></tr>`}).join('') || '<tr><td colspan="14">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
   const sp=selectedProductCode?products.find(p=>p.code===selectedProductCode):null;
   if(q('selectedProductInfo')) q('selectedProductInfo').textContent=sp?`المحدد: ${sp.code} - ${sp.name}`:'اختر منتجًا من الجدول أولاً';
   q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج` + (rows.length>300 ? ' - اكتب في البحث لتضييق النتائج' : '');
@@ -743,8 +786,10 @@ function viewSelectedProduct(){
     <div class="card"><h3>التصنيف</h3><div>${p.category||''}</div></div>
     <div class="card"><h3>الماركة</h3><div>${p.brand||''}</div></div>
     <div class="card"><h3>الموديل</h3><div class="ltr">${p.model||''}</div></div>
-    <div class="card"><h3>اللون</h3><div>${p.color||''}</div></div>
-    <div class="card"><h3>المورد</h3><div>${p.supplier_name||''}</div></div>
+    <div class="card"><h3>اللون</h3><div>${esc(p.color)}</div></div>
+    <div class="card"><h3>الباركود</h3><div class="ltr">${esc(p.barcode)}</div></div>
+    <div class="card"><h3>حد الطلب</h3><div class="num">${money(p.reorder_point)}</div></div>
+    <div class="card"><h3>المورد</h3><div>${esc(p.supplier_name)}</div></div>
     <div class="card"><h3>سعر الشراء</h3><div class="num">${money(p.purchase_price)}</div></div>
     <div class="card"><h3>سعر البيع</h3><div class="num">${money(p.retail_price)}</div></div>
     <div class="card"><h3>فرع 11 يونيو</h3><div class="num">${money(p.stock_11_june)}</div></div>
@@ -782,28 +827,26 @@ function renderSaleProductPicker(){
     return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&(!term||hay.includes(term));
   });
   const shown=rows.slice(0,250);
-  q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr><td class="ltr"><b>${p.code||''}</b></td><td>${p.name||''}</td><td>${p.brand||''}<div class="mini ltr">${p.model||''}</div></td><td>${p.color||''}</td><td>${p.supplier_name||''}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="8">لا توجد منتجات مطابقة للفلاتر.</td></tr>';
+  q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr><td class="ltr"><b>${p.code||''}</b></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="8">لا توجد منتجات مطابقة للفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
   setupTableSorting();
 }
 function addSaleProductFromPicker(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   const qty=Math.max(0.001,Number(q('salePickerQty').value||1));
-  addSaleRow({product_code:p.code,product_name:p.name,qty,unit_price:Number(p.retail_price||0)});
-  const last=q('saleItemsBody').lastElementChild;
-  if(last){const note=last.querySelector('.si-product-note'); if(note) note.textContent=[p.brand,p.model,p.color,p.category].filter(Boolean).join(' - '); updateSaleAvailable(last.querySelector('.si-qty'));}
+  addOrIncrementSaleProduct(p,qty);
   toast('تمت إضافة المنتج للفاتورة');
 }
 
 function resetProductForm(){
-  q('productForm').reset(); q('productPurchasePrice').value=0; q('productRetailPrice').value=0;
+  q('productForm').reset(); q('productPurchasePrice').value=0; q('productRetailPrice').value=0; q('productReorderPoint').value=0;
   q('productSubmitBtn').textContent='حفظ المنتج'; q('productCode').readOnly=false;
 }
 function editProduct(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   document.querySelector('[data-tab="products"]').click();
   q('productCode').value=p.code||''; q('productName').value=p.name||''; q('productCategory').value=p.category||'';
-  q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productColor').value=p.color||''; q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0);
+  q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productColor').value=p.color||''; q('productBarcode').value=p.barcode||''; q('productReorderPoint').value=Number(p.reorder_point||0); q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0);
   const sup=suppliers.find(s=>s.name===p.supplier_name); q('productSupplier').value=sup?.id||'';
   q('productSubmitBtn').textContent='حفظ تعديل المنتج';
   q('productCode').focus();
@@ -970,7 +1013,7 @@ function getTransferItems(){
 function renderSales(){
   q('salesBody').innerHTML = sales.map(sl=>{
     const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id);
-    return `<tr><td>${sl.sale_date}</td><td>${l?.name||''}</td><td>${c?.name||'زبون نقدي'}</td><td>${typeLabel(sl.payment_method)}</td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}">${money(sl.balance_due)}</td><td><div class="row"><button class="btn secondary" onclick="openSaleForEdit('${sl.id}')">فتح / تعديل</button><button class="btn secondary" onclick="printSale('${sl.id}')">طباعة</button></div></td></tr>`;
+    return `<tr><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${esc(typeLabel(sl.payment_method))}</td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}">${money(sl.balance_due)}</td><td><div class="row"><button class="btn secondary" onclick="openSaleForEdit('${sl.id}')">فتح / تعديل</button><button class="btn secondary" onclick="printSale('${sl.id}')">طباعة</button><button class="btn secondary" onclick="openSaleReturn('${sl.id}')">مرتجع</button></div></td></tr>`;
   }).join('') || '<tr><td colspan="8">لا توجد فواتير بيع بعد.</td></tr>';
 }
 async function adjustStockDoc(location_id, item, qtyChange, movementType, referenceTable, referenceId, notes){
@@ -986,7 +1029,7 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 }
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillSaleRow(this)" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><input class="si-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="si-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="number" step="0.001" min="0" value="${item.unit_price||0}" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillSaleRow(this)" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><input class="si-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="si-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="number" step="0.001" min="0" value="${item.unit_price||0}" oninput="updateSaleTotal()"></td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
   q('saleItemsBody').appendChild(tr); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function fillSaleRow(input){
@@ -1004,19 +1047,40 @@ function updateSaleAvailable(el){
   tr.querySelector('.si-available').innerHTML=`<b class="${available>0?'stock-positive':available<0?'stock-negative':''}">${money(available)}</b>`;
 }
 function refreshSaleAvailability(){[...q('saleItemsBody').querySelectorAll('.si-qty')].forEach(updateSaleAvailable)}
+
+function calcLineDiscount(raw, base){
+  raw=String(raw||'').trim();
+  if(!raw) return 0;
+  if(raw.endsWith('%')) return Math.min(base, Math.max(0, base*(Number(raw.slice(0,-1))||0)/100));
+  return Math.min(base, Math.max(0, Number(raw)||0));
+}
+function findProductByCodeOrBarcode(value){
+  const v=String(value||'').trim().toLowerCase(); if(!v) return null;
+  return products.find(p=>String(p.code||'').toLowerCase()===v || String(p.barcode||'').toLowerCase()===v) || null;
+}
+function addOrIncrementSaleProduct(p, qty=1){
+  const rows=[...q('saleItemsBody').querySelectorAll('tr')];
+  const existing=rows.find(tr=>String(tr.querySelector('.si-code')?.value||'').trim().toLowerCase()===String(p.code||'').toLowerCase());
+  if(existing){const inp=existing.querySelector('.si-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updateSaleTotal(); updateSaleAvailable(inp); return;}
+  addSaleRow({product_code:p.code,product_name:p.name,qty,unit_price:Number(p.retail_price||0)});
+  const last=q('saleItemsBody').lastElementChild; if(last){const note=last.querySelector('.si-product-note'); if(note) note.textContent=[p.brand,p.model,p.color,p.category].filter(Boolean).join(' - '); updateSaleAvailable(last.querySelector('.si-qty'));}
+}
+function handleBarcodeKey(e){if(e.key==='Enter'){e.preventDefault();const p=findProductByCodeOrBarcode(q('saleBarcodeInput').value); if(p){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value=''; q('saleBarcodeInput').focus();}else toast('لم يتم العثور على المنتج أو الباركود');}}
+function handleBarcodeInput(){const v=q('saleBarcodeInput').value.trim(); const p=findProductByCodeOrBarcode(v); if(p && v.length>=4){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value='';}}
+
 function getSaleItems(){
   return [...q('saleItemsBody').querySelectorAll('tr')].map(tr=>{
     let code=tr.querySelector('.si-code').value.trim(); let name=tr.querySelector('.si-name').value.trim();
     const picked=findProductByInput(code); if(picked){code=picked.code||code; if(!name) name=picked.name||name;}
     if(code.includes('|')) code=code.split('|')[0].trim();
-    const qty=Number(tr.querySelector('.si-qty').value||0); const unit_price=Number(tr.querySelector('.si-price').value||0);
-    return {product_code:code||name, product_name:name, qty, unit_price, line_total:qty*unit_price};
+    const qty=Number(tr.querySelector('.si-qty').value||0); const unit_price=Number(tr.querySelector('.si-price').value||0); const base=qty*unit_price; const discount_text=tr.querySelector('.si-discount')?.value||''; const line_discount=calcLineDiscount(discount_text,base);
+    return {product_code:code||name, product_name:name, qty, unit_price, line_discount, discount_text, line_total:Math.max(0,base-line_discount)};
   }).filter(x=>x.product_name && x.qty>0);
 }
 function updateSaleTotal(){
   let subtotal=0;
   [...q('saleItemsBody').querySelectorAll('tr')].forEach(tr=>{
-    const qty=Number(tr.querySelector('.si-qty').value||0); const price=Number(tr.querySelector('.si-price').value||0); const line=qty*price; subtotal+=line;
+    const qty=Number(tr.querySelector('.si-qty').value||0); const price=Number(tr.querySelector('.si-price').value||0); const base=qty*price; const line=Math.max(0,base-calcLineDiscount(tr.querySelector('.si-discount')?.value||'',base)); subtotal+=line;
     tr.querySelector('.si-line').innerHTML=`<b>${money(line)}</b>`;
   });
   const discount=Number(q('saleDiscount').value||0); const total=Math.max(0,subtotal-discount);
@@ -1051,7 +1115,7 @@ async function openSaleForEdit(id){
     document.querySelector('[data-tab="sales"]').click();
     q('saleLocation').value=sl.location_id||''; q('saleDate').value=sl.sale_date||''; q('salePaymentMethod').value=sl.payment_method||'cash'; q('saleInvoiceNo').value=sl.invoice_no||'';
     q('saleCustomer').value=sl.customer_id||''; q('saleNewCustomerName').value=''; q('saleNewCustomerPhone').value=''; q('saleNotes').value=sl.notes||''; q('saleDiscount').value=Number(sl.discount||0); q('salePaidAmount').value=Number(sl.paid_amount||0);
-    q('saleItemsBody').innerHTML=''; rows.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price}));
+    q('saleItemsBody').innerHTML=''; rows.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount,discount_text:it.discount_text}));
     updateSaleTotal(); refreshSaleAvailability(); q('saleSubmitBtn').textContent='حفظ تعديل البيع وتحديث المخزون'; q('saleCancelEditBtn').classList.remove('hidden');
     toast('تم فتح فاتورة البيع للتعديل');
   }catch(err){console.error(err);toast('خطأ في فتح فاتورة البيع: '+err.message)} finally{showLoading(false)}
@@ -1070,8 +1134,8 @@ async function printSale(id){
     const sl=sales.find(x=>x.id===id) || (await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
     const items=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`});
     const loc=locations.find(x=>x.id===sl.location_id); const cust=customers.find(x=>x.id===sl.customer_id);
-    const rows=items.map((it,i)=>`<tr><td>${i+1}</td><td>${it.product_code}</td><td>${it.product_name}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_total)}</td></tr>`).join('');
-    const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة بيع</title><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;margin:32px;color:#111;line-height:1.6}.print-top{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:2px solid #1d4ed8;padding-bottom:16px;margin-bottom:18px}.logo-box{width:82px;height:82px;border:1px solid #d8dee9;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;background:#f8fafc}.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex:1}h1{margin:0;color:#1d4ed8;font-size:28px}.box{border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin:10px 0;background:#fff}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #e2e8f0;padding:10px;text-align:right}th{background:#f8fafc;color:#475569;font-weight:700}.total{font-size:19px;font-weight:700}.ltr{direction:ltr;text-align:left;font-family:ui-monospace,monospace}@media print{button{display:none}body{margin:18mm}}</style></head><body><button onclick="print()">طباعة</button><div class="print-top"><div class="logo-box">الشعار</div><div class="head"><div><h1>مجموعة بن عمر</h1><div>فاتورة بيع</div></div><div class="ltr">${sl.invoice_no||sl.id.slice(0,8)}</div></div></div><div class="box">التاريخ: ${sl.sale_date}<br>الفرع: ${loc?.name||''}<br>العميل: ${cust?.name||'زبون نقدي'} ${cust?.phone?'<span class="ltr">'+cust.phone+'</span>':''}<br>طريقة الدفع: ${typeLabel(sl.payment_method)}</div><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table><div class="box total">الإجمالي: ${money(sl.total)} د.ل<br>المدفوع: ${money(sl.paid_amount)} د.ل<br>المتبقي: ${money(sl.balance_due)} د.ل</div></body></html>`;
+    const rows=items.map((it,i)=>`<tr><td>${i+1}</td><td>${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td>${money(it.line_total)}</td></tr>`).join('');
+    const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة بيع</title><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;margin:32px;color:#111;line-height:1.6}.print-top{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:2px solid #1d4ed8;padding-bottom:16px;margin-bottom:18px}.logo-box{width:82px;height:82px;border:1px solid #d8dee9;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;background:#f8fafc}.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex:1}h1{margin:0;color:#1d4ed8;font-size:28px}.box{border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin:10px 0;background:#fff}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #e2e8f0;padding:10px;text-align:right}th{background:#f8fafc;color:#475569;font-weight:700}.total{font-size:19px;font-weight:700}.ltr{direction:ltr;text-align:left;font-family:ui-monospace,monospace}@media print{button{display:none}body{margin:18mm}}</style></head><body><button onclick="print()">طباعة</button><div class="print-top"><div class="logo-box">الشعار</div><div class="head"><div><h1>${esc(APP_CONFIG.businessName)}</h1><div>فاتورة بيع</div></div><div class="ltr">${sl.invoice_no||sl.id.slice(0,8)}</div></div></div><div class="box">التاريخ: ${sl.sale_date}<br>الفرع: ${esc(loc?.name)}<br>العميل: ${esc(cust?.name||'زبون نقدي')} ${cust?.phone?'<span class="ltr">'+cust.phone+'</span>':''}<br>طريقة الدفع: ${typeLabel(sl.payment_method)}</div><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>خصم</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table><div class="box total">الإجمالي: ${money(sl.total)} ${esc(APP_CONFIG.currency)}<br>المدفوع: ${money(sl.paid_amount)} ${esc(APP_CONFIG.currency)}<br>المتبقي: ${money(sl.balance_due)} ${esc(APP_CONFIG.currency)}</div></body></html>`;
     const w=window.open('','_blank'); w.document.write(html); w.document.close();
   }catch(err){console.error(err);toast('خطأ في طباعة الفاتورة: '+err.message)}
 }
@@ -1118,6 +1182,50 @@ document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault();open
 
 
 
+
+
+function closeSaleReturnModal(){q('saleReturnModal').classList.remove('show')}
+async function openSaleReturn(id){
+  try{
+    showLoading(true);
+    returningSale=sales.find(x=>x.id===id) || (await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
+    returningSaleId=id;
+    returningSaleItems=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`});
+    q('saleReturnTitle').textContent='مرتجع فاتورة بيع';
+    q('saleReturnSub').textContent=(returningSale.invoice_no||returningSale.id.slice(0,8))+' - '+returningSale.sale_date;
+    q('saleReturnDate').value=new Date().toISOString().slice(0,10);
+    q('saleReturnRefundMethod').value=Number(returningSale.balance_due||0)>0?'credit_reduction':'cash';
+    q('saleReturnItemsBody').innerHTML=returningSaleItems.map(it=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td><input class="ri-qty" data-item-id="${it.id}" type="number" step="0.001" min="0" max="${Number(it.qty||0)}" value="0" oninput="updateSaleReturnTotal()"></td></tr>`).join('');
+    updateSaleReturnTotal(); q('saleReturnModal').classList.add('show');
+  }catch(err){console.error(err);toast('خطأ في فتح المرتجع: '+err.message)} finally{showLoading(false)}
+}
+function getReturnItems(){
+  return [...q('saleReturnItemsBody').querySelectorAll('.ri-qty')].map(inp=>{
+    const it=returningSaleItems.find(x=>x.id===inp.dataset.itemId); const qty=Math.min(Number(inp.value||0),Number(it?.qty||0));
+    const base=qty*Number(it?.unit_price||0); const perUnitDiscount=Number(it?.qty||0)>0?Number(it?.line_discount||0)/Number(it.qty):0; const line_discount=Math.min(base, perUnitDiscount*qty);
+    return it&&qty>0?{sale_item_id:it.id,product_code:it.product_code,product_name:it.product_name,qty,unit_price:Number(it.unit_price||0),line_discount,line_total:Math.max(0,base-line_discount)}:null;
+  }).filter(Boolean);
+}
+function updateSaleReturnTotal(){const total=getReturnItems().reduce((a,x)=>a+Number(x.line_total||0),0); q('saleReturnTotal').textContent=`الإجمالي: ${money(total)} ${APP_CONFIG.currency}`}
+
+
+q('saleReturnForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const items=getReturnItems(); if(!items.length){toast('اختر كمية مرتجع أولاً');return;}
+  try{
+    showLoading(true);
+    const total=items.reduce((a,x)=>a+Number(x.line_total||0),0); const method=q('saleReturnRefundMethod').value;
+    const ret=await api('pos_sale_returns',{method:'POST',body:{sale_id:returningSaleId,return_date:q('saleReturnDate').value,location_id:returningSale.location_id,customer_id:returningSale.customer_id,total,refund_method:method,notes:q('saleReturnNotes').value.trim()||null}});
+    const returnId=ret[0].id;
+    await api('pos_sale_return_items',{method:'POST',body:items.map(it=>({...it,return_id:returnId}))});
+    for(const it of items){await adjustStockDoc(returningSale.location_id,it,Math.abs(it.qty),'return_customer','pos_sale_returns',returnId,'مرتجع عميل')}
+    if(returningSale.customer_id && (method==='credit_reduction' || Number(returningSale.balance_due||0)>0)){
+      await api('pos_customer_ledger',{method:'POST',body:{customer_id:returningSale.customer_id,entry_date:q('saleReturnDate').value,entry_type:'return',description:'مرتجع فاتورة بيع',debit:0,credit:total,reference_table:'pos_sale_returns',reference_id:returnId}});
+    }
+    closeSaleReturnModal(); toast('تم حفظ المرتجع وتحديث المخزون'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ المرتجع: '+err.message+' - تأكد من تشغيل SQL المرتجعات')}
+  finally{showLoading(false)}
+});
 
 q('roleForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -1216,6 +1324,8 @@ q('productForm').addEventListener('submit', async e=>{
       brand:q('productBrand').value.trim()||null,
       model:q('productModel').value.trim()||null,
       color:q('productColor').value.trim()||null,
+      barcode:q('productBarcode').value.trim()||null,
+      reorder_point:Number(q('productReorderPoint').value||0),
       category:q('productCategory').value.trim()||null,
       supplier_id:q('productSupplier').value||null,
       purchase_price:Number(q('productPurchasePrice').value||0),
@@ -1426,7 +1536,8 @@ function renderReports(){
   const customerDebt=customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0);
   const supplierDebt=suppliers.reduce((a,s)=>a+Math.max(0,Number(s.balance||0)),0);
   const stockValue=stock.reduce((a,st)=>a+Number(st.qty||0)*productCost(st.product_code),0);
-  q('repSalesTotal').textContent=money(salesTotal); q('repSalesCount').textContent=filteredSales.length; q('repProfit').textContent=money(profit);
+  const returnsTotal=saleReturns.filter(r=>inDateRange(r.return_date,from,to) && (!loc || r.location_id===loc)).reduce((a,r)=>a+Number(r.total||0),0);
+  q('repSalesTotal').textContent=money(salesTotal-returnsTotal); if(q('repReturnsTotal')) q('repReturnsTotal').textContent=money(returnsTotal); q('repSalesCount').textContent=filteredSales.length; q('repProfit').textContent=money(profit);
   q('repCustomerDebt').textContent=money(customerDebt); q('repSupplierDebt').textContent=money(supplierDebt); q('repStockValue').textContent=money(stockValue);
 
   const byBranch={};
@@ -1437,7 +1548,7 @@ function renderReports(){
   filteredItems.forEach(it=>{const k=it.product_code; if(!top[k]) top[k]={code:k,name:it.product_name,qty:0,total:0,profit:0}; top[k].qty+=Number(it.qty||0); top[k].total+=Number(it.line_total||0); top[k].profit+=(Number(it.unit_price||0)-productCost(it.product_code))*Number(it.qty||0);});
   q('repTopProductsBody').innerHTML=Object.values(top).sort((a,b)=>b.total-a.total).slice(0,30).map(r=>`<tr><td class="ltr"><b>${r.code}</b></td><td>${r.name}</td><td>${money(r.qty)}</td><td>${money(r.total)}</td><td>${money(r.profit)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف مباعة.</td></tr>';
 
-  const low=stock.filter(st=>Number(st.qty||0)<=2).sort((a,b)=>Number(a.qty||0)-Number(b.qty||0)).slice(0,80);
+  const low=stock.filter(st=>Number(st.qty||0)<=Number(APP_CONFIG.lowStockThreshold||0)).sort((a,b)=>Number(a.qty||0)-Number(b.qty||0)).slice(0,80);
   q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${st.product_code}</b></td><td>${st.product_name||''}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
 
   q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${s.name}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
@@ -1446,7 +1557,7 @@ function renderReports(){
 function printReports(){
   const content=q('reports').innerHTML;
   const w=window.open('','_blank');
-  w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقارير مجموعة بن عمر</title><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;margin:28px;color:#111;line-height:1.6}.print-top{display:flex;align-items:center;gap:16px;border-bottom:2px solid #1d4ed8;padding-bottom:14px;margin-bottom:18px}.logo-box{width:76px;height:76px;border:1px solid #d8dee9;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;background:#f8fafc}table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border-bottom:1px solid #e2e8f0;padding:9px;text-align:right}th{background:#f8fafc;color:#475569}.btn,button,input,select{display:none}.card{border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin:8px;display:inline-block;min-width:180px}.num{font-size:22px;font-weight:700;color:#1d4ed8}.panel{margin-bottom:20px}</style></head><body><div class="print-top"><div class="logo-box">الشعار</div><div><h1>تقارير مجموعة بن عمر</h1><div>تقرير مطبوع من نظام البيع والمخزون</div></div></div>${content}</body></html>`);
+  w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقارير ${esc(APP_CONFIG.businessName)}</title><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;margin:28px;color:#111;line-height:1.6}.print-top{display:flex;align-items:center;gap:16px;border-bottom:2px solid #1d4ed8;padding-bottom:14px;margin-bottom:18px}.logo-box{width:76px;height:76px;border:1px solid #d8dee9;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;background:#f8fafc}table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border-bottom:1px solid #e2e8f0;padding:9px;text-align:right}th{background:#f8fafc;color:#475569}.btn,button,input,select{display:none}.card{border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin:8px;display:inline-block;min-width:180px}.num{font-size:22px;font-weight:700;color:#1d4ed8}.panel{margin-bottom:20px}</style></head><body><div class="print-top"><div class="logo-box">الشعار</div><div><h1>تقارير ${esc(APP_CONFIG.businessName)}</h1><div>تقرير مطبوع من نظام البيع والمخزون</div></div></div>${content}</body></html>`);
   w.document.close();
 }
 
@@ -1471,7 +1582,7 @@ function setupTableSorting(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d; if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
+initBranding(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
