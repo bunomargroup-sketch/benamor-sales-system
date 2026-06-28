@@ -60,8 +60,9 @@
     .btn{border:1px solid var(--blue);border-radius:var(--radius);padding:11px 15px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;font-family:inherit;box-shadow:none}.btn:hover{filter:brightness(.97)}
     .btn.secondary{background:var(--accent-soft);color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 22%,var(--border))}.btn.danger{background:#fff0f0;color:var(--bad);border:1px solid #ffd0d0}
     html[data-theme="dark"] .btn.danger{background:rgba(180,35,24,.14);border-color:rgba(180,35,24,.35)}
-    table{width:100%;border-collapse:collapse;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:var(--radius);border:1px solid var(--border);font-size:14px;background:var(--card)}
-    th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:var(--table-head);color:var(--muted);font-size:13px;font-weight:700}td{color:var(--text)}tbody tr:hover{background:var(--hover)} tbody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 35%,transparent);outline-offset:-2px}.picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end;margin-bottom:12px}tr:last-child td{border-bottom:0} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}
+     .table-scroll{max-height:70vh;overflow:auto;border-radius:var(--radius)}
+    table{width:100%;border-collapse:collapse;border-spacing:0;margin-top:12px;overflow:clip;border-radius:var(--radius);border:1px solid var(--border);font-size:14px;background:var(--card)}
+    th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:var(--table-head);color:var(--muted);font-size:13px;font-weight:700;position:sticky;top:0;z-index:4;box-shadow:0 1px 0 var(--border)}td{color:var(--text)}tbody tr:hover{background:var(--hover)} tbody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 35%,transparent);outline-offset:-2px}.picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end;margin-bottom:12px}tr:last-child td{border-bottom:0} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}
     td b,.num,.ltr,[class$="-line"],td:nth-child(n+4){font-variant-numeric:tabular-nums}.ltr,td .ltr,td:first-child b{direction:ltr;unicode-bidi:embed;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
     td[colspan]{text-align:center!important;color:var(--muted);padding:28px 12px!important;font-weight:600}td[colspan]::before{content:"\ea82";font-family:"tabler-icons";display:block;font-size:26px;margin-bottom:8px;color:var(--muted);opacity:.7}
     .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:700;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
@@ -69,7 +70,7 @@
     .ltr{direction:ltr;unicode-bidi:embed}.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:10px 0}.hidden{display:none!important}
     .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:var(--card);color:var(--text);border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
     .mini{font-size:12px;color:var(--muted)}.totalBox{background:var(--accent-soft);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.totalBox b{font-size:23px;color:var(--blue);font-variant-numeric:tabular-nums}
-    .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.modal{position:fixed;inset:0;background:rgba(15,23,42,.54);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.modal-card{background:var(--card);color:var(--text);border-radius:calc(var(--radius) + 6px);box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(1100px,96vw);max-height:88vh;overflow:auto;padding:18px;border:1px solid var(--border)}.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.stock-negative{color:var(--bad);font-weight:700}.stock-positive{color:var(--good);font-weight:700}
+    .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.sticky-actions{position:sticky;top:82px;z-index:6;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow)}.modal{position:fixed;inset:0;background:rgba(15,23,42,.54);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.modal-card{background:var(--card);color:var(--text);border-radius:calc(var(--radius) + 6px);box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(1100px,96vw);max-height:88vh;overflow:auto;padding:18px;border:1px solid var(--border)}.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.stock-negative{color:var(--bad);font-weight:700}.stock-positive{color:var(--good);font-weight:700}
     @media(max-width:900px){.picker-grid{grid-template-columns:1fr}.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}.table-scroll{overflow:auto}}
   </style>
 </head>
@@ -142,9 +143,9 @@
             <div><label>الموديل</label><input id="productModel" list="modelDatalist" placeholder="اختر أو أضف موديل"></div>
             <div><label>اللون</label><input id="productColor" list="colorDatalist" placeholder="مثال: أبيض / أسود / ذهبي"></div>
             <div><label>الباركود</label><input id="productBarcode" class="ltr" placeholder="اختياري"></div>
-            <div><label>حد الطلب</label><input id="productReorderPoint" type="number" step="0.001" value="0"></div>
-            <div><label>سعر الشراء</label><input id="productPurchasePrice" type="number" step="0.001" value="0"></div>
-            <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="number" step="0.001" value="0"></div>
+            <div><label>حد الطلب</label><input id="productReorderPoint" type="number" step="1" value="0"></div>
+            <div><label>سعر الشراء</label><input id="productPurchasePrice" type="number" step="1" value="0"></div>
+            <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="number" step="1" value="0"></div>
             <div class="row"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
           </form>
           <p class="mini">يمكنك إضافة التصنيف عند إنشاء المنتج. إذا كتبت كود منتج موجود سيتم تعديل بياناته.</p>
@@ -160,7 +161,7 @@
               <select id="productSupplierFilter" onchange="renderProducts()" style="min-width:180px"></select>
               <button class="btn secondary" onclick="loadAll()">تحديث</button>
             </div>
-            <div class="row" style="margin-top:10px">
+            <div class="row sticky-actions" style="margin-top:10px">
               <button class="btn secondary" type="button" onclick="viewSelectedProduct()">مشاهدة المنتج</button>
               <button class="btn secondary" type="button" onclick="editSelectedProduct()">تعديل المنتج المحدد</button>
               <button class="btn secondary" type="button" onclick="openSelectedProductMovements()">حركات المنتج المحدد</button>
@@ -526,7 +527,7 @@
         <div><label>الماركة</label><select id="salePickerBrand" onchange="renderSaleProductPicker()"></select></div>
         <div><label>اللون</label><select id="salePickerColor" onchange="renderSaleProductPicker()"></select></div>
         <div><label>المورد</label><select id="salePickerSupplier" onchange="renderSaleProductPicker()"></select></div>
-        <div><label>الكمية</label><input id="salePickerQty" type="number" step="0.001" min="0.001" value="1"></div>
+        <div><label>الكمية</label><input id="salePickerQty" type="number" step="1" min="1" placeholder="اختر الكمية"></div>
       </div>
       <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>المتوفر في الفرع</th><th>سعر البيع</th><th>إجراء</th></tr></thead><tbody id="salePickerBody"></tbody></table></div>
       <div class="mini" id="salePickerInfo" style="margin-top:10px"></div>
@@ -813,6 +814,7 @@ function openSaleProductPicker(){
   fillPickerSelect('salePickerBrand','brand','كل الماركات');
   fillPickerSelect('salePickerColor','color','كل الألوان');
   fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
+  q('salePickerQty').value='';
   q('saleProductPickerModal').classList.add('show');
   renderSaleProductPicker();
   setTimeout(()=>q('salePickerSearch')?.focus(),50);
@@ -833,7 +835,7 @@ function renderSaleProductPicker(){
 }
 function addSaleProductFromPicker(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
-  const qty=Math.max(0.001,Number(q('salePickerQty').value||1));
+  const qty=Number(q('salePickerQty').value||0); if(!(qty>0)){toast('اختر الكمية قبل إضافة المنتج'); q('salePickerQty').focus(); return;}
   addOrIncrementSaleProduct(p,qty);
   toast('تمت إضافة المنتج للفاتورة');
 }
@@ -977,7 +979,7 @@ function renderTransfers(){
 }
 function addTransferRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"><div class="mini ti-product-note"></div></td><td><input class="ti-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"><div class="mini ti-product-note"></div></td><td><input class="ti-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
   q('transferItemsBody').appendChild(tr); updateTransferAvailable(tr.querySelector('.ti-qty'));
 }
 function fillTransferRow(input){
@@ -1029,13 +1031,14 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 }
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillSaleRow(this)" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><input class="si-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="si-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="number" step="0.001" min="0" value="${item.unit_price||0}" oninput="updateSaleTotal()"></td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillSaleRow(this)" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><input class="si-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="si-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="number" step="1" min="0" value="${item.unit_price||0}" oninput="updateSaleTotal()"></td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
   q('saleItemsBody').appendChild(tr); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function fillSaleRow(input){
   const p=findProductByInput(input.value); if(!p) return;
   const tr=input.closest('tr');
   tr.querySelector('.si-code').value=p.code||''; tr.querySelector('.si-name').value=p.name||''; tr.querySelector('.si-price').value=Number(p.retail_price||0);
+  if(mergeSaleDuplicateRows(tr,p.code)) return;
   const brandModel=[p.brand,p.model].filter(Boolean).join(' / '); const note=tr.querySelector('.si-product-note');
   if(note) note.textContent=[brandModel,p.category].filter(Boolean).join(' - ');
   updateSaleTotal(); updateSaleAvailable(input);
@@ -1064,6 +1067,21 @@ function addOrIncrementSaleProduct(p, qty=1){
   if(existing){const inp=existing.querySelector('.si-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updateSaleTotal(); updateSaleAvailable(inp); return;}
   addSaleRow({product_code:p.code,product_name:p.name,qty,unit_price:Number(p.retail_price||0)});
   const last=q('saleItemsBody').lastElementChild; if(last){const note=last.querySelector('.si-product-note'); if(note) note.textContent=[p.brand,p.model,p.color,p.category].filter(Boolean).join(' - '); updateSaleAvailable(last.querySelector('.si-qty'));}
+}
+
+function mergeSaleDuplicateRows(currentTr, productCode){
+  const rows=[...q('saleItemsBody').querySelectorAll('tr')];
+  const existing=rows.find(tr=>tr!==currentTr && String(tr.querySelector('.si-code')?.value||'').trim().toLowerCase()===String(productCode||'').toLowerCase());
+  if(existing){
+    const exQty=existing.querySelector('.si-qty');
+    const curQty=currentTr.querySelector('.si-qty');
+    exQty.value=Number(exQty.value||0)+Number(curQty.value||1);
+    currentTr.remove();
+    updateSaleTotal(); updateSaleAvailable(exQty);
+    toast('المنتج موجود في الفاتورة، تم إضافة الكمية إلى السطر الموجود');
+    return true;
+  }
+  return false;
 }
 function handleBarcodeKey(e){if(e.key==='Enter'){e.preventDefault();const p=findProductByCodeOrBarcode(q('saleBarcodeInput').value); if(p){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value=''; q('saleBarcodeInput').focus();}else toast('لم يتم العثور على المنتج أو الباركود');}}
 function handleBarcodeInput(){const v=q('saleBarcodeInput').value.trim(); const p=findProductByCodeOrBarcode(v); if(p && v.length>=4){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value='';}}
@@ -1142,7 +1160,7 @@ async function printSale(id){
 
 function addPurchaseRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="0.001" min="0.001" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="number" step="0.001" min="0" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="number" step="1" min="0" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
   q('purchaseItemsBody').appendChild(tr); updatePurchaseTotal();
 }
 function getPurchaseItems(){
@@ -1176,7 +1194,7 @@ async function updateStock(location_id, item, purchaseId){
   await api('pos_stock_movements',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,movement_type:'purchase',qty_change:item.qty,reference_table:'pos_purchases',reference_id:purchaseId,notes:'فاتورة شراء'}});
 }
 
-document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active')}));
+document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab==='sales') setTimeout(()=>q('saleBarcodeInput')?.focus(),50)}));
 document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault();openSaleProductPicker();} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();}});
 
 
@@ -1195,7 +1213,7 @@ async function openSaleReturn(id){
     q('saleReturnSub').textContent=(returningSale.invoice_no||returningSale.id.slice(0,8))+' - '+returningSale.sale_date;
     q('saleReturnDate').value=new Date().toISOString().slice(0,10);
     q('saleReturnRefundMethod').value=Number(returningSale.balance_due||0)>0?'credit_reduction':'cash';
-    q('saleReturnItemsBody').innerHTML=returningSaleItems.map(it=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td><input class="ri-qty" data-item-id="${it.id}" type="number" step="0.001" min="0" max="${Number(it.qty||0)}" value="0" oninput="updateSaleReturnTotal()"></td></tr>`).join('');
+    q('saleReturnItemsBody').innerHTML=returningSaleItems.map(it=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td><input class="ri-qty" data-item-id="${it.id}" type="number" step="1" min="0" max="${Number(it.qty||0)}" value="0" oninput="updateSaleReturnTotal()"></td></tr>`).join('');
     updateSaleReturnTotal(); q('saleReturnModal').classList.add('show');
   }catch(err){console.error(err);toast('خطأ في فتح المرتجع: '+err.message)} finally{showLoading(false)}
 }
