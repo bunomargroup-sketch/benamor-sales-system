@@ -737,6 +737,20 @@ function getStockQty(location_id, product_code){
   const r=stock.find(x=>x.location_id===location_id && String(x.product_code||'').toLowerCase()===String(product_code||'').toLowerCase());
   return Number(r?.qty||0);
 }
+async function adjustStockOnly(location_id, item, qtyChange){
+  const code=encodeURIComponent(item.product_code);
+  const loc=encodeURIComponent(location_id);
+  const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
+  if(found && found.length){
+    const newQty=Number(found[0].qty||0)+Number(qtyChange||0);
+    await api('pos_stock',{method:'PATCH',qs:`?id=eq.${found[0].id}`,body:{qty:newQty,product_name:item.product_name,updated_at:new Date().toISOString()}});
+  }else{
+    await api('pos_stock',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,qty:qtyChange}});
+  }
+}
+async function deleteStockMovements(referenceTable, referenceId){
+  await api('pos_stock_movements',{method:'DELETE',qs:`?reference_table=eq.${referenceTable}&reference_id=eq.${referenceId}`});
+}
 async function adjustStock(location_id, item, qtyChange, movementType, referenceId, notes){
   const code=encodeURIComponent(item.product_code);
   const loc=encodeURIComponent(location_id);
@@ -881,9 +895,11 @@ async function openSaleForEdit(id){
 }
 async function reverseSaleEffects(){
   if(!editingSaleId || !originalSale) return;
+  // عند تعديل فاتورة البيع نرجع المخزون بدون تسجيل حركة مرتجع وهمية، ثم نحذف حركات البيع القديمة.
   for(const it of originalSaleItems){
-    await adjustStockDoc(originalSale.location_id,{product_code:it.product_code,product_name:it.product_name,qty:it.qty},Math.abs(Number(it.qty||0)),'return_customer','pos_sales',editingSaleId,'عكس بيع سابق قبل التعديل');
+    await adjustStockOnly(originalSale.location_id,{product_code:it.product_code,product_name:it.product_name},Math.abs(Number(it.qty||0)));
   }
+  await deleteStockMovements('pos_sales', editingSaleId);
   await api('pos_customer_ledger',{method:'DELETE',qs:`?reference_table=eq.pos_sales&reference_id=eq.${editingSaleId}`});
 }
 async function printSale(id){
@@ -1109,9 +1125,11 @@ async function openPurchaseForEdit(id){
 }
 async function reversePurchaseEffects(){
   if(!editingPurchaseId || !originalPurchase) return;
+  // عند تعديل الفاتورة نعكس تأثير المخزون بدون تسجيل حركة وهمية، ثم نحذف حركات الفاتورة القديمة.
   for(const it of originalPurchaseItems){
-    await updateStock(originalPurchase.location_id,{product_code:it.product_code,product_name:it.product_name,qty:-Math.abs(Number(it.qty||0))},editingPurchaseId);
+    await adjustStockOnly(originalPurchase.location_id,{product_code:it.product_code,product_name:it.product_name},-Math.abs(Number(it.qty||0)));
   }
+  await deleteStockMovements('pos_purchases', editingPurchaseId);
   await api('pos_supplier_ledger',{method:'DELETE',qs:`?reference_table=eq.pos_purchases&reference_id=eq.${editingPurchaseId}`});
 }
 
@@ -1168,11 +1186,12 @@ async function openTransferForEdit(id){
 }
 async function reverseTransferEffects(){
   if(!editingTransferId || !originalTransfer) return;
+  // نعكس التحويل القديم بدون تسجيل حركات وهمية، ثم نحذف حركات التحويل القديمة.
   for(const it of originalTransferItems){
-    // Reverse old transfer: add back to source, subtract from destination.
-    await adjustStock(originalTransfer.from_location_id,it,Math.abs(Number(it.qty||0)),'transfer_in',editingTransferId,'عكس تحويل سابق قبل التعديل');
-    await adjustStock(originalTransfer.to_location_id,it,-Math.abs(Number(it.qty||0)),'transfer_out',editingTransferId,'عكس تحويل سابق قبل التعديل');
+    await adjustStockOnly(originalTransfer.from_location_id,it,Math.abs(Number(it.qty||0)));
+    await adjustStockOnly(originalTransfer.to_location_id,it,-Math.abs(Number(it.qty||0)));
   }
+  await deleteStockMovements('pos_stock_transfers', editingTransferId);
 }
 
 q('transferForm').addEventListener('submit', async e=>{
@@ -1269,6 +1288,5 @@ function printReports(){
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d; if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
