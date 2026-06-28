@@ -55,6 +55,7 @@
       <button data-tab="purchases">فواتير الشراء</button>
       <button data-tab="stock">المخزون الحالي</button>
       <button data-tab="transfers">تحويلات المخزون</button>
+      <button data-tab="reports">التقارير</button>
       <button data-tab="next">المرحلة القادمة</button>
     </nav>
 
@@ -322,11 +323,59 @@
         </div>
       </section>
 
+
+      <section id="reports" class="section">
+        <div class="panel">
+          <div class="tools">
+            <h2>التقارير</h2>
+            <div class="row">
+              <input id="reportFrom" type="date" onchange="renderReports()">
+              <input id="reportTo" type="date" onchange="renderReports()">
+              <select id="reportLocation" onchange="renderReports()" style="min-width:210px"></select>
+              <button class="btn secondary" onclick="loadAll()">تحديث</button>
+              <button class="btn secondary" onclick="printReports()">طباعة التقرير</button>
+            </div>
+          </div>
+          <p class="muted">تقارير سريعة للمبيعات، الأرباح التقديرية، المخزون، أرصدة الموردين، وأرصدة العملاء.</p>
+          <div class="grid cards">
+            <div class="card"><h3>إجمالي المبيعات</h3><div class="num" id="repSalesTotal">0</div></div>
+            <div class="card"><h3>عدد فواتير البيع</h3><div class="num" id="repSalesCount">0</div></div>
+            <div class="card"><h3>ربح تقديري</h3><div class="num" id="repProfit">0</div></div>
+            <div class="card"><h3>ديون العملاء</h3><div class="num" id="repCustomerDebt">0</div></div>
+            <div class="card"><h3>أرصدة الموردين علينا</h3><div class="num" id="repSupplierDebt">0</div></div>
+            <div class="card"><h3>قيمة المخزون بسعر الشراء</h3><div class="num" id="repStockValue">0</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>مبيعات حسب الفرع</h2>
+          <div class="table-scroll"><table><thead><tr><th>الفرع</th><th>عدد الفواتير</th><th>إجمالي البيع</th><th>المدفوع</th><th>الدين</th></tr></thead><tbody id="repSalesByBranchBody"></tbody></table></div>
+        </div>
+
+        <div class="panel">
+          <h2>أفضل المنتجات مبيعًا</h2>
+          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>إجمالي البيع</th><th>ربح تقديري</th></tr></thead><tbody id="repTopProductsBody"></tbody></table></div>
+        </div>
+
+        <div class="panel">
+          <h2>مخزون منخفض / سالب</h2>
+          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>سعر الشراء</th></tr></thead><tbody id="repLowStockBody"></tbody></table></div>
+        </div>
+
+        <div class="panel">
+          <h2>أرصدة الموردين والعملاء</h2>
+          <div class="grid" style="grid-template-columns:1fr 1fr">
+            <div class="table-scroll"><table><thead><tr><th>المورد</th><th>الرصيد</th><th>الحالة</th></tr></thead><tbody id="repSuppliersBody"></tbody></table></div>
+            <div class="table-scroll"><table><thead><tr><th>العميل</th><th>الرصيد</th><th>الحالة</th></tr></thead><tbody id="repCustomersBody"></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
       <section id="next" class="section">
         <div class="panel">
           <h2>المرحلة القادمة</h2>
           <ul>
-            <li>الخطوة التالية: تقارير المبيعات والمخزون والموردين.</li>
+            <li>الخطوة القادمة: تحسين الصلاحيات والمستخدمين، ثم تقارير متقدمة حسب الحاجة.</li>
           </ul>
         </div>
       </section>
@@ -351,7 +400,7 @@
 const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0';
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], customers=[], customerLedger=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], customers=[], customerLedger=[];
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
@@ -390,16 +439,17 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, customers, customerLedger] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, customers, customerLedger] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
       api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
       apiAll('pos_stock','?select=*&order=updated_at.desc'),
-      api('pos_purchases',{qs:'?select=*&order=purchase_date.desc,created_at.desc&limit=50'}),
+      apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc'),
       apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
       api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}),
-      api('pos_sales',{qs:'?select=*&order=sale_date.desc,created_at.desc&limit=80'}).catch(e=>{console.warn('sales not setup yet',e); return []}),
+      apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(e=>{console.warn('sales not setup yet',e); return []}),
+      apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
       apiAll('pos_customer_balances','?select=*&order=name.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
       apiAll('pos_customer_ledger','?select=*&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []})
     ]);
@@ -409,7 +459,7 @@ async function loadAll(){
   finally{showLoading(false)}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderPurchases();renderStock();renderTransfers()}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderPurchases();renderStock();renderTransfers();renderReports()}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -552,6 +602,7 @@ function fillSupplierSelects(){
   const customerOptions = '<option value="">اختر العميل</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
   q('customerPaymentCustomer').innerHTML = customerOptions;
   q('customerLedgerCustomer').innerHTML = customerOptions;
+  q('reportLocation').innerHTML = '<option value="">كل الفروع</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
 }
 function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id; renderLedger()}
 function renderLedger(){
@@ -1048,9 +1099,57 @@ q('transferForm').addEventListener('submit', async e=>{
 
 q('transferFrom').addEventListener('change', refreshTransferAvailability);
 
-function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d}
+
+function inDateRange(date, from, to){
+  if(!date) return true;
+  if(from && date < from) return false;
+  if(to && date > to) return false;
+  return true;
+}
+function productCost(code){
+  const p=products.find(x=>String(x.code||'').toLowerCase()===String(code||'').toLowerCase());
+  return Number(p?.purchase_price||0);
+}
+function renderReports(){
+  if(!q('repSalesTotal')) return;
+  const from=q('reportFrom')?.value||''; const to=q('reportTo')?.value||''; const loc=q('reportLocation')?.value||'';
+  const filteredSales=sales.filter(sl=>inDateRange(sl.sale_date,from,to) && (!loc || sl.location_id===loc));
+  const saleIds=new Set(filteredSales.map(s=>s.id));
+  const filteredItems=saleItems.filter(it=>saleIds.has(it.sale_id));
+  const salesTotal=filteredSales.reduce((a,s)=>a+Number(s.total||0),0);
+  const paidTotal=filteredSales.reduce((a,s)=>a+Number(s.paid_amount||0),0);
+  const balanceTotal=filteredSales.reduce((a,s)=>a+Number(s.balance_due||0),0);
+  const profit=filteredItems.reduce((a,it)=>a+(Number(it.unit_price||0)-productCost(it.product_code))*Number(it.qty||0),0);
+  const customerDebt=customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0);
+  const supplierDebt=suppliers.reduce((a,s)=>a+Math.max(0,Number(s.balance||0)),0);
+  const stockValue=stock.reduce((a,st)=>a+Number(st.qty||0)*productCost(st.product_code),0);
+  q('repSalesTotal').textContent=money(salesTotal); q('repSalesCount').textContent=filteredSales.length; q('repProfit').textContent=money(profit);
+  q('repCustomerDebt').textContent=money(customerDebt); q('repSupplierDebt').textContent=money(supplierDebt); q('repStockValue').textContent=money(stockValue);
+
+  const byBranch={};
+  filteredSales.forEach(sl=>{const k=sl.location_id||'none'; if(!byBranch[k]) byBranch[k]={count:0,total:0,paid:0,balance:0}; byBranch[k].count++; byBranch[k].total+=Number(sl.total||0); byBranch[k].paid+=Number(sl.paid_amount||0); byBranch[k].balance+=Number(sl.balance_due||0);});
+  q('repSalesByBranchBody').innerHTML=Object.entries(byBranch).map(([id,r])=>{const l=locations.find(x=>x.id===id); return `<tr><td>${l?.name||'غير محدد'}</td><td>${r.count}</td><td><b>${money(r.total)}</b></td><td>${money(r.paid)}</td><td>${money(r.balance)}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد مبيعات في الفترة المحددة.</td></tr>';
+
+  const top={};
+  filteredItems.forEach(it=>{const k=it.product_code; if(!top[k]) top[k]={code:k,name:it.product_name,qty:0,total:0,profit:0}; top[k].qty+=Number(it.qty||0); top[k].total+=Number(it.line_total||0); top[k].profit+=(Number(it.unit_price||0)-productCost(it.product_code))*Number(it.qty||0);});
+  q('repTopProductsBody').innerHTML=Object.values(top).sort((a,b)=>b.total-a.total).slice(0,30).map(r=>`<tr><td class="ltr"><b>${r.code}</b></td><td>${r.name}</td><td>${money(r.qty)}</td><td>${money(r.total)}</td><td>${money(r.profit)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف مباعة.</td></tr>';
+
+  const low=stock.filter(st=>Number(st.qty||0)<=2).sort((a,b)=>Number(a.qty||0)-Number(b.qty||0)).slice(0,80);
+  q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${st.product_code}</b></td><td>${st.product_name||''}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
+
+  q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${s.name}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
+  q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${c.name}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة عملاء.</td></tr>';
+}
+function printReports(){
+  const content=q('reports').innerHTML;
+  const w=window.open('','_blank');
+  w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقارير مجموعة بن عمر</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:24px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #ddd;padding:7px;text-align:right}th{background:#f3f6ff}.btn,button,input,select{display:none}.card{border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px;display:inline-block;min-width:180px}.num{font-size:22px;font-weight:900;color:#082b9e}.panel{margin-bottom:18px}</style></head><body><h1>تقارير مجموعة بن عمر</h1>${content}</body></html>`);
+  w.document.close();
+}
+
+function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d; if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); loadAll();
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a12b9107ce825f26',t:'MTc4MjYzNzkxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
