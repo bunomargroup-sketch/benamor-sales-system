@@ -4,61 +4,100 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>نظام البيع - مجموعة بن عمر</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <script>(function(){try{var t=localStorage.getItem('posTheme'); if(t){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>
   <style>
     :root{
-      --blue:#082b9e;--blue2:#0f4cbd;--bg:#f4f7fb;--card:#fff;--text:#0f172a;--muted:#475569;
-      --border:#dbe3ef;--good:#087f5b;--bad:#b42318;--warn:#b7791f;--shadow:0 14px 40px rgba(15,23,42,.08);
-      --radius:18px;
+      --bg:#f7f8fa;
+      --card:#ffffff;
+      --blue:#1d4ed8;
+      --blue2:#2563eb;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e6e9ef;
+      --good:#087f5b;
+      --bad:#b42318;
+      --warn:#b7791f;
+      --shadow:0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+      --radius:14px;
+      --accent-soft:#eff6ff;
+      --input:#ffffff;
+      --table-head:#f8fafc;
+      --hover:#f8fafc;
+      --focus:0 0 0 3px rgba(29,78,216,.25);
     }
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Tahoma,Arial,sans-serif;color:var(--text)}
-    header{background:linear-gradient(135deg,var(--blue),var(--blue2));color:white;padding:18px 22px;position:sticky;top:0;z-index:20;box-shadow:0 10px 28px rgba(8,43,158,.22)}
+    @media (prefers-color-scheme:dark){
+      :root{--bg:#0b1220;--card:#131c2e;--text:#e8edf6;--muted:#94a3b8;--border:#243043;--input:#101827;--table-head:#17243a;--hover:#18243a;--accent-soft:rgba(29,78,216,.16);}
+    }
+    html[data-theme="dark"]{--bg:#0b1220;--card:#131c2e;--text:#e8edf6;--muted:#94a3b8;--border:#243043;--input:#101827;--table-head:#17243a;--hover:#18243a;--accent-soft:rgba(29,78,216,.16);}
+    html[data-theme="light"]{--bg:#f7f8fa;--card:#ffffff;--text:#0f172a;--muted:#64748b;--border:#e6e9ef;--input:#ffffff;--table-head:#f8fafc;--hover:#f8fafc;--accent-soft:#eff6ff;}
+    *{box-sizing:border-box}
+    html{color-scheme:light dark}
+    body{margin:0;background:var(--bg);font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;color:var(--text);font-weight:400;line-height:1.55}
+    header{background:var(--blue);color:white;padding:16px 22px;position:sticky;top:0;z-index:20;box-shadow:var(--shadow)}
     .top{display:flex;align-items:center;justify-content:space-between;gap:14px;max-width:1320px;margin:auto}
-    .brand{display:flex;flex-direction:column;gap:4px}.brand h1{font-size:24px;margin:0;font-weight:900}.brand p{margin:0;opacity:.85;font-size:13px}
-    .pill{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:9px 13px;font-size:13px}
-    .wrap{max-width:1320px;margin:22px auto;padding:0 16px;display:grid;grid-template-columns:250px 1fr;gap:18px}
-    nav{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow);height:max-content;position:sticky;top:90px}
-    nav button{width:100%;border:0;background:transparent;color:var(--text);font-weight:800;text-align:right;padding:13px 14px;border-radius:14px;cursor:pointer;margin:3px 0;font-size:15px}
-    nav button.active,nav button:hover{background:linear-gradient(135deg,#eaf1ff,#f8fbff);color:var(--blue)}
+    .brand{display:flex;flex-direction:column;gap:3px}.brand h1{font-size:23px;margin:0;font-weight:700;letter-spacing:-.02em}.brand p{margin:0;opacity:.86;font-size:13px;font-weight:500}
+    .pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:8px 12px;font-size:13px;color:#fff}
+    .icon-btn{width:38px;height:38px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.12);color:#fff;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:19px}
+    .icon-btn:hover{background:rgba(255,255,255,.2)}
+    .wrap{max-width:1320px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:260px 1fr;gap:18px}
+    nav{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow);height:max-content;position:sticky;top:86px}
+    nav button{width:100%;border:0;background:transparent;color:var(--muted);font-weight:600;text-align:right;padding:11px 12px;border-radius:12px;cursor:pointer;margin:2px 0;font-size:14px;display:flex;align-items:center;justify-content:flex-start;gap:10px;font-family:inherit;transition:background .15s ease,color .15s ease}
+    nav button i{font-size:19px;line-height:1;color:currentColor;opacity:.9;min-width:20px;text-align:center}
+    nav button span{flex:1;text-align:right}
+    nav button:hover{background:var(--hover);color:var(--text)}
+    nav button.active{background:var(--accent-soft);color:var(--blue);font-weight:700}
     main{min-width:0}.section{display:none}.section.active{display:block}.grid{display:grid;gap:14px}.cards{grid-template-columns:repeat(4,minmax(0,1fr))}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}.card h3{margin:0 0 8px;font-size:15px;color:var(--muted)}.num{font-size:28px;font-weight:900;color:var(--blue)}
-    .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:16px}.panel h2{margin:0 0 14px;font-size:20px}
-    label{display:block;font-size:13px;color:var(--muted);font-weight:800;margin-bottom:6px}.form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}
-    input,select,textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:11px 12px;font:inherit;background:white;color:var(--text)}textarea{min-height:72px;resize:vertical}
-    .btn{border:0;border-radius:13px;padding:12px 15px;font-weight:900;cursor:pointer;background:linear-gradient(135deg,var(--blue),#1d6bff);color:white}.btn.secondary{background:#edf2ff;color:var(--blue);border:1px solid #c8d7ff}.btn.danger{background:#fff0f0;color:var(--bad);border:1px solid #ffd0d0}
-    table{width:100%;border-collapse:separate;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:14px;border:1px solid var(--border);font-size:14px}th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:#f8fafc;color:#334155;font-size:13px} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}tr:last-child td{border-bottom:0}
-    .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:900;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}.card h3{margin:0 0 8px;font-size:14px;color:var(--muted);font-weight:600}.num{font-size:27px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums}
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:16px}.panel h2{margin:0 0 14px;font-size:20px;font-weight:700;letter-spacing:-.01em}
+    label{display:block;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:6px}.form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}
+    input,select,textarea{width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px;font:inherit;background:var(--input);color:var(--text);outline:none}textarea{min-height:72px;resize:vertical}
+    input::placeholder,textarea::placeholder{color:color-mix(in srgb,var(--muted) 70%,transparent)}
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.btn:focus-visible{outline:none;box-shadow:var(--focus)}
+    .btn{border:1px solid var(--blue);border-radius:var(--radius);padding:11px 15px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;font-family:inherit;box-shadow:none}.btn:hover{filter:brightness(.97)}
+    .btn.secondary{background:var(--accent-soft);color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 22%,var(--border))}.btn.danger{background:#fff0f0;color:var(--bad);border:1px solid #ffd0d0}
+    html[data-theme="dark"] .btn.danger{background:rgba(180,35,24,.14);border-color:rgba(180,35,24,.35)}
+    table{width:100%;border-collapse:collapse;border-spacing:0;margin-top:12px;overflow:hidden;border-radius:var(--radius);border:1px solid var(--border);font-size:14px;background:var(--card)}
+    th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:var(--table-head);color:var(--muted);font-size:13px;font-weight:700}td{color:var(--text)}tbody tr:hover{background:var(--hover)}tr:last-child td{border-bottom:0} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}
+    td b,.num,.ltr,[class$="-line"],td:nth-child(n+4){font-variant-numeric:tabular-nums}.ltr,td .ltr,td:first-child b{direction:ltr;unicode-bidi:embed;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    td[colspan]{text-align:center!important;color:var(--muted);padding:28px 12px!important;font-weight:600}td[colspan]::before{content:"\ea82";font-family:"tabler-icons";display:block;font-size:26px;margin-bottom:8px;color:var(--muted);opacity:.7}
+    .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:700;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
+    html[data-theme="dark"] .green{background:rgba(8,127,91,.16);color:#60d6ad}html[data-theme="dark"] .red{background:rgba(180,35,24,.18);color:#ff9b91}html[data-theme="dark"] .gray{background:#26344a;color:#cbd5e1}html[data-theme="dark"] .yellow{background:rgba(183,121,31,.17);color:#f7cf82}
     .ltr{direction:ltr;unicode-bidi:embed}.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:10px 0}.hidden{display:none!important}
-    .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:white;border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
-    .mini{font-size:12px;color:var(--muted)}.totalBox{background:#f8fbff;border:1px solid #d9e6ff;border-radius:16px;padding:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.totalBox b{font-size:24px;color:var(--blue)}
-    .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.modal{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.modal-card{background:white;border-radius:20px;box-shadow:0 24px 70px rgba(15,23,42,.25);width:min(1100px,96vw);max-height:88vh;overflow:auto;padding:18px;border:1px solid var(--border)}.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.stock-negative{color:var(--bad);font-weight:900}.stock-positive{color:var(--good);font-weight:900}
-    @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}th,td{padding:9px}.table-scroll{overflow:auto}}
+    .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:50;display:none}.toast{position:fixed;left:18px;bottom:18px;background:var(--card);color:var(--text);border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:60;display:none;max-width:340px}
+    .mini{font-size:12px;color:var(--muted)}.totalBox{background:var(--accent-soft);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.totalBox b{font-size:23px;color:var(--blue);font-variant-numeric:tabular-nums}
+    .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.modal{position:fixed;inset:0;background:rgba(15,23,42,.54);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.modal-card{background:var(--card);color:var(--text);border-radius:calc(var(--radius) + 6px);box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(1100px,96vw);max-height:88vh;overflow:auto;padding:18px;border:1px solid var(--border)}.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.stock-negative{color:var(--bad);font-weight:700}.stock-positive{color:var(--good);font-weight:700}
+    @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}.table-scroll{overflow:auto}}
   </style>
 </head>
 <body>
   <header>
     <div class="top">
       <div class="brand"><h1>نظام البيع والمخزون</h1><p>مجموعة بن عمر - نظام بيع ومخزون</p></div>
-      <div class="row"><div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div><div class="pill hidden" id="userPill"><span id="userLabel"></span> <button class="btn secondary" style="padding:6px 10px" onclick="logoutPOS()">خروج</button></div></div>
+      <div class="row"><button class="icon-btn" id="themeToggle" type="button" onclick="toggleTheme()" title="تبديل الوضع"><i class="ti ti-moon"></i></button><div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div><div class="pill hidden" id="userPill"><span id="userLabel"></span> <button class="btn secondary" style="padding:6px 10px" onclick="logoutPOS()">خروج</button></div></div>
     </div>
   </header>
 
   <div class="wrap">
     <nav>
-      <button class="active" data-tab="dashboard">الرئيسية</button>
-      <button data-tab="locations">الفروع والمخازن</button>
-      <button data-tab="products">قاعدة المنتجات</button>
-      <button data-tab="suppliers">الموردون</button>
-      <button data-tab="ledger">كشف حساب المورد</button>
-      <button data-tab="payments">دفعات الموردين</button>
-      <button data-tab="sales">البيع اليومي</button>
-      <button data-tab="salesList">فواتير البيع</button>
-      <button data-tab="customers">العملاء والديون</button>
-      <button data-tab="purchases">فواتير الشراء</button>
-      <button data-tab="stock">المخزون الحالي</button>
-      <button data-tab="transfers">تحويلات المخزون</button>
-      <button data-tab="reports">التقارير</button>
-      <button data-tab="users">المستخدمون والصلاحيات</button>
-      <button data-tab="next">المرحلة القادمة</button>
+      <button class="active" data-tab="dashboard"><i class="ti ti-layout-dashboard"></i><span>الرئيسية</span></button>
+      <button data-tab="locations"><i class="ti ti-building-warehouse"></i><span>الفروع والمخازن</span></button>
+      <button data-tab="products"><i class="ti ti-box"></i><span>قاعدة المنتجات</span></button>
+      <button data-tab="suppliers"><i class="ti ti-truck"></i><span>الموردون</span></button>
+      <button data-tab="ledger"><i class="ti ti-file-invoice"></i><span>كشف حساب المورد</span></button>
+      <button data-tab="payments"><i class="ti ti-cash"></i><span>دفعات الموردين</span></button>
+      <button data-tab="sales"><i class="ti ti-shopping-cart"></i><span>البيع اليومي</span></button>
+      <button data-tab="salesList"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
+      <button data-tab="customers"><i class="ti ti-users"></i><span>العملاء والديون</span></button>
+      <button data-tab="purchases"><i class="ti ti-receipt"></i><span>فواتير الشراء</span></button>
+      <button data-tab="stock"><i class="ti ti-stack-2"></i><span>المخزون الحالي</span></button>
+      <button data-tab="transfers"><i class="ti ti-arrows-exchange"></i><span>تحويلات المخزون</span></button>
+      <button data-tab="reports"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
+      <button data-tab="users"><i class="ti ti-shield-lock"></i><span>المستخدمون والصلاحيات</span></button>
+      <button data-tab="next"><i class="ti ti-rocket"></i><span>المرحلة القادمة</span></button>
     </nav>
 
     <main>
@@ -439,6 +478,12 @@
       <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>المكان</th><th>الكمية</th><th>المرجع</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
     </div>
   </div>
+
+<script>
+function applyThemeIcon(){try{var t=document.documentElement.getAttribute('data-theme')||localStorage.getItem('posTheme')||'auto';var btn=document.getElementById('themeToggle');if(btn){btn.innerHTML=t==='dark'?'<i class="ti ti-sun"></i>':'<i class="ti ti-moon"></i>';}}catch(e){}}
+function toggleTheme(){try{var cur=document.documentElement.getAttribute('data-theme');var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);localStorage.setItem('posTheme',next);applyThemeIcon();}catch(e){}}
+document.addEventListener('DOMContentLoaded',applyThemeIcon);
+</script>
 
 <script>
 const SUPABASE_URL = 'https://kkqbkumobeimwuscxztu.supabase.co';
@@ -918,7 +963,7 @@ async function printSale(id){
     const items=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`});
     const loc=locations.find(x=>x.id===sl.location_id); const cust=customers.find(x=>x.id===sl.customer_id);
     const rows=items.map((it,i)=>`<tr><td>${i+1}</td><td>${it.product_code}</td><td>${it.product_name}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_total)}</td></tr>`).join('');
-    const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة بيع</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:28px;color:#111}h1{margin:0;color:#082b9e}.head{display:flex;justify-content:space-between;border-bottom:2px solid #082b9e;padding-bottom:12px;margin-bottom:16px}.box{border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px 0}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #ddd;padding:8px;text-align:right}th{background:#f3f6ff}.total{font-size:18px;font-weight:900}.ltr{direction:ltr;text-align:left}@media print{button{display:none}}</style></head><body><button onclick="print()">طباعة</button><div class="head"><div><h1>مجموعة بن عمر</h1><div>فاتورة بيع</div></div><div class="ltr">${sl.invoice_no||sl.id.slice(0,8)}</div></div><div class="box">التاريخ: ${sl.sale_date}<br>الفرع: ${loc?.name||''}<br>العميل: ${cust?.name||'زبون نقدي'} ${cust?.phone?'<span class="ltr">'+cust.phone+'</span>':''}<br>طريقة الدفع: ${typeLabel(sl.payment_method)}</div><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table><div class="box total">الإجمالي: ${money(sl.total)} د.ل<br>المدفوع: ${money(sl.paid_amount)} د.ل<br>المتبقي: ${money(sl.balance_due)} د.ل</div></body></html>`;
+    const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة بيع</title><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;margin:32px;color:#111;line-height:1.6}.print-top{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:2px solid #1d4ed8;padding-bottom:16px;margin-bottom:18px}.logo-box{width:82px;height:82px;border:1px solid #d8dee9;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;background:#f8fafc}.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex:1}h1{margin:0;color:#1d4ed8;font-size:28px}.box{border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin:10px 0;background:#fff}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #e2e8f0;padding:10px;text-align:right}th{background:#f8fafc;color:#475569;font-weight:700}.total{font-size:19px;font-weight:700}.ltr{direction:ltr;text-align:left;font-family:ui-monospace,monospace}@media print{button{display:none}body{margin:18mm}}</style></head><body><button onclick="print()">طباعة</button><div class="print-top"><div class="logo-box">الشعار</div><div class="head"><div><h1>مجموعة بن عمر</h1><div>فاتورة بيع</div></div><div class="ltr">${sl.invoice_no||sl.id.slice(0,8)}</div></div></div><div class="box">التاريخ: ${sl.sale_date}<br>الفرع: ${loc?.name||''}<br>العميل: ${cust?.name||'زبون نقدي'} ${cust?.phone?'<span class="ltr">'+cust.phone+'</span>':''}<br>طريقة الدفع: ${typeLabel(sl.payment_method)}</div><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table><div class="box total">الإجمالي: ${money(sl.total)} د.ل<br>المدفوع: ${money(sl.paid_amount)} د.ل<br>المتبقي: ${money(sl.balance_due)} د.ل</div></body></html>`;
     const w=window.open('','_blank'); w.document.write(html); w.document.close();
   }catch(err){console.error(err);toast('خطأ في طباعة الفاتورة: '+err.message)}
 }
@@ -1292,7 +1337,7 @@ function renderReports(){
 function printReports(){
   const content=q('reports').innerHTML;
   const w=window.open('','_blank');
-  w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقارير مجموعة بن عمر</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:24px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #ddd;padding:7px;text-align:right}th{background:#f3f6ff}.btn,button,input,select{display:none}.card{border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px;display:inline-block;min-width:180px}.num{font-size:22px;font-weight:900;color:#082b9e}.panel{margin-bottom:18px}</style></head><body><h1>تقارير مجموعة بن عمر</h1>${content}</body></html>`);
+  w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقارير مجموعة بن عمر</title><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;margin:28px;color:#111;line-height:1.6}.print-top{display:flex;align-items:center;gap:16px;border-bottom:2px solid #1d4ed8;padding-bottom:14px;margin-bottom:18px}.logo-box{width:76px;height:76px;border:1px solid #d8dee9;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;background:#f8fafc}table{width:100%;border-collapse:collapse;margin:14px 0}th,td{border-bottom:1px solid #e2e8f0;padding:9px;text-align:right}th{background:#f8fafc;color:#475569}.btn,button,input,select{display:none}.card{border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin:8px;display:inline-block;min-width:180px}.num{font-size:22px;font-weight:700;color:#1d4ed8}.panel{margin-bottom:20px}</style></head><body><div class="print-top"><div class="logo-box">الشعار</div><div><h1>تقارير مجموعة بن عمر</h1><div>تقرير مطبوع من نظام البيع والمخزون</div></div></div>${content}</body></html>`);
   w.document.close();
 }
 
