@@ -62,7 +62,7 @@
     html[data-theme="dark"] .btn.danger{background:rgba(180,35,24,.14);border-color:rgba(180,35,24,.35)}
      .table-scroll{max-height:70vh;overflow:auto;border-radius:var(--radius)}
     table{width:100%;border-collapse:collapse;border-spacing:0;margin-top:12px;overflow:clip;border-radius:var(--radius);border:1px solid var(--border);font-size:14px;background:var(--card)}
-    th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:var(--table-head);color:var(--muted);font-size:13px;font-weight:700;position:sticky;top:0;z-index:4;box-shadow:0 1px 0 var(--border)}td{color:var(--text)}tbody tr:hover{background:var(--hover)} tbody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 35%,transparent);outline-offset:-2px}.picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end;margin-bottom:12px}tr:last-child td{border-bottom:0} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}
+    th,td{padding:12px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}th{background:var(--table-head);color:var(--muted);font-size:13px;font-weight:700;position:sticky;top:0;z-index:4;box-shadow:0 1px 0 var(--border)}td{color:var(--text)}tbody tr:hover{background:var(--hover)} tbody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 35%,transparent);outline-offset:-2px}.picker-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end;margin-bottom:12px}.sale-summary{position:sticky;bottom:0;z-index:5;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow)}.edit-alert{background:#fff8e6;color:var(--warn);border:1px solid rgba(183,121,31,.35);border-radius:var(--radius);padding:10px 12px;margin:10px 0;font-weight:700}.shortcut-hint{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.kbd{font-family:ui-monospace,monospace;background:var(--table-head);border:1px solid var(--border);border-radius:8px;padding:2px 7px;color:var(--muted)}tr:last-child td{border-bottom:0} th.sortable{cursor:pointer;user-select:none} th.sortable:after{content:" ⇅";color:#94a3b8;font-size:11px}
     td b,.num,.ltr,[class$="-line"],td:nth-child(n+4){font-variant-numeric:tabular-nums}.ltr,td .ltr,td:first-child b{direction:ltr;unicode-bidi:embed;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
     td[colspan]{text-align:center!important;color:var(--muted);padding:28px 12px!important;font-weight:600}td[colspan]::before{content:"\ea82";font-family:"tabler-icons";display:block;font-size:26px;margin-bottom:8px;color:var(--muted);opacity:.7}
     .badge{display:inline-flex;border-radius:999px;padding:5px 9px;font-weight:700;font-size:12px}.green{background:#e7f8f1;color:var(--good)}.red{background:#fff0f0;color:var(--bad)}.gray{background:#eef2f7;color:#334155}.yellow{background:#fff8e6;color:var(--warn)}
@@ -98,6 +98,7 @@
       <button data-tab="transfers"><i class="ti ti-arrows-exchange"></i><span>تحويلات المخزون</span></button>
       <button data-tab="reports"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
       <button data-tab="users"><i class="ti ti-shield-lock"></i><span>المستخدمون والصلاحيات</span></button>
+      <button data-tab="settings"><i class="ti ti-settings"></i><span>الإعدادات</span></button>
       <button data-tab="next"><i class="ti ti-rocket"></i><span>المرحلة القادمة</span></button>
     </nav>
 
@@ -109,6 +110,8 @@
           <div class="card"><h3>الموردون</h3><div class="num" id="suppliersCount">0</div></div>
           <div class="card"><h3>المنتجات</h3><div class="num" id="productsCount">0</div></div>
           <div class="card"><h3>فواتير البيع</h3><div class="num" id="salesCount">0</div></div>
+          <div class="card"><h3>مبيعات اليوم</h3><div class="num" id="todaySalesTotal">0</div></div>
+          <div class="card"><h3>فواتير اليوم</h3><div class="num" id="todaySalesCount">0</div></div>
           <div class="card"><h3>ديون العملاء</h3><div class="num" id="customersDebtTotal">0</div></div>
           <div class="card"><h3>إجمالي أرصدة الموردين</h3><div class="num" id="suppliersBalance">0</div></div>
           <div class="card"><h3>أصناف تحت حد الطلب</h3><div class="num" id="reorderCount">0</div></div>
@@ -116,6 +119,14 @@
         <div class="panel">
           <h2>ملخص سريع</h2>
           <p class="muted">هذه النسخة تشمل المنتجات، الموردين، فواتير الشراء، التحويلات، البيع اليومي، وطباعة فاتورة عربية.</p>
+        </div>
+        <div class="panel">
+          <h2>آخر فواتير البيع</h2>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>الإجمالي</th><th>الدين</th></tr></thead><tbody id="dashLastSalesBody"></tbody></table></div>
+        </div>
+        <div class="panel">
+          <h2>آخر حركات المخزون</h2>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الصنف</th><th>المكان</th><th>الكمية</th></tr></thead><tbody id="dashMovementsBody"></tbody></table></div>
         </div>
         <div class="panel">
           <h2>أصناف تحت حد الطلب</h2>
@@ -225,6 +236,8 @@
       <section id="sales" class="section">
         <div class="panel">
           <h2>فاتورة بيع جديدة</h2>
+          <div id="saleEditAlert" class="edit-alert hidden">أنت الآن تعدل فاتورة بيع قديمة — تأكد من حفظ التعديل أو إلغائه.</div>
+          <div class="shortcut-hint mini"><span><b class="kbd">F3</b> قائمة المنتجات</span><span><b class="kbd">F6</b> حفظ بدون طباعة</span><span><b class="kbd">F7</b> حفظ وطباعة</span><span><b class="kbd">Esc</b> إغلاق النوافذ</span></div>
           <form id="saleForm">
             <div class="form">
               <div><label>فرع البيع</label><select id="saleLocation" required onchange="refreshSaleAvailability()"></select></div>
@@ -249,7 +262,7 @@
               </table>
             </div>
             <p class="mini">اختر المنتج من القائمة. النظام يخصم الكمية من فرع البيع ويطبع فاتورة عربية.</p>
-            <div class="form" style="margin-top:12px">
+            <div class="form sale-summary" style="margin-top:12px">
               <div><label>خصم</label><input id="saleDiscount" type="number" step="0.001" value="0" oninput="updateSaleTotal()"></div>
               <div><label>المدفوع</label><input id="salePaidAmount" type="number" step="0.001" value="0" oninput="updateSaleTotal()"></div>
               <div class="totalBox"><span>إجمالي البيع</span><b id="saleTotal">0.00</b></div>
@@ -455,6 +468,21 @@
         </div>
       </section>
 
+      <section id="settings" class="section">
+        <div class="panel">
+          <h2>الإعدادات</h2>
+          <p class="muted">إعدادات سريعة محفوظة على هذا الجهاز. يمكن تغيير الاسم والعملة وحد المخزون المنخفض بدون تعديل الكود.</p>
+          <form class="form" id="settingsForm">
+            <div><label>اسم الشركة</label><input id="settingsBusinessName"></div>
+            <div><label>الوصف</label><input id="settingsTagline"></div>
+            <div><label>العملة</label><input id="settingsCurrency"></div>
+            <div><label>حد المخزون المنخفض</label><input id="settingsLowStock" type="number" step="1" min="0"></div>
+            <button class="btn" type="submit">حفظ الإعدادات</button>
+            <button class="btn secondary" type="button" onclick="resetLocalSettings()">استرجاع الافتراضي</button>
+          </form>
+        </div>
+      </section>
+
       <section id="next" class="section">
         <div class="panel">
           <h2>المرحلة القادمة</h2>
@@ -522,12 +550,12 @@
         <button class="btn secondary" onclick="closeSaleProductPicker()">إغلاق</button>
       </div>
       <div class="picker-grid">
-        <div><label>بحث</label><input id="salePickerSearch" placeholder="كود، اسم، ماركة، لون، مورد..." oninput="renderSaleProductPicker()"></div>
-        <div><label>التصنيف</label><select id="salePickerCategory" onchange="renderSaleProductPicker()"></select></div>
-        <div><label>الماركة</label><select id="salePickerBrand" onchange="renderSaleProductPicker()"></select></div>
-        <div><label>اللون</label><select id="salePickerColor" onchange="renderSaleProductPicker()"></select></div>
-        <div><label>المورد</label><select id="salePickerSupplier" onchange="renderSaleProductPicker()"></select></div>
-        <div><label>الكمية</label><input id="salePickerQty" type="number" step="1" min="1" placeholder="اختر الكمية"></div>
+        <div><label>بحث</label><input id="salePickerSearch" onkeydown="handleSalePickerKey(event)" placeholder="كود، اسم، ماركة، لون، مورد..." oninput="renderSaleProductPicker()"></div>
+        <div><label>التصنيف</label><select id="salePickerCategory" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>الماركة</label><select id="salePickerBrand" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>اللون</label><select id="salePickerColor" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>المورد</label><select id="salePickerSupplier" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
+        <div><label>الكمية</label><input id="salePickerQty" onkeydown="handleSalePickerKey(event)" type="number" step="1" min="1" placeholder="اختر الكمية"></div>
       </div>
       <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>المتوفر في الفرع</th><th>سعر البيع</th><th>إجراء</th></tr></thead><tbody id="salePickerBody"></tbody></table></div>
       <div class="mini" id="salePickerInfo" style="margin-top:10px"></div>
@@ -551,15 +579,18 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 <script>
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
+function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
+loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], saleReturns=[], saleReturnItems=[], customers=[], customerLedger=[], userRoles=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[];
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
 let selectedProductCode=null;
+let pickerSelectedIndex=0;
 let returningSaleId=null, returningSale=null, returningSaleItems=[];
 
 function q(id){return document.getElementById(id)}
@@ -606,7 +637,7 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, saleReturns, saleReturnItems, customers, customerLedger, userRoles] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, saleReturns, saleReturnItems, stockMovements, customers, customerLedger, userRoles] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
@@ -619,6 +650,7 @@ async function loadAll(){
       apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
       apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('sale returns not setup yet',e); return []}),
       apiAll('pos_sale_return_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale return items not setup yet',e); return []}),
+      apiAll('pos_stock_movements','?select=*&order=movement_date.desc&limit=50').catch(e=>{console.warn('stock movements not setup yet',e); return []}),
       apiAll('pos_customer_balances','?select=*&order=name.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
       apiAll('pos_customer_ledger','?select=*&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
       apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []})
@@ -638,12 +670,22 @@ function renderDashboard(){
   q('salesCount').textContent=sales.length;
   q('customersDebtTotal').textContent=money(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0));
   q('suppliersBalance').textContent=money(suppliers.reduce((a,s)=>a+Number(s.balance||0),0));
+  const today=new Date().toISOString().slice(0,10); const todaySales=sales.filter(s=>s.sale_date===today);
+  if(q('todaySalesTotal')) q('todaySalesTotal').textContent=money(todaySales.reduce((a,s)=>a+Number(s.total||0),0));
+  if(q('todaySalesCount')) q('todaySalesCount').textContent=todaySales.length;
+  renderDashboardLists();
   renderReorderAlerts();
+}
+
+
+function renderDashboardLists(){
+  if(q('dashLastSalesBody')) q('dashLastSalesBody').innerHTML=sales.slice(0,5).map(sl=>{const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); return `<tr><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td><b>${money(sl.total)}</b></td><td>${money(sl.balance_due)}</td></tr>`}).join('')||'<tr><td colspan="5">لا توجد فواتير بيع بعد.</td></tr>';
+  if(q('dashMovementsBody')) q('dashMovementsBody').innerHTML=stockMovements.slice(0,8).map(m=>{const l=locations.find(x=>x.id===m.location_id); return `<tr><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,19))}</td><td>${esc(typeLabel(m.movement_type))}</td><td>${esc(m.product_name||m.product_code)}</td><td>${esc(l?.name)}</td><td class="${Number(m.qty_change)>0?'stock-positive':'stock-negative'}"><b>${money(m.qty_change)}</b></td></tr>`}).join('')||'<tr><td colspan="5">لا توجد حركات مخزون بعد.</td></tr>';
 }
 
 const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
 const ROLE_TABS={
-  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','customers','purchases','stock','transfers','reports','users','next'],
+  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','customers','purchases','stock','transfers','reports','users','settings','next'],
   seller_11:['dashboard','products','sales','salesList','stock'],
   seller_sarraj:['dashboard','products','sales','salesList','stock'],
   warehouse:['dashboard','products','stock','transfers','purchases'],
@@ -829,10 +871,18 @@ function renderSaleProductPicker(){
     return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&(!term||hay.includes(term));
   });
   const shown=rows.slice(0,250);
-  q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr><td class="ltr"><b>${p.code||''}</b></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="8">لا توجد منتجات مطابقة للفلاتر.</td></tr>';
+  q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr class="${shown.indexOf(p)===pickerSelectedIndex?'selected-row':''}" ondblclick="addSaleProductFromPicker('${safe}')"><td class="ltr"><b>${p.code||''}</b></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="8">لا توجد منتجات مطابقة للفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
   setupTableSorting();
 }
+
+function handleSalePickerKey(e){
+  const rows=[...q('salePickerBody').querySelectorAll('tr')];
+  if(e.key==='ArrowDown'){e.preventDefault();pickerSelectedIndex=Math.min(rows.length-1,pickerSelectedIndex+1);renderSaleProductPicker();}
+  if(e.key==='ArrowUp'){e.preventDefault();pickerSelectedIndex=Math.max(0,pickerSelectedIndex-1);renderSaleProductPicker();}
+  if(e.key==='Enter'){e.preventDefault();const btn=q('salePickerBody').querySelectorAll('button')[pickerSelectedIndex]; if(btn) btn.click();}
+}
+
 function addSaleProductFromPicker(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   const qty=Number(q('salePickerQty').value||0); if(!(qty>0)){toast('اختر الكمية قبل إضافة المنتج'); q('salePickerQty').focus(); return;}
@@ -1121,7 +1171,7 @@ async function ensureSaleCustomer(balanceDue){
 function resetSaleForm(){
   editingSaleId=null; originalSale=null; originalSaleItems=[];
   q('saleForm').reset(); q('saleItemsBody').innerHTML=''; addSaleRow(); setToday();
-  q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); updateSaleTotal();
+  q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden'); updateSaleTotal(); setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
 }
 async function openSaleForEdit(id){
   try{
@@ -1134,7 +1184,7 @@ async function openSaleForEdit(id){
     q('saleLocation').value=sl.location_id||''; q('saleDate').value=sl.sale_date||''; q('salePaymentMethod').value=sl.payment_method||'cash'; q('saleInvoiceNo').value=sl.invoice_no||'';
     q('saleCustomer').value=sl.customer_id||''; q('saleNewCustomerName').value=''; q('saleNewCustomerPhone').value=''; q('saleNotes').value=sl.notes||''; q('saleDiscount').value=Number(sl.discount||0); q('salePaidAmount').value=Number(sl.paid_amount||0);
     q('saleItemsBody').innerHTML=''; rows.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount,discount_text:it.discount_text}));
-    updateSaleTotal(); refreshSaleAvailability(); q('saleSubmitBtn').textContent='حفظ تعديل البيع وتحديث المخزون'; q('saleCancelEditBtn').classList.remove('hidden');
+    updateSaleTotal(); refreshSaleAvailability(); q('saleSubmitBtn').textContent='حفظ تعديل البيع وتحديث المخزون'; q('saleCancelEditBtn').classList.remove('hidden'); q('saleEditAlert')?.classList.remove('hidden');
     toast('تم فتح فاتورة البيع للتعديل');
   }catch(err){console.error(err);toast('خطأ في فتح فاتورة البيع: '+err.message)} finally{showLoading(false)}
 }
@@ -1195,7 +1245,7 @@ async function updateStock(location_id, item, purchaseId){
 }
 
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab==='sales') setTimeout(()=>q('saleBarcodeInput')?.focus(),50)}));
-document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault();openSaleProductPicker();} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();}});
+document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault();openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();q('salePrintAfterSave').value='no';q('saleForm').requestSubmit();} if(e.key==='F7'){e.preventDefault();q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit();} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();}});
 
 
 
@@ -1227,6 +1277,10 @@ function getReturnItems(){
 function updateSaleReturnTotal(){const total=getReturnItems().reduce((a,x)=>a+Number(x.line_total||0),0); q('saleReturnTotal').textContent=`الإجمالي: ${money(total)} ${APP_CONFIG.currency}`}
 
 
+
+function fillSettingsForm(){if(!q('settingsBusinessName'))return; q('settingsBusinessName').value=APP_CONFIG.businessName; q('settingsTagline').value=APP_CONFIG.tagline; q('settingsCurrency').value=APP_CONFIG.currency; q('settingsLowStock').value=APP_CONFIG.lowStockThreshold;}
+function resetLocalSettings(){localStorage.removeItem('posAppConfig'); location.reload()}
+
 q('saleReturnForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const items=getReturnItems(); if(!items.length){toast('اختر كمية مرتجع أولاً');return;}
@@ -1243,6 +1297,14 @@ q('saleReturnForm').addEventListener('submit', async e=>{
     closeSaleReturnModal(); toast('تم حفظ المرتجع وتحديث المخزون'); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ المرتجع: '+err.message+' - تأكد من تشغيل SQL المرتجعات')}
   finally{showLoading(false)}
+});
+
+
+q('settingsForm')?.addEventListener('submit',e=>{
+  e.preventDefault();
+  Object.assign(APP_CONFIG,{businessName:q('settingsBusinessName').value.trim()||APP_CONFIG.businessName,tagline:q('settingsTagline').value.trim()||APP_CONFIG.tagline,currency:q('settingsCurrency').value.trim()||APP_CONFIG.currency,lowStockThreshold:Number(q('settingsLowStock').value||0)});
+  localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold}));
+  initBranding(); renderAll(); toast('تم حفظ الإعدادات');
 });
 
 q('roleForm').addEventListener('submit', async e=>{
@@ -1600,8 +1662,7 @@ function setupTableSorting(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d; if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
+initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
