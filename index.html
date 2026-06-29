@@ -326,7 +326,14 @@
       <section id="salesList" class="section">
         <div class="panel">
           <div class="tools"><h2>فواتير البيع</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div class="row sticky-actions" style="margin:10px 0">
+            <button class="btn secondary" type="button" onclick="openSelectedSaleForEdit()">فتح / تعديل</button>
+            <button class="btn secondary" type="button" onclick="printSelectedSale()">طباعة</button>
+            <button class="btn secondary" type="button" onclick="openSelectedSaleReturn()">مرتجع</button>
+            <button class="btn secondary" type="button" onclick="convertSelectedSaleToProforma()">تحويل لمبدئية</button>
+            <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th></tr></thead><tbody id="salesBody"></tbody></table></div>
         </div>
       </section>
 
@@ -754,6 +761,9 @@ let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
 let selectedProductCode=null;
+let selectedSaleId=null;
+let productSortIndex=13, productSortDir='desc';
+let stockSortIndex=3, stockSortDir='desc';
 let pickerSelectedIndex=0;
 let productPickerTarget='sale';
 let editingProformaId=null;
@@ -974,7 +984,7 @@ function renderProductCategoryTree(activeCat=''){
   if(!q('productCategoryTree')) return;
   const counts={}; products.forEach(p=>{const c=p.category||'بدون تصنيف'; counts[c]=(counts[c]||0)+1});
   q('allProductsCountSide').textContent=products.length;
-  q('productCategoryTree').innerHTML=Object.entries(counts).sort((a,b)=>a[0].localeCompare(b[0],'ar')).map(([cat,count])=>`<div class="category-node ${activeCat===cat?'active':''}" onclick="selectProductCategory('${String(cat).replace(/'/g,"\'")}')"><span>${esc(cat)}</span><span class="count">${count}</span></div>`).join('');
+  q('productCategoryTree').innerHTML=Object.entries(counts).sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0],'ar')).map(([cat,count])=>`<div class="category-node ${activeCat===cat?'active':''}" onclick="selectProductCategory('${String(cat).replace(/'/g,"\'")}')"><span>${esc(cat)}</span><span class="count">${count}</span></div>`).join('');
 }
 function selectProductCategory(cat){
   q('productCategoryFilter').value=cat||'';
@@ -992,6 +1002,9 @@ function renderProducts(){
     const hay=[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].join(' ').toLowerCase();
     return (!cat || p.category===cat) && (!brand || p.brand===brand) && (!color || p.color===color) && (!supplier || p.supplier_name===supplier) && (!term || hay.includes(term));
   });
+  const productCols=['code','name','brand','color','barcode','supplier_name','category','purchase_price','retail_price','reorder_point','stock_11_june','stock_sarraj','stock_janzour','total_stock'];
+  const key=productCols[productSortIndex]||'total_stock';
+  rows.sort((a,b)=>{const va=a[key]??'', vb=b[key]??''; const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va).localeCompare(String(vb),'ar'); return productSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,300);
   q('productsBody').innerHTML = shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\'"); return `<tr class="${selectedProductCode===p.code?'selected-row':''}" onclick="selectProductRow('${safe}')"><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td class="ltr">${esc(p.barcode)}</td><td>${esc(p.supplier_name)}</td><td>${esc(p.category)}</td><td>${money(p.purchase_price)}</td><td>${money(p.retail_price)}</td><td>${money(p.reorder_point)}</td><td>${money(p.stock_11_june)}</td><td>${money(p.stock_sarraj)}</td><td>${money(p.stock_janzour)}</td><td><b>${money(p.total_stock)}</b></td></tr>`}).join('') || '<tr><td colspan="14">لا توجد منتجات. شغل ملف استيراد قاعدة البيانات أولاً.</td></tr>';
   const sp=selectedProductCode?products.find(p=>p.code===selectedProductCode):null;
@@ -1216,7 +1229,9 @@ function renderPurchases(){
 function renderStock(){
   const loc=q('stockLocationFilter')?.value||''; const term=(q('stockSearch')?.value||'').trim().toLowerCase();
   const rows=stock.filter(r=>{const p=products.find(x=>String(x.code||'').toLowerCase()===String(r.product_code||'').toLowerCase()); const hay=[r.product_code,r.product_name,p?.brand,p?.model,p?.color,p?.supplier_name,p?.category].join(' ').toLowerCase(); return (!loc||r.location_id===loc) && (!term || hay.includes(term));});
-  q('stockBody').innerHTML = rows.map(r=>{const l=locations.find(x=>x.id===r.location_id); const qty=Number(r.qty||0); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${r.product_code}</b></td><td>${r.product_name||''}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td class="mini">${(r.updated_at||'').replace('T',' ').slice(0,19)}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون حتى الآن. أدخل فاتورة شراء أولاً.</td></tr>';
+  const stockCols=['location','product_code','product_name','qty','updated_at']; const key=stockCols[stockSortIndex]||'qty';
+  rows.sort((a,b)=>{const va=key==='location'?(locations.find(x=>x.id===a.location_id)?.name||''):a[key]; const vb=key==='location'?(locations.find(x=>x.id===b.location_id)?.name||''):b[key]; const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va||'').localeCompare(String(vb||''),'ar'); return stockSortDir==='asc'?c:-c;});
+  q('stockBody').innerHTML = rows.map(r=>{const l=locations.find(x=>x.id===r.location_id); const qty=Number(r.qty||0); return `<tr><td>${esc(l?.name)}</td><td class="ltr"><b>${esc(r.product_code)}</b></td><td>${esc(r.product_name)}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون حتى الآن. أدخل فاتورة شراء أولاً.</td></tr>';
 }
 
 function getStockQty(location_id, product_code){
@@ -1292,10 +1307,18 @@ function getTransferItems(){
 
 function renderSales(){
   q('salesBody').innerHTML = sales.map(sl=>{
-    const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id);
-    return `<tr><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${esc(typeLabel(sl.payment_method))}<div class="mini">${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}">${money(sl.balance_due)}</td><td><div class="row"><button class="btn secondary" onclick="openSaleForEdit('${sl.id}')">فتح / تعديل</button><button class="btn secondary" onclick="printSale('${sl.id}')">طباعة</button><button class="btn secondary" onclick="openSaleReturn('${sl.id}')">مرتجع</button><button class="btn secondary" onclick="convertSaleToProforma('${sl.id}')">تحويل لمبدئية</button></div></td></tr>`;
-  }).join('') || '<tr><td colspan="8">لا توجد فواتير بيع بعد.</td></tr>';
+    const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); const safe=String(sl.id).replace(/'/g,"\'");
+    return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" onclick="selectSaleRow('${safe}')"><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${esc(typeLabel(sl.payment_method))}<div class="mini">${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}">${money(sl.balance_due)}</td></tr>`;
+  }).join('') || '<tr><td colspan="7">لا توجد فواتير بيع بعد.</td></tr>';
+  const sl=selectedSaleId?sales.find(x=>x.id===selectedSaleId):null;
+  if(q('selectedSaleInfo')) q('selectedSaleInfo').textContent=sl?`المحدد: ${sl.sale_date} - ${money(sl.total)} ${APP_CONFIG.currency}`:'اختر فاتورة من الجدول أولاً';
 }
+function selectSaleRow(id){selectedSaleId=id;renderSales()}
+function getSelectedSaleId(){if(!selectedSaleId){toast('اختر فاتورة من الجدول أولاً');return null;} return selectedSaleId}
+function openSelectedSaleForEdit(){const id=getSelectedSaleId(); if(id) openSaleForEdit(id)}
+function printSelectedSale(){const id=getSelectedSaleId(); if(id) printSale(id)}
+function openSelectedSaleReturn(){const id=getSelectedSaleId(); if(id) openSaleReturn(id)}
+function convertSelectedSaleToProforma(){const id=getSelectedSaleId(); if(id) convertSaleToProforma(id)}
 async function adjustStockDoc(location_id, item, qtyChange, movementType, referenceTable, referenceId, notes){
   const code=encodeURIComponent(item.product_code); const loc=encodeURIComponent(location_id);
   const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
@@ -1459,7 +1482,7 @@ async function printSale(id){
     const loc=locations.find(x=>x.id===sl.location_id); const cust=customers.find(x=>x.id===sl.customer_id);
     const rows=items.map((it,i)=>`<tr><td>${i+1}</td><td>${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td>${money(it.line_total)}</td></tr>`).join('');
     const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة بيع</title><style>@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;margin:32px;color:#111;line-height:1.6}.print-top{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:2px solid #1d4ed8;padding-bottom:16px;margin-bottom:18px}.logo-box{width:82px;height:82px;border:1px solid #d8dee9;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;background:#f8fafc}.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex:1}h1{margin:0;color:#1d4ed8;font-size:28px}.box{border:1px solid #e2e8f0;border-radius:14px;padding:12px 14px;margin:10px 0;background:#fff}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #e2e8f0;padding:10px;text-align:right}th{background:#f8fafc;color:#475569;font-weight:700}.total{font-size:19px;font-weight:700}.ltr{direction:ltr;text-align:left;font-family:ui-monospace,monospace}@media print{button{display:none}body{margin:18mm}}</style></head><body><button onclick="print()">طباعة</button><div class="print-top"><div class="logo-box">الشعار</div><div class="head"><div><h1>${esc(APP_CONFIG.businessName)}</h1><div>فاتورة بيع</div></div><div class="ltr">${sl.invoice_no||sl.id.slice(0,8)}</div></div></div><div class="box">التاريخ: ${sl.sale_date}<br>الفرع: ${esc(loc?.name)}<br>العميل: ${esc(cust?.name||'زبون نقدي')} ${cust?.phone?'<span class="ltr">'+cust.phone+'</span>':''}<br>طريقة الدفع: ${typeLabel(sl.payment_method)}<br>تفصيل الدفع: ${esc(paymentBreakdownText(payRows)||'-')}</div><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>خصم</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table><div class="box total">الإجمالي: ${money(sl.total)} ${esc(APP_CONFIG.currency)}<br>المدفوع: ${money(sl.paid_amount)} ${esc(APP_CONFIG.currency)}<br>المتبقي: ${money(sl.balance_due)} ${esc(APP_CONFIG.currency)}</div></body></html>`;
-    const w=window.open('','_blank'); w.document.write(html); w.document.close();
+    const w=window.open('','_blank'); if(!w){toast('المتصفح منع نافذة الطباعة. اسمح بالنوافذ المنبثقة أو اختر حفظ بدون طباعة.'); return;} w.document.write(html); w.document.close();
   }catch(err){console.error(err);toast('خطأ في طباعة الفاتورة: '+err.message)}
 }
 
@@ -1714,10 +1737,12 @@ q('saleForm').addEventListener('submit', async e=>{
       virtualStock.set(k,(virtualStock.get(k)||0)+Number(it.qty||0));
     }
   }
+  const oversold=[];
   for(const it of items){
     const available=virtualStock.get(`${location_id}|${String(it.product_code).toLowerCase()}`)||0;
-    if(available < it.qty){toast(`الكمية غير كافية للمنتج ${it.product_code}. المتوفر ${money(available)}`); return;}
+    if(available < it.qty) oversold.push(`${it.product_code} المتوفر ${money(available)} والمطلوب ${money(it.qty)}`);
   }
+  if(oversold.length && !confirm('تنبيه: توجد منتجات كميتها غير كافية. هل تريد البيع بدون مخزون؟\n'+oversold.join('\n'))){return;}
   try{
     showLoading(true);
     const customer_id=await ensureSaleCustomer(balance_due);
@@ -2010,8 +2035,10 @@ function setupTableSorting(){
       th.title='اضغط للترتيب تصاعدي/تنازلي';
       th.addEventListener('click',()=>{
         const tbody=table.querySelector('tbody'); if(!tbody) return;
-        const rows=[...tbody.querySelectorAll('tr')].filter(r=>r.children.length>1);
         const dir=th.dataset.dir==='asc'?'desc':'asc'; th.dataset.dir=dir;
+        if(tbody.id==='productsBody'){productSortIndex=idx; productSortDir=dir; renderProducts(); return;}
+        if(tbody.id==='stockBody'){stockSortIndex=idx; stockSortDir=dir; renderStock(); return;}
+        const rows=[...tbody.querySelectorAll('tr')].filter(r=>r.children.length>1);
         const val=(r)=>{let t=(r.children[idx]?.innerText||'').trim().replace(/,/g,''); let n=parseFloat(t); return isNaN(n)?t:n;};
         rows.sort((a,b)=>{const va=val(a), vb=val(b); let c=(typeof va==='number'&&typeof vb==='number')?va-vb:String(va).localeCompare(String(vb),'ar'); return dir==='asc'?c:-c;});
         rows.forEach(r=>tbody.appendChild(r));
@@ -2023,5 +2050,6 @@ function setupTableSorting(){
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
