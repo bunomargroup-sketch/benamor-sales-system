@@ -92,10 +92,12 @@
       <button data-tab="payments"><i class="ti ti-cash"></i><span>دفعات الموردين</span></button>
       <button data-tab="sales"><i class="ti ti-shopping-cart"></i><span>البيع اليومي</span></button>
       <button data-tab="salesList"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
+      <button data-tab="proformas"><i class="ti ti-file-description"></i><span>الفواتير المبدئية</span></button>
       <button data-tab="customers"><i class="ti ti-users"></i><span>العملاء والديون</span></button>
       <button data-tab="purchases"><i class="ti ti-receipt"></i><span>فواتير الشراء</span></button>
       <button data-tab="stock"><i class="ti ti-stack-2"></i><span>المخزون الحالي</span></button>
       <button data-tab="transfers"><i class="ti ti-arrows-exchange"></i><span>تحويلات المخزون</span></button>
+      <button data-tab="finance"><i class="ti ti-building-bank"></i><span>الخزائن والمصارف</span></button>
       <button data-tab="reports"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
       <button data-tab="users"><i class="ti ti-shield-lock"></i><span>المستخدمون والصلاحيات</span></button>
       <button data-tab="settings"><i class="ti ti-settings"></i><span>الإعدادات</span></button>
@@ -125,6 +127,7 @@
               <div class="quick-grid">
                 <button class="quick-tile" type="button" onclick="openTab('sales')"><i class="ti ti-receipt-2"></i><span>فاتورة بيع</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('salesList')"><i class="ti ti-file-invoice"></i><span>فواتير البيع</span></button>
+                <button class="quick-tile" type="button" onclick="openTab('proformas')"><i class="ti ti-file-description"></i><span>فاتورة مبدئية</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('customers')"><i class="ti ti-users"></i><span>العملاء والديون</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('products')"><i class="ti ti-box"></i><span>المنتجات</span></button>
               </div>
@@ -328,6 +331,41 @@
       </section>
 
 
+      <section id="proformas" class="section">
+        <div class="panel">
+          <h2>فاتورة مبدئية جديدة</h2>
+          <form id="proformaForm">
+            <div class="form">
+              <div><label>الفرع</label><select id="proformaLocation" required></select></div>
+              <div><label>التاريخ</label><input id="proformaDate" type="date" required></div>
+              <div><label>رقم الفاتورة المبدئية</label><input id="proformaNo" placeholder="اختياري"></div>
+              <div><label>عميل موجود</label><select id="proformaCustomer"></select></div>
+              <div><label>أو اسم عميل جديد</label><input id="proformaCustomerName" placeholder="اختياري"></div>
+              <div><label>هاتف العميل</label><input id="proformaCustomerPhone" class="ltr" placeholder="اختياري"></div>
+              <div><label>ملاحظات</label><input id="proformaNotes" placeholder="اختياري"></div>
+            </div>
+            <div class="tools" style="margin-top:16px">
+              <h2 style="font-size:18px;margin:0">الأصناف</h2>
+              <button class="btn secondary" type="button" onclick="addProformaRow()">+ إضافة صنف يدوي</button>
+              <button class="btn secondary" type="button" onclick="openProformaProductPicker()">قائمة المنتجات F3</button>
+            </div>
+            <div class="table-scroll">
+              <table><thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>خصم السطر</th><th>الإجمالي</th><th></th></tr></thead><tbody id="proformaItemsBody"></tbody></table>
+            </div>
+            <div class="form sale-summary" style="margin-top:12px">
+              <div><label>خصم</label><input id="proformaDiscount" type="number" step="1" value="0" oninput="updateProformaTotal()"></div>
+              <div class="totalBox"><span>إجمالي المبدئية</span><b id="proformaTotal">0.00</b></div>
+              <div class="row"><button class="btn" id="proformaSubmitBtn" type="submit">حفظ الفاتورة المبدئية</button><button class="btn secondary hidden" id="proformaCancelEditBtn" type="button" onclick="resetProformaForm()">إلغاء التعديل</button></div>
+            </div>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="tools"><h2>الفواتير المبدئية</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>الإجمالي</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="proformasBody"></tbody></table></div>
+        </div>
+      </section>
+
+
       <section id="customers" class="section">
         <div class="panel">
           <h2>إضافة عميل / رصيد افتتاحي</h2>
@@ -380,7 +418,7 @@
 
             <div class="tools" style="margin-top:16px">
               <h2 style="font-size:18px;margin:0">الأصناف</h2>
-              <button class="btn secondary" type="button" onclick="addPurchaseRow()">+ إضافة صنف</button>
+              <button class="btn secondary" type="button" onclick="addPurchaseRow()">+ إضافة صنف يدوي</button><button class="btn secondary" type="button" onclick="openPurchaseProductPicker()">قائمة المنتجات F3</button>
             </div>
             <div class="table-scroll">
               <table>
@@ -464,6 +502,85 @@
         <div class="panel">
           <div class="tools"><h2>قائمة الصلاحيات</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
           <div class="table-scroll"><table><thead><tr><th>المعرف</th><th>الاسم</th><th>الدور</th><th>الحالة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="rolesBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <section id="finance" class="section">
+        <div class="panel">
+          <h2>الخزائن والمصارف</h2>
+          <p class="muted">إدارة خزائن الفروع والحسابات المصرفية والبطاقات، مع تسجيل التحويلات والمصاريف والمرتبات.</p>
+          <div class="grid cards">
+            <div class="card"><h3>إجمالي النقدي</h3><div class="num" id="financeCashTotal">0</div></div>
+            <div class="card"><h3>إجمالي المصارف</h3><div class="num" id="financeBankTotal">0</div></div>
+            <div class="card"><h3>إجمالي البطاقة</h3><div class="num" id="financeCardTotal">0</div></div>
+            <div class="card"><h3>مصاريف الشهر</h3><div class="num" id="financeMonthExpenses">0</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>إضافة خزينة / مصرف</h2>
+          <form class="form" id="financeAccountForm">
+            <div><label>الاسم</label><input id="financeAccountName" required placeholder="مثال: مصرف الجمهورية"></div>
+            <div><label>النوع</label><select id="financeAccountType"><option value="cash">خزينة نقدية</option><option value="bank">حساب مصرفي</option><option value="card">حساب بطاقة</option></select></div>
+            <div><label>الفرع</label><select id="financeAccountLocation"></select></div>
+            <div><label>اسم المصرف</label><input id="financeBankName" placeholder="اختياري"></div>
+            <div><label>رقم الحساب</label><input id="financeAccountNo" class="ltr" placeholder="اختياري"></div>
+            <div><label>رصيد افتتاحي</label><input id="financeOpeningBalance" type="number" step="1" value="0"></div>
+            <div style="grid-column:1/-1"><label>ملاحظات</label><input id="financeAccountNotes" placeholder="اختياري"></div>
+            <button class="btn" type="submit">حفظ الحساب</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>تحويل بين خزينة ومصرف</h2>
+          <form class="form" id="financeTransferForm">
+            <div><label>من حساب</label><select id="financeTransferFrom" required></select></div>
+            <div><label>إلى حساب</label><select id="financeTransferTo" required></select></div>
+            <div><label>التاريخ</label><input id="financeTransferDate" type="date" required></div>
+            <div><label>المبلغ</label><input id="financeTransferAmount" type="number" step="1" min="1" required></div>
+            <div style="grid-column:1/-1"><label>ملاحظات</label><input id="financeTransferNotes" placeholder="مثال: إيداع مبيعات فرع السراج في المصرف"></div>
+            <button class="btn" type="submit">حفظ التحويل</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>المصاريف</h2>
+          <form class="form" id="expenseForm">
+            <div><label>الحساب المدفوع منه</label><select id="expenseAccount" required></select></div>
+            <div><label>التصنيف</label><select id="expenseCategory"></select></div>
+            <div><label>التاريخ</label><input id="expenseDate" type="date" required></div>
+            <div><label>المبلغ</label><input id="expenseAmount" type="number" step="1" min="1" required></div>
+            <div style="grid-column:1/-1"><label>البيان</label><input id="expenseTitle" required placeholder="مثال: مصاريف وقود"></div>
+            <div style="grid-column:1/-1"><label>ملاحظات</label><input id="expenseNotes" placeholder="اختياري"></div>
+            <button class="btn" type="submit">حفظ المصروف</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>الموظفون والمرتبات</h2>
+          <form class="form" id="employeeForm">
+            <div><label>اسم الموظف</label><input id="employeeName" required></div>
+            <div><label>الهاتف</label><input id="employeePhone" class="ltr"></div>
+            <div><label>الوظيفة</label><input id="employeePosition"></div>
+            <div><label>المرتب الشهري</label><input id="employeeMonthlySalary" type="number" step="1" value="0"></div>
+            <button class="btn" type="submit">حفظ الموظف</button>
+          </form>
+          <hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
+          <form class="form" id="salaryPaymentForm">
+            <div><label>الموظف</label><select id="salaryEmployee" required></select></div>
+            <div><label>الحساب المدفوع منه</label><select id="salaryAccount" required></select></div>
+            <div><label>التاريخ</label><input id="salaryPaymentDate" type="date" required></div>
+            <div><label>الفترة</label><input id="salaryPeriod" placeholder="مثال: 2026-06"></div>
+            <div><label>المبلغ</label><input id="salaryAmount" type="number" step="1" min="1" required></div>
+            <div style="grid-column:1/-1"><label>ملاحظات</label><input id="salaryNotes" placeholder="اختياري"></div>
+            <button class="btn" type="submit">دفع مرتب</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>الأرصدة والحركات</h2>
+          <div class="table-scroll"><table><thead><tr><th>الحساب</th><th>النوع</th><th>الفرع</th><th>المصرف</th><th>الرصيد</th></tr></thead><tbody id="financeAccountsBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الحساب</th><th>النوع</th><th>داخل</th><th>خارج</th><th>ملاحظات</th></tr></thead><tbody id="financeMovementsBody"></tbody></table></div>
         </div>
       </section>
 
@@ -631,13 +748,15 @@ loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 const H = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[];
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
 let selectedProductCode=null;
 let pickerSelectedIndex=0;
+let productPickerTarget='sale';
+let editingProformaId=null;
 let returningSaleId=null, returningSale=null, returningSaleItems=[];
 
 function q(id){return document.getElementById(id)}
@@ -684,7 +803,7 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, salePayments, saleReturns, saleReturnItems, stockMovements, customers, customerLedger, userRoles] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, expenseCategories, expenses, employees, salaryPayments] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
@@ -696,12 +815,20 @@ async function loadAll(){
       apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(e=>{console.warn('sales not setup yet',e); return []}),
       apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
       apiAll('pos_sale_payments','?select=*&order=created_at.desc').catch(e=>{console.warn('sale payments not setup yet',e); return []}),
+      apiAll('pos_proformas','?select=*&order=proforma_date.desc,created_at.desc').catch(e=>{console.warn('proformas not setup yet',e); return []}),
+      apiAll('pos_proforma_items','?select=*&order=created_at.desc').catch(e=>{console.warn('proforma items not setup yet',e); return []}),
       apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('sale returns not setup yet',e); return []}),
       apiAll('pos_sale_return_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale return items not setup yet',e); return []}),
       apiAll('pos_stock_movements','?select=*&order=movement_date.desc&limit=50').catch(e=>{console.warn('stock movements not setup yet',e); return []}),
       apiAll('pos_customer_balances','?select=*&order=name.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
       apiAll('pos_customer_ledger','?select=*&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
-      apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []})
+      apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []}),
+      apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return []}),
+      apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(e=>{console.warn('finance movements not setup yet',e); return []}),
+      apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
+      apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('expenses not setup yet',e); return []}),
+      apiAll('pos_employees','?select=*&order=name.asc').catch(e=>{console.warn('employees not setup yet',e); return []}),
+      apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('salary payments not setup yet',e); return []})
     ]);
     ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
     renderAll();
@@ -709,7 +836,7 @@ async function loadAll(){
   finally{showLoading(false)}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderPurchases();renderStock();renderTransfers();renderReports();renderRoles();applyPermissions();setTimeout(setupTableSorting,0)}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();applyPermissions();setTimeout(setupTableSorting,0)}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -733,11 +860,11 @@ function renderDashboardLists(){
 
 const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
 const ROLE_TABS={
-  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','customers','purchases','stock','transfers','reports','users','settings','next'],
-  seller_11:['dashboard','products','sales','salesList','stock'],
-  seller_sarraj:['dashboard','products','sales','salesList','stock'],
+  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','transfers','finance','reports','users','settings','next'],
+  seller_11:['dashboard','products','sales','salesList','proformas','stock'],
+  seller_sarraj:['dashboard','products','sales','salesList','proformas','stock'],
   warehouse:['dashboard','products','stock','transfers','purchases'],
-  accountant:['dashboard','suppliers','ledger','payments','customers','reports'],
+  accountant:['dashboard','suppliers','ledger','payments','customers','finance','reports'],
   viewer:['dashboard','products','stock','reports']
 };
 function getUserRole(){
@@ -913,6 +1040,7 @@ function fillPickerSelect(id,key,label){
   if(vals.includes(old)) el.value=old;
 }
 function openSaleProductPicker(){
+  productPickerTarget='sale';
   if(!q('saleLocation').value){toast('اختر فرع البيع أولاً'); return;}
   fillPickerSelect('salePickerCategory','category','كل التصنيفات');
   fillPickerSelect('salePickerBrand','brand','كل الماركات');
@@ -924,10 +1052,36 @@ function openSaleProductPicker(){
   setTimeout(()=>q('salePickerSearch')?.focus(),50);
 }
 function closeSaleProductPicker(){q('saleProductPickerModal').classList.remove('show')}
+function openProformaProductPicker(){
+  productPickerTarget='proforma';
+  if(!q('proformaLocation').value){toast('اختر الفرع أولاً'); return;}
+  fillPickerSelect('salePickerCategory','category','كل التصنيفات');
+  fillPickerSelect('salePickerBrand','brand','كل الماركات');
+  fillPickerSelect('salePickerColor','color','كل الألوان');
+  fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
+  q('salePickerQty').value=q('salePickerQty').value||'1';
+  q('saleProductPickerModal').classList.add('show');
+  renderSaleProductPicker();
+  setTimeout(()=>q('salePickerSearch')?.focus(),50);
+}
+
+function openPurchaseProductPicker(){
+  productPickerTarget='purchase';
+  if(!q('purchaseLocation').value){toast('اختر مكان دخول البضاعة أولاً'); return;}
+  fillPickerSelect('salePickerCategory','category','كل التصنيفات');
+  fillPickerSelect('salePickerBrand','brand','كل الماركات');
+  fillPickerSelect('salePickerColor','color','كل الألوان');
+  fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
+  q('salePickerQty').value=q('salePickerQty').value||'1';
+  q('saleProductPickerModal').classList.add('show');
+  renderSaleProductPicker();
+  setTimeout(()=>q('salePickerSearch')?.focus(),50);
+}
+
 function renderSaleProductPicker(){
   const term=(q('salePickerSearch')?.value||'').trim().toLowerCase();
   const cat=q('salePickerCategory')?.value||'', brand=q('salePickerBrand')?.value||'', color=q('salePickerColor')?.value||'', supplier=q('salePickerSupplier')?.value||'';
-  const loc=q('saleLocation')?.value||'';
+  const loc=(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:q('saleLocation')?.value))||'';
   const rows=products.filter(p=>{
     const hay=[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].join(' ').toLowerCase();
     return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&(!term||hay.includes(term));
@@ -948,7 +1102,8 @@ function handleSalePickerKey(e){
 function addSaleProductFromPicker(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   const qty=Number(q('salePickerQty').value||1);
-  addOrIncrementSaleProduct(p,qty);
+  if(productPickerTarget==='proforma') addOrIncrementProformaProduct(p,qty); else if(productPickerTarget==='purchase') addOrIncrementPurchaseProduct(p,qty); else addOrIncrementSaleProduct(p,qty);
+  q('salePickerQty').value='1';
   toast('تمت إضافة المنتج للفاتورة');
 }
 
@@ -1022,10 +1177,21 @@ function fillSupplierSelects(){
   q('stockLocationFilter').innerHTML = '<option value="">كل الفروع والمخازن</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
   q('saleLocation').innerHTML = '<option value="">اختر فرع البيع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
   q('saleCustomer').innerHTML = '<option value="">زبون نقدي / بدون عميل</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}${Number(c.balance||0)>0?' - دين '+money(c.balance):''}</option>`).join('');
+  if(q('proformaCustomer')) q('proformaCustomer').innerHTML = '<option value="">بدون عميل</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
+  if(q('proformaLocation')) q('proformaLocation').innerHTML = '<option value="">اختر الفرع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
   const customerOptions = '<option value="">اختر العميل</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
   q('customerPaymentCustomer').innerHTML = customerOptions;
   q('customerLedgerCustomer').innerHTML = customerOptions;
   q('reportLocation').innerHTML = '<option value="">كل الفروع</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+
+  const accountOpts='<option value="">اختر الحساب</option>'+financeAccounts.map(a=>`<option value="${a.id}">${a.name} - ${money(a.balance)}</option>`).join('');
+  ['financeTransferFrom','financeTransferTo','expenseAccount','salaryAccount'].forEach(id=>{if(q(id)) q(id).innerHTML=accountOpts});
+  if(q('financeAccountLocation')) q('financeAccountLocation').innerHTML='<option value="">بدون فرع / عام</option>'+locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+  if(q('expenseCategory')) q('expenseCategory').innerHTML='<option value="">بدون تصنيف</option>'+expenseCategories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  if(q('salaryEmployee')) q('salaryEmployee').innerHTML='<option value="">اختر الموظف</option>'+employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  if(q('saleCashAccount')) q('saleCashAccount').innerHTML='<option value="">خزينة الفرع تلقائيًا</option>'+financeAccounts.filter(a=>a.account_type==='cash').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if(q('saleBankAccount')) q('saleBankAccount').innerHTML='<option value="">اختر المصرف</option>'+financeAccounts.filter(a=>a.account_type==='bank').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if(q('saleCardAccount')) q('saleCardAccount').innerHTML='<option value="">اختر حساب البطاقة</option>'+financeAccounts.filter(a=>a.account_type==='card').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
 }
 function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id; renderLedger()}
 function renderLedger(){
@@ -1127,7 +1293,7 @@ function getTransferItems(){
 function renderSales(){
   q('salesBody').innerHTML = sales.map(sl=>{
     const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id);
-    return `<tr><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${esc(typeLabel(sl.payment_method))}<div class="mini">${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}">${money(sl.balance_due)}</td><td><div class="row"><button class="btn secondary" onclick="openSaleForEdit('${sl.id}')">فتح / تعديل</button><button class="btn secondary" onclick="printSale('${sl.id}')">طباعة</button><button class="btn secondary" onclick="openSaleReturn('${sl.id}')">مرتجع</button></div></td></tr>`;
+    return `<tr><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${esc(typeLabel(sl.payment_method))}<div class="mini">${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}">${money(sl.balance_due)}</td><td><div class="row"><button class="btn secondary" onclick="openSaleForEdit('${sl.id}')">فتح / تعديل</button><button class="btn secondary" onclick="printSale('${sl.id}')">طباعة</button><button class="btn secondary" onclick="openSaleReturn('${sl.id}')">مرتجع</button><button class="btn secondary" onclick="convertSaleToProforma('${sl.id}')">تحويل لمبدئية</button></div></td></tr>`;
   }).join('') || '<tr><td colspan="8">لا توجد فواتير بيع بعد.</td></tr>';
 }
 async function adjustStockDoc(location_id, item, qtyChange, movementType, referenceTable, referenceId, notes){
@@ -1297,6 +1463,63 @@ async function printSale(id){
   }catch(err){console.error(err);toast('خطأ في طباعة الفاتورة: '+err.message)}
 }
 
+
+function addProformaRow(item={}){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input class="pr-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillProformaRow(this)}" onchange="fillProformaRow(this)"><div class="mini pr-note"></div></td><td><input class="pr-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pr-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updateProformaTotal()"></td><td><input class="pr-price" type="number" step="1" min="0" value="${item.unit_price||0}" oninput="updateProformaTotal()"></td><td><input class="pr-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateProformaTotal()"></td><td class="pr-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateProformaTotal()">حذف</button></td>`;
+  q('proformaItemsBody').appendChild(tr); updateProformaTotal();
+}
+function fillProformaRow(input){
+  const p=findProductByInput(input.value); if(!p) return;
+  const tr=input.closest('tr');
+  tr.querySelector('.pr-code').value=p.code||''; tr.querySelector('.pr-name').value=p.name||''; tr.querySelector('.pr-price').value=Number(p.retail_price||0);
+  if(mergeProformaDuplicateRows(tr,p.code)) return;
+  const note=tr.querySelector('.pr-note'); if(note) note.textContent=[p.brand,p.model,p.color,p.category].filter(Boolean).join(' - ');
+  updateProformaTotal();
+}
+function mergeProformaDuplicateRows(currentTr, productCode){
+  const rows=[...q('proformaItemsBody').querySelectorAll('tr')];
+  const existing=rows.find(tr=>tr!==currentTr && String(tr.querySelector('.pr-code')?.value||'').trim().toLowerCase()===String(productCode||'').toLowerCase());
+  if(existing){existing.querySelector('.pr-qty').value=Number(existing.querySelector('.pr-qty').value||0)+Number(currentTr.querySelector('.pr-qty').value||1); currentTr.remove(); updateProformaTotal(); toast('المنتج موجود، تم إضافة الكمية للسطر الموجود'); return true;}
+  return false;
+}
+function addOrIncrementProformaProduct(p, qty=1){
+  const rows=[...q('proformaItemsBody').querySelectorAll('tr')];
+  const existing=rows.find(tr=>String(tr.querySelector('.pr-code')?.value||'').trim().toLowerCase()===String(p.code||'').toLowerCase());
+  if(existing){const inp=existing.querySelector('.pr-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updateProformaTotal(); return;}
+  addProformaRow({product_code:p.code,product_name:p.name,qty,unit_price:Number(p.retail_price||0)});
+}
+function getProformaItems(){
+  return [...q('proformaItemsBody').querySelectorAll('tr')].map(tr=>{
+    let code=tr.querySelector('.pr-code').value.trim(); let name=tr.querySelector('.pr-name').value.trim(); const picked=findProductByInput(code); if(picked){code=picked.code||code; if(!name) name=picked.name||name;} if(code.includes('|')) code=code.split('|')[0].trim();
+    const qty=Number(tr.querySelector('.pr-qty').value||0), unit_price=Number(tr.querySelector('.pr-price').value||0), base=qty*unit_price, discount_text=tr.querySelector('.pr-discount').value||'', line_discount=calcLineDiscount(discount_text,base);
+    return {product_code:code||name,product_name:name,qty,unit_price,line_discount,discount_text,line_total:Math.max(0,base-line_discount)};
+  }).filter(x=>x.product_name&&x.qty>0);
+}
+function updateProformaTotal(){
+  let subtotal=0; [...q('proformaItemsBody').querySelectorAll('tr')].forEach(tr=>{const qty=Number(tr.querySelector('.pr-qty').value||0), price=Number(tr.querySelector('.pr-price').value||0), base=qty*price, line=Math.max(0,base-calcLineDiscount(tr.querySelector('.pr-discount').value||'',base)); subtotal+=line; tr.querySelector('.pr-line').innerHTML=`<b>${money(line)}</b>`});
+  const total=Math.max(0,subtotal-Number(q('proformaDiscount').value||0)); q('proformaTotal').textContent=money(total);
+}
+function resetProformaForm(){editingProformaId=null; q('proformaForm').reset(); q('proformaItemsBody').innerHTML=''; addProformaRow(); setToday(); q('proformaSubmitBtn').textContent='حفظ الفاتورة المبدئية'; q('proformaCancelEditBtn').classList.add('hidden'); updateProformaTotal();}
+function renderProformas(){
+  if(!q('proformasBody')) return;
+  q('proformasBody').innerHTML=proformas.map(pr=>{const l=locations.find(x=>x.id===pr.location_id), c=customers.find(x=>x.id===pr.customer_id); return `<tr><td>${esc(pr.proforma_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||pr.customer_name||'')}</td><td><b>${money(pr.total)}</b></td><td>${esc(pr.status)}</td><td><div class="row"><button class="btn secondary" onclick="openProformaForEdit('${pr.id}')">فتح / تعديل</button><button class="btn secondary" onclick="convertProformaToSale('${pr.id}')">تحويل إلى بيع</button></div></td></tr>`}).join('')||'<tr><td colspan="6">لا توجد فواتير مبدئية.</td></tr>';
+}
+async function openProformaForEdit(id){
+  try{showLoading(true); const rows=await api('pos_proforma_items',{qs:`?select=*&proforma_id=eq.${id}&order=created_at.asc`}); const pr=proformas.find(x=>x.id===id)||(await api('pos_proformas',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; if(!pr){toast('لم يتم العثور على الفاتورة');return;} editingProformaId=id; openTab('proformas'); q('proformaLocation').value=pr.location_id||''; q('proformaDate').value=pr.proforma_date||''; q('proformaNo').value=pr.proforma_no||''; q('proformaCustomer').value=pr.customer_id||''; q('proformaCustomerName').value=pr.customer_name||''; q('proformaCustomerPhone').value=pr.customer_phone||''; q('proformaNotes').value=pr.notes||''; q('proformaDiscount').value=Number(pr.discount||0); q('proformaItemsBody').innerHTML=''; rows.forEach(it=>addProformaRow(it)); updateProformaTotal(); q('proformaSubmitBtn').textContent='حفظ تعديل المبدئية'; q('proformaCancelEditBtn').classList.remove('hidden');}catch(e){console.error(e);toast('خطأ في فتح المبدئية: '+e.message)}finally{showLoading(false)}}
+async function convertSaleToProforma(id){
+  try{showLoading(true); const sl=sales.find(x=>x.id===id)||(await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`}); const c=customers.find(x=>x.id===sl.customer_id); const subtotal=rows.reduce((a,x)=>a+Number(x.line_total||0),0); const pr=await api('pos_proformas',{method:'POST',body:{proforma_date:sl.sale_date,location_id:sl.location_id,customer_id:sl.customer_id,customer_name:c?.name||null,customer_phone:c?.phone||null,subtotal,discount:Number(sl.discount||0),total:Number(sl.total||subtotal),status:'draft',source_sale_id:id,notes:'تم إنشاؤها من فاتورة بيع'}}); await api('pos_proforma_items',{method:'POST',body:rows.map(it=>({proforma_id:pr[0].id,product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount||0,discount_text:it.discount_text||'',line_total:it.line_total}))}); toast('تم تحويل فاتورة البيع إلى مبدئية'); await loadAll(); openTab('proformas');}catch(e){console.error(e);toast('خطأ في التحويل: '+e.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false)}}
+async function convertProformaToSale(id){
+  try{showLoading(true); const pr=proformas.find(x=>x.id===id)||(await api('pos_proformas',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_proforma_items',{qs:`?select=*&proforma_id=eq.${id}&order=created_at.asc`}); openTab('sales'); resetSaleForm(); q('saleLocation').value=pr.location_id||''; q('saleCustomer').value=pr.customer_id||''; q('saleNewCustomerName').value=pr.customer_name||''; q('saleNewCustomerPhone').value=pr.customer_phone||''; q('saleNotes').value='من فاتورة مبدئية '+(pr.proforma_no||pr.id.slice(0,8)); q('saleDiscount').value=Number(pr.discount||0); q('saleItemsBody').innerHTML=''; rows.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount,discount_text:it.discount_text})); updateSaleTotal(); await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{status:'converted'}}).catch(()=>{}); toast('تم فتح الفاتورة في شاشة البيع، راجع الدفع ثم احفظ البيع');}catch(e){console.error(e);toast('خطأ في تحويل المبدئية إلى بيع: '+e.message)}finally{showLoading(false)}}
+
+
+function addOrIncrementPurchaseProduct(p, qty=1){
+  const rows=[...q('purchaseItemsBody').querySelectorAll('tr')];
+  const existing=rows.find(tr=>String(tr.querySelector('.pi-code')?.value||'').trim().toLowerCase()===String(p.code||'').toLowerCase());
+  if(existing){const inp=existing.querySelector('.pi-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updatePurchaseTotal(); return;}
+  addPurchaseRow({product_code:p.code,product_name:p.name,qty,unit_cost:Number(p.purchase_price||0)});
+}
+
 function addPurchaseRow(item={}){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="number" step="1" min="0" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
@@ -1338,7 +1561,7 @@ function openTab(tab){const btn=document.querySelector(`nav button[data-tab="${t
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{function openTab(tab){const btn=document.querySelector(`nav button[data-tab="${tab}"]`); if(btn && btn.style.display!=='none') btn.click();}
 
 document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));btn.classList.add('active');q(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab==='sales') setTimeout(()=>q('saleBarcodeInput')?.focus(),50)}));
-document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault();openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();q('salePrintAfterSave').value='no';q('saleForm').requestSubmit();} if(e.key==='F7'){e.preventDefault();q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit();} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();}});
+document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();q('salePrintAfterSave').value='no';q('saleForm').requestSubmit();} if(e.key==='F7'){e.preventDefault();q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit();} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();}});
 
 
 
@@ -1371,6 +1594,31 @@ function updateSaleReturnTotal(){const total=getReturnItems().reduce((a,x)=>a+Nu
 
 
 
+
+function accountTypeLabel(t){return {cash:'خزينة نقدية',bank:'حساب مصرفي',card:'حساب بطاقة'}[t]||t}
+function financeAccountName(id){return financeAccounts.find(a=>a.id===id)?.name||''}
+function defaultAccountFor(method, location_id){
+  if(method==='cash') return q('saleCashAccount')?.value || financeAccounts.find(a=>a.account_type==='cash' && a.location_id===location_id)?.id || financeAccounts.find(a=>a.account_type==='cash')?.id || null;
+  if(method==='bank_transfer') return q('saleBankAccount')?.value || financeAccounts.find(a=>a.account_type==='bank')?.id || null;
+  if(method==='card') return q('saleCardAccount')?.value || financeAccounts.find(a=>a.account_type==='card')?.id || null;
+  return null;
+}
+async function addFinanceMovement(account_id,direction,movement_type,amount,date,reference_table,reference_id,notes){
+  if(!account_id || !(Number(amount)>0)) return;
+  await api('pos_finance_movements',{method:'POST',body:{account_id,direction,movement_type,amount:Number(amount),movement_date:date,reference_table,reference_id,notes}}).catch(e=>console.warn('finance movement failed',e));
+}
+async function recordSaleFinanceMovements(saleId, location_id, saleDate, payRows){
+  for(const r of payRows){await addFinanceMovement(defaultAccountFor(r.payment_method,location_id),'in','sale_payment',r.amount,saleDate,'pos_sales',saleId,'تحصيل فاتورة بيع')}
+}
+function renderFinance(){
+  if(!q('financeAccountsBody')) return;
+  const cash=financeAccounts.filter(a=>a.account_type==='cash').reduce((x,a)=>x+Number(a.balance||0),0), bank=financeAccounts.filter(a=>a.account_type==='bank').reduce((x,a)=>x+Number(a.balance||0),0), card=financeAccounts.filter(a=>a.account_type==='card').reduce((x,a)=>x+Number(a.balance||0),0);
+  q('financeCashTotal').textContent=money(cash); q('financeBankTotal').textContent=money(bank); q('financeCardTotal').textContent=money(card);
+  const month=new Date().toISOString().slice(0,7); q('financeMonthExpenses').textContent=money(expenses.filter(e=>(e.expense_date||'').startsWith(month)).reduce((a,e)=>a+Number(e.amount||0),0)+salaryPayments.filter(e=>(e.payment_date||'').startsWith(month)).reduce((a,e)=>a+Number(e.amount||0),0));
+  q('financeAccountsBody').innerHTML=financeAccounts.map(a=>{const l=locations.find(x=>x.id===a.location_id);return `<tr><td>${esc(a.name)}</td><td>${accountTypeLabel(a.account_type)}</td><td>${esc(l?.name||'عام')}</td><td>${esc(a.bank_name)}</td><td><b>${money(a.balance)}</b></td></tr>`}).join('')||'<tr><td colspan="5">لا توجد حسابات مالية.</td></tr>';
+  q('financeMovementsBody').innerHTML=financeMovements.slice(0,80).map(m=>`<tr><td>${esc(m.movement_date)}</td><td>${esc(financeAccountName(m.account_id))}</td><td>${esc(typeLabel(m.movement_type))}</td><td>${m.direction==='in'?money(m.amount):''}</td><td>${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.notes)}</td></tr>`).join('')||'<tr><td colspan="6">لا توجد حركات مالية.</td></tr>';
+}
+
 function fillSettingsForm(){if(!q('settingsBusinessName'))return; q('settingsBusinessName').value=APP_CONFIG.businessName; q('settingsTagline').value=APP_CONFIG.tagline; q('settingsCurrency').value=APP_CONFIG.currency; q('settingsLowStock').value=APP_CONFIG.lowStockThreshold;}
 function resetLocalSettings(){localStorage.removeItem('posAppConfig'); location.reload()}
 
@@ -1392,6 +1640,13 @@ q('saleReturnForm').addEventListener('submit', async e=>{
   finally{showLoading(false)}
 });
 
+
+
+q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();try{showLoading(true);await api('pos_finance_accounts',{method:'POST',body:{name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:Number(q('financeOpeningBalance').value||0),notes:q('financeAccountNotes').value.trim()||null}});e.target.reset();toast('تم حفظ الحساب');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message)}finally{showLoading(false)}});
+q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=Number(q('financeTransferAmount').value||0),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب');return;}await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await loadAll();}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false)}});
+q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();try{showLoading(true);const body={expense_date:q('expenseDate').value,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:Number(q('expenseAmount').value||0),notes:q('expenseNotes').value.trim()||null};const r=await api('pos_expenses',{method:'POST',body});await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset();setToday();toast('تم حفظ المصروف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false)}});
+q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();try{showLoading(true);await api('pos_employees',{method:'POST',body:{name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:Number(q('employeeMonthlySalary').value||0)}});e.target.reset();toast('تم حفظ الموظف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message)}finally{showLoading(false)}});
+q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:Number(q('salaryAmount').value||0),notes:q('salaryNotes').value.trim()||null};const r=await api('pos_salary_payments',{method:'POST',body});await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب موظف');e.target.reset();setToday();toast('تم دفع المرتب');await loadAll();}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false)}});
 
 q('settingsForm')?.addEventListener('submit',e=>{
   e.preventDefault();
@@ -1473,12 +1728,14 @@ q('saleForm').addEventListener('submit', async e=>{
       await api('pos_sales',{method:'PATCH',qs:`?id=eq.${editingSaleId}`,body:{...body,updated_at:new Date().toISOString()}});
       await api('pos_sale_items',{method:'DELETE',qs:`?sale_id=eq.${editingSaleId}`});
       await api('pos_sale_payments',{method:'DELETE',qs:`?sale_id=eq.${editingSaleId}`}).catch(()=>{});
+      await api('pos_finance_movements',{method:'DELETE',qs:`?reference_table=eq.pos_sales&reference_id=eq.${editingSaleId}`}).catch(()=>{});
     }else{
       const sale=await api('pos_sales',{method:'POST',body}); saleId=sale[0].id;
     }
     await api('pos_sale_items',{method:'POST',body:items.map(it=>({...it,sale_id:saleId}))});
     const paymentsToSave=payRows.map(r=>({...r,sale_id:saleId,payment_date:body.sale_date}));
     if(paymentsToSave.length) await api('pos_sale_payments',{method:'POST',body:paymentsToSave}).catch(e=>console.warn('sale payments save failed',e));
+    await recordSaleFinanceMovements(saleId, body.location_id, body.sale_date, paymentsToSave);
     for(const it of items){ await adjustStockDoc(location_id,it,-Math.abs(it.qty),'sale','pos_sales',saleId,'فاتورة بيع'); }
     if(balance_due>0){
       await api('pos_customer_ledger',{method:'POST',body:{customer_id,entry_date:body.sale_date,entry_type:'sale',description:body.invoice_no?`فاتورة بيع رقم ${body.invoice_no}`:'فاتورة بيع',debit:balance_due,credit:0,reference_table:'pos_sales',reference_id:saleId}});
@@ -1583,6 +1840,12 @@ async function reversePurchaseEffects(){
   await deleteStockMovements('pos_purchases', editingPurchaseId);
   await api('pos_supplier_ledger',{method:'DELETE',qs:`?reference_table=eq.pos_purchases&reference_id=eq.${editingPurchaseId}`});
 }
+
+
+q('proformaForm')?.addEventListener('submit',async e=>{
+  e.preventDefault(); const items=getProformaItems(); if(!items.length){toast('أضف صنف واحد على الأقل');return;}
+  try{showLoading(true); const subtotal=items.reduce((a,x)=>a+Number(x.line_total||0),0), discount=Number(q('proformaDiscount').value||0), total=Math.max(0,subtotal-discount); const body={proforma_no:q('proformaNo').value.trim()||null,proforma_date:q('proformaDate').value,location_id:q('proformaLocation').value,customer_id:q('proformaCustomer').value||null,customer_name:q('proformaCustomerName').value.trim()||null,customer_phone:q('proformaCustomerPhone').value.trim()||null,subtotal,discount,total,status:'draft',notes:q('proformaNotes').value.trim()||null}; let id=editingProformaId; if(id){await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{...body,updated_at:new Date().toISOString()}}); await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});}else{const pr=await api('pos_proformas',{method:'POST',body}); id=pr[0].id;} await api('pos_proforma_items',{method:'POST',body:items.map(it=>({...it,proforma_id:id}))}); resetProformaForm(); toast('تم حفظ الفاتورة المبدئية'); await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المبدئية: '+err.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false)}
+});
 
 q('purchaseForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -1757,9 +2020,8 @@ function setupTableSorting(){
   });
 }
 
-function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; q('customerPaymentDate').value=d; if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
+function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
+initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
