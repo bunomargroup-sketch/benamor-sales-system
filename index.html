@@ -95,6 +95,9 @@
 
     /* ===== Separated cashier payment step ===== */
     .sale-finish-bar{position:sticky;bottom:42px;z-index:7;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:12px;box-shadow:var(--elev-2);display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;flex-wrap:wrap}.sale-finish-bar .finish-total{display:flex;align-items:center;gap:10px}.sale-finish-bar .finish-total b{font-size:28px;color:var(--blue);font-variant-numeric:tabular-nums}.sale-finish-bar .finish-actions{display:flex;gap:8px;flex-wrap:wrap}.pos-bottom-bar{display:none}.pos-bottom-bar.payment-open{display:grid;position:fixed;inset:18px;z-index:110;bottom:18px;overflow:auto;align-content:start}.payment-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:109;display:none}.payment-backdrop.show{display:block}.payment-title{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.payment-title h2{margin:0}.payment-title .big{font-size:30px;color:var(--blue);font-weight:800}.return-invoice-head{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}.return-invoice-head .cell{background:var(--table-head);border:1px solid var(--border);border-radius:12px;padding:9px 12px}.return-invoice-head .lbl{font-size:12px;color:var(--muted);font-weight:700}.return-invoice-head .val{font-weight:800}
+
+    /* ===== Advanced reports ===== */
+    .seg{display:flex;flex-wrap:wrap;gap:6px}.seg-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-family:inherit;font-weight:800;font-size:13.5px;padding:9px 14px;border-radius:11px;cursor:pointer;transition:all .14s ease}.seg-btn i{font-size:17px}.seg-btn:hover{background:var(--hover);color:var(--text);border-color:color-mix(in srgb,var(--blue) 30%,var(--border))}.seg-btn.active{background:var(--primary-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px color-mix(in srgb,var(--blue) 32%,transparent)}.seg-btn.active i{color:#fff}.report-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.profit-positive{color:var(--good);font-weight:800}.profit-negative{color:var(--bad);font-weight:800}@media(max-width:900px){.report-kpi{grid-template-columns:1fr 1fr}}
     @media(max-width:900px){.product-workbench{grid-template-columns:1fr}.quick-board{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}.picker-grid{grid-template-columns:1fr}.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}.table-scroll{overflow:auto}}
   </style>
   <style id="pro-theme">
@@ -811,6 +814,27 @@
           </div>
         </div>
 
+        <div class="panel" style="padding:10px">
+          <div class="seg">
+            <button class="seg-btn active" type="button" data-rep="overview" onclick="showReport('overview')"><i class="ti ti-layout-grid"></i> نظرة عامة</button>
+            <button class="seg-btn" type="button" data-rep="income" onclick="showReport('income')"><i class="ti ti-report-money"></i> قائمة الدخل</button>
+            <button class="seg-btn" type="button" data-rep="items" onclick="showReport('items')"><i class="ti ti-box"></i> ربحية الأصناف</button>
+            <button class="seg-btn" type="button" data-rep="customers" onclick="showReport('customers')"><i class="ti ti-users"></i> ربحية الزبائن</button>
+            <button class="seg-btn" type="button" data-rep="invoices" onclick="showReport('invoices')"><i class="ti ti-file-invoice"></i> ربحية الفواتير</button>
+            <button class="seg-btn" type="button" data-rep="expenses" onclick="showReport('expenses')"><i class="ti ti-cash"></i> المصاريف والمرتبات</button>
+            <button class="seg-btn" type="button" data-rep="monthly" onclick="showReport('monthly')"><i class="ti ti-calendar-stats"></i> الأداء الشهري</button>
+            <button class="seg-btn" type="button" data-rep="compare" onclick="showReport('compare')"><i class="ti ti-columns-3"></i> مقارنة الفترات</button>
+            <button class="seg-btn" type="button" data-rep="branchprofit" onclick="showReport('branchprofit')"><i class="ti ti-building-store"></i> أرباح الفروع</button>
+            <button class="seg-btn" type="button" data-rep="catprofit" onclick="showReport('catprofit')"><i class="ti ti-category"></i> ربحية التصنيفات</button>
+            <button class="seg-btn" type="button" data-rep="lossitems" onclick="showReport('lossitems')"><i class="ti ti-trending-down"></i> أصناف خاسرة</button>
+            <button class="seg-btn" type="button" data-rep="losscustomers" onclick="showReport('losscustomers')"><i class="ti ti-user-down"></i> زبائن خاسرون</button>
+            <button class="seg-btn" type="button" data-rep="supplierprofit" onclick="showReport('supplierprofit')"><i class="ti ti-truck-delivery"></i> ربحية الموردين</button>
+            <button class="seg-btn" type="button" data-rep="itemhistory" onclick="showReport('itemhistory')"><i class="ti ti-history"></i> حركة صنف</button>
+            <button class="seg-btn" type="button" data-rep="customerhistory" onclick="showReport('customerhistory')"><i class="ti ti-user-search"></i> حركة زبون</button>
+          </div>
+        </div>
+
+        <div id="rep-overview" class="rep-view">
         <div class="panel">
           <h2>مبيعات حسب الفرع</h2>
           <div class="table-scroll"><table><thead><tr><th>الفرع</th><th>عدد الفواتير</th><th>إجمالي البيع</th><th>المدفوع</th><th>الدين</th></tr></thead><tbody id="repSalesByBranchBody"></tbody></table></div>
@@ -832,6 +856,50 @@
             <div class="table-scroll"><table><thead><tr><th>المورد</th><th>الرصيد</th><th>الحالة</th></tr></thead><tbody id="repSuppliersBody"></tbody></table></div>
             <div class="table-scroll"><table><thead><tr><th>الزبون</th><th>الرصيد</th><th>الحالة</th></tr></thead><tbody id="repCustomersBody"></tbody></table></div>
           </div>
+        </div>
+        </div><!-- /rep-overview -->
+
+        <div id="rep-income" class="rep-view hidden">
+          <div class="panel"><h2>قائمة الدخل</h2><p class="muted">صافي الإيرادات بعد المرتجعات، ناقص تكلفة البضاعة والمصاريف والمرتبات خلال الفترة.</p><div id="repIncomeBody"></div></div>
+        </div>
+        <div id="rep-items" class="rep-view hidden">
+          <div class="panel"><div class="tools"><h2>ربحية الأصناف</h2><input id="repItemSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderReportsDetail()" style="max-width:280px"></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repItemProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-customers" class="rep-view hidden">
+          <div class="panel"><h2>ربحية الزبائن</h2><div class="table-scroll"><table><thead><tr><th>الزبون</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الدين الحالي</th></tr></thead><tbody id="repCustomerProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-invoices" class="rep-view hidden">
+          <div class="panel"><h2>ربحية الفواتير</h2><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>الإجمالي</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repInvoiceProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-expenses" class="rep-view hidden">
+          <div class="panel"><h2>المصاريف والمرتبات</h2><div class="report-kpi"><div class="card"><h3>المصاريف</h3><div class="num" id="repExpenseTotal">0</div></div><div class="card"><h3>المرتبات</h3><div class="num" id="repSalaryTotal">0</div></div><div class="card"><h3>الإجمالي</h3><div class="num" id="repExpenseSalaryTotal">0</div></div></div><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>الحساب</th><th>المبلغ</th></tr></thead><tbody id="repExpensesBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-monthly" class="rep-view hidden">
+          <div class="panel"><h2>الأداء الشهري</h2><div class="table-scroll"><table><thead><tr><th>الشهر</th><th>المبيعات</th><th>المرتجعات</th><th>التكلفة</th><th>المصاريف</th><th>الربح الصافي</th></tr></thead><tbody id="repMonthlyBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-compare" class="rep-view hidden">
+          <div class="panel"><div class="tools"><h2>مقارنة قائمة الدخل حسب الفترة</h2><select id="repComparePeriod" onchange="renderReportsDetail()"><option value="month">شهري</option><option value="quarter">ربع سنوي</option><option value="year">سنوي</option></select></div><div class="table-scroll"><table><thead><tr><th>الفترة</th><th>عدد الفواتير</th><th>الإيرادات</th><th>التكلفة</th><th>مجمل الربح</th><th>المصاريف</th><th>صافي الربح</th></tr></thead><tbody id="repCompareBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-branchprofit" class="rep-view hidden">
+          <div class="panel"><h2>أرباح الفروع</h2><p class="muted">يعرض مجمل الربح قبل المصاريف المشتركة.</p><div class="table-scroll"><table><thead><tr><th>الفرع</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repBranchProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-catprofit" class="rep-view hidden">
+          <div class="panel"><h2>أرباح مجموعات الأصناف</h2><p class="muted">مجموعات الأصناف = حقل التصنيف في المنتج.</p><div class="table-scroll"><table><thead><tr><th>التصنيف</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repCatProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-supplierprofit" class="rep-view hidden">
+          <div class="panel"><h2>أرباح الموردين</h2><div class="table-scroll"><table><thead><tr><th>المورد</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repSupplierProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-lossitems" class="rep-view hidden">
+          <div class="panel"><h2>أصناف تسبب خسائر</h2><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repLossItemsBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-losscustomers" class="rep-view hidden">
+          <div class="panel"><h2>زبائن تسبب خسائر</h2><div class="table-scroll"><table><thead><tr><th>الزبون</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الدين الحالي</th></tr></thead><tbody id="repLossCustomersBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-itemhistory" class="rep-view hidden">
+          <div class="panel"><div class="tools"><h2>حركة أرباح صنف</h2><div class="row"><input id="repHistItemCode" list="productsDatalist" placeholder="اختر أو اكتب كود الصنف" oninput="renderReportsDetail()" style="max-width:320px"><select id="repHistPeriod" onchange="renderReportsDetail()"><option value="month">شهري</option><option value="quarter">ربع سنوي</option><option value="year">سنوي</option></select></div></div><div class="table-scroll"><table><thead><tr><th>الفترة</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th></tr></thead><tbody id="repItemHistoryBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-customerhistory" class="rep-view hidden">
+          <div class="panel"><div class="tools"><h2>حركة أرباح زبون</h2><div class="row"><select id="repHistCustomer" onchange="renderReportsDetail()" style="min-width:260px"></select><select id="repHistCustomerPeriod" onchange="renderReportsDetail()"><option value="month">شهري</option><option value="quarter">ربع سنوي</option><option value="year">سنوي</option></select></div></div><div class="table-scroll"><table><thead><tr><th>الفترة</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th></tr></thead><tbody id="repCustomerHistoryBody"></tbody></table></div></div>
         </div>
       </section>
 
@@ -989,6 +1057,7 @@ let activePayInputId="saleCashAmount";
 let saleSaveMode="new";
 let lastFocusedSaleRow=null;
 let calcExpr="";
+let currentReport="overview";
 let productSortIndex=13, productSortDir='desc';
 let stockSortIndex=3, stockSortDir='desc';
 let pickerSelectedIndex=0;
@@ -2383,6 +2452,35 @@ function productCost(code){
   const p=products.find(x=>String(x.code||'').toLowerCase()===String(code||'').toLowerCase());
   return Number(p?.purchase_price||0);
 }
+
+function bucketKey(date, period){
+  if(!date) return '';
+  const y=String(date).slice(0,4), mo=Number(String(date).slice(5,7))||1;
+  if(period==='year') return y;
+  if(period==='quarter') return `${y}-Q${Math.ceil(mo/3)}`;
+  return String(date).slice(0,7);
+}
+function repScopeData(){
+  const d=reportContext();
+  return {from:d.from,to:d.to,loc:d.loc,fSales:d.filteredSales,fItems:d.filteredItems,fReturns:d.filteredReturns,fRetItems:d.filteredReturnItems,fExpenses:d.filteredExpenses,fSalaries:d.filteredSalaries};
+}
+function emptyRow(cols,msg='لا توجد بيانات.'){return `<tr><td colspan="${cols}">${esc(msg)}</td></tr>`}
+function profitClass(n){return Number(n||0)>=0?'stock-positive':'stock-negative'}
+function productByCode(code){return products.find(p=>String(p.code||'').toLowerCase()===String(code||'').toLowerCase())||null}
+function itemProfitRows(){
+  const d=repScopeData();
+  const m={};
+  d.fItems.forEach(it=>{const k=it.product_code; const o=m[k]||(m[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0}); o.qty+=Number(it.qty||0); o.sales+=Number(it.line_total||0); o.cost+=productCost(k)*Number(it.qty||0);});
+  d.fRetItems.forEach(it=>{const k=it.product_code; const o=m[k]||(m[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0}); o.qty-=Number(it.qty||0); o.sales-=Number(it.line_total||0); o.cost-=productCost(k)*Number(it.qty||0);});
+  return Object.values(m).map(r=>({...r,profit:r.sales-r.cost,margin:r.sales?(r.sales-r.cost)/r.sales*100:0}));
+}
+function customerProfitRows(){
+  const d=repScopeData(); const bySale={}; d.fItems.forEach(it=>{(bySale[it.sale_id]||(bySale[it.sale_id]=[])).push(it)}); const m={};
+  d.fSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const k=sl.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.count++; o.sales+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=productCost(it.product_code)*Number(it.qty||0));});
+  const byRet={}; d.fRetItems.forEach(it=>{(byRet[it.return_id]||(byRet[it.return_id]=[])).push(it)});
+  d.fReturns.forEach(r=>{const c=customers.find(x=>x.id===r.customer_id); const k=r.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.sales-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=productCost(it.product_code)*Number(it.qty||0));});
+  return Object.values(m).map(r=>({...r,profit:r.sales-r.cost}));
+}
 function renderReports(){
   if(!q('repSalesTotal')) return;
   const from=q('reportFrom')?.value||''; const to=q('reportTo')?.value||''; const loc=q('reportLocation')?.value||'';
@@ -2412,8 +2510,110 @@ function renderReports(){
   q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${st.product_code}</b></td><td>${st.product_name||''}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
 
   q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${s.name}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
-  q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${c.name}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة زبائن.</td></tr>';
+  q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${esc(c.name)}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة زبائن.</td></tr>';
+  renderReportsDetail();
 }
+
+function showReport(name){
+  currentReport=name;
+  document.querySelectorAll('.rep-view').forEach(v=>v.classList.add('hidden'));
+  q('rep-'+name)?.classList.remove('hidden');
+  document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.rep===name));
+  renderReportsDetail();
+}
+function reportContext(){
+  const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'', loc=q('reportLocation')?.value||'';
+  const filteredSales=sales.filter(sl=>inDateRange(sl.sale_date,from,to)&&(!loc||sl.location_id===loc));
+  const saleIds=new Set(filteredSales.map(s=>s.id));
+  const filteredItems=saleItems.filter(it=>saleIds.has(it.sale_id));
+  const filteredReturns=saleReturns.filter(r=>inDateRange(r.return_date,from,to)&&(!loc||r.location_id===loc));
+  const filteredReturnIds=new Set(filteredReturns.map(r=>r.id));
+  const filteredReturnItems=saleReturnItems.filter(it=>filteredReturnIds.has(it.return_id));
+  const filteredExpenses=expenses.filter(e=>inDateRange(e.expense_date,from,to));
+  const filteredSalaries=salaryPayments.filter(e=>inDateRange(e.payment_date,from,to));
+  return {from,to,loc,filteredSales,saleIds,filteredItems,filteredReturns,filteredReturnItems,filteredExpenses,filteredSalaries};
+}
+function aggregateItemProfit(items, returnItems=[]){
+  const map={};
+  items.forEach(it=>{const k=it.product_code; if(!map[k])map[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0,returns:0,profit:0}; map[k].qty+=Number(it.qty||0); map[k].sales+=Number(it.line_total||0); map[k].cost+=productCost(k)*Number(it.qty||0);});
+  returnItems.forEach(it=>{const k=it.product_code; if(!map[k])map[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0,returns:0,profit:0}; map[k].qty-=Number(it.qty||0); map[k].returns+=Number(it.line_total||0); map[k].sales-=Number(it.line_total||0); map[k].cost-=productCost(k)*Number(it.qty||0);});
+  Object.values(map).forEach(r=>{r.profit=r.sales-r.cost; r.margin=r.sales?((r.profit/r.sales)*100):0;});
+  return Object.values(map);
+}
+function renderReportsDetail(){
+  if(q('repHistCustomer') && !q('repHistCustomer').dataset.ready){q('repHistCustomer').innerHTML='<option value="">اختر الزبون</option>'+customers.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''); q('repHistCustomer').dataset.ready='1';}
+  const ctx=reportContext();
+  const salesTotal=ctx.filteredSales.reduce((a,s)=>a+Number(s.total||0),0);
+  const returnsTotal=ctx.filteredReturns.reduce((a,r)=>a+Number(r.total||0),0);
+  const itemAgg=aggregateItemProfit(ctx.filteredItems,ctx.filteredReturnItems);
+  const cogs=itemAgg.reduce((a,r)=>a+Number(r.cost||0),0);
+  const grossProfit=(salesTotal-returnsTotal)-cogs;
+  const expenseTotal=ctx.filteredExpenses.reduce((a,e)=>a+Number(e.amount||0),0);
+  const salaryTotal=ctx.filteredSalaries.reduce((a,e)=>a+Number(e.amount||0),0);
+  const netProfit=grossProfit-expenseTotal-salaryTotal;
+  if(q('repIncomeBody')) q('repIncomeBody').innerHTML=`<div class="report-kpi"><div class="card"><h3>صافي المبيعات</h3><div class="num">${money(salesTotal-returnsTotal)}</div></div><div class="card"><h3>تكلفة البضاعة</h3><div class="num">${money(cogs)}</div></div><div class="card"><h3>مجمل الربح</h3><div class="num ${grossProfit>=0?'profit-positive':'profit-negative'}">${money(grossProfit)}</div></div><div class="card"><h3>صافي الربح</h3><div class="num ${netProfit>=0?'profit-positive':'profit-negative'}">${money(netProfit)}</div></div></div><table><tbody><tr><td>إجمالي المبيعات</td><td>${money(salesTotal)}</td></tr><tr><td>المرتجعات</td><td>${money(returnsTotal)}</td></tr><tr><td>صافي المبيعات</td><td>${money(salesTotal-returnsTotal)}</td></tr><tr><td>تكلفة البضاعة المباعة</td><td>${money(cogs)}</td></tr><tr><td>مجمل الربح</td><td>${money(grossProfit)}</td></tr><tr><td>المصاريف</td><td>${money(expenseTotal)}</td></tr><tr><td>المرتبات</td><td>${money(salaryTotal)}</td></tr><tr><td><b>صافي الربح</b></td><td><b>${money(netProfit)}</b></td></tr></tbody></table>`;
+  const term=(q('repItemSearch')?.value||'').trim().toLowerCase();
+  if(q('repItemProfitBody')) q('repItemProfitBody').innerHTML=itemAgg.filter(r=>!term||[r.code,r.name].join(' ').toLowerCase().includes(term)).sort((a,b)=>b.profit-a.profit).slice(0,200).map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="${r.profit>=0?'profit-positive':'profit-negative'}">${money(r.profit)}</td><td>${money(r.margin)}%</td></tr>`).join('')||'<tr><td colspan="7">لا توجد بيانات.</td></tr>';
+  const byCustomer={};
+  ctx.filteredSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const key=sl.customer_id||'cash'; if(!byCustomer[key])byCustomer[key]={name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,profit:0,balance:Number(c?.balance||0)}; byCustomer[key].count++; byCustomer[key].sales+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>byCustomer[key].cost+=productCost(it.product_code)*Number(it.qty||0));});
+  Object.values(byCustomer).forEach(r=>r.profit=r.sales-r.cost);
+  if(q('repCustomerProfitBody')) q('repCustomerProfitBody').innerHTML=Object.values(byCustomer).sort((a,b)=>b.sales-a.sales).map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="${r.profit>=0?'profit-positive':'profit-negative'}">${money(r.profit)}</td><td>${money(r.balance)}</td></tr>`).join('')||'<tr><td colspan="6">لا توجد بيانات.</td></tr>';
+  if(q('repInvoiceProfitBody')) q('repInvoiceProfitBody').innerHTML=ctx.filteredSales.map(sl=>{const l=locations.find(x=>x.id===sl.location_id), c=customers.find(x=>x.id===sl.customer_id); const cost=saleItems.filter(it=>it.sale_id===sl.id).reduce((a,it)=>a+productCost(it.product_code)*Number(it.qty||0),0); const profit=Number(sl.total||0)-cost; const margin=Number(sl.total||0)?profit/Number(sl.total||0)*100:0; return `<tr><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${money(sl.total)}</td><td>${money(cost)}</td><td class="${profit>=0?'profit-positive':'profit-negative'}">${money(profit)}</td><td>${money(margin)}%</td></tr>`}).join('')||'<tr><td colspan="7">لا توجد فواتير.</td></tr>';
+  if(q('repExpenseTotal')){q('repExpenseTotal').textContent=money(expenseTotal); q('repSalaryTotal').textContent=money(salaryTotal); q('repExpenseSalaryTotal').textContent=money(expenseTotal+salaryTotal)}
+  if(q('repExpensesBody')) q('repExpensesBody').innerHTML=[...ctx.filteredExpenses.map(e=>({date:e.expense_date,type:'مصروف',title:e.title,account:e.account_id,amount:e.amount})),...ctx.filteredSalaries.map(e=>({date:e.payment_date,type:'مرتب',title:e.period||'مرتب',account:e.account_id,amount:e.amount}))].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.title)}</td><td>${esc(financeAccountName(r.account))}</td><td>${money(r.amount)}</td></tr>`).join('')||'<tr><td colspan="5">لا توجد مصاريف أو مرتبات.</td></tr>';
+  const months={};
+  ctx.filteredSales.forEach(s=>{const m=(s.sale_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].sales+=Number(s.total||0); saleItems.filter(it=>it.sale_id===s.id).forEach(it=>months[m].cost+=productCost(it.product_code)*Number(it.qty||0));});
+  ctx.filteredReturns.forEach(r=>{const m=(r.return_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].returns+=Number(r.total||0);});
+  ctx.filteredExpenses.forEach(e=>{const m=(e.expense_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].expenses+=Number(e.amount||0);});
+  ctx.filteredSalaries.forEach(e=>{const m=(e.payment_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].expenses+=Number(e.amount||0);});
+  if(q('repMonthlyBody')) q('repMonthlyBody').innerHTML=Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,r])=>{const net=r.sales-r.returns-r.cost-r.expenses; return `<tr><td>${esc(m)}</td><td>${money(r.sales)}</td><td>${money(r.returns)}</td><td>${money(r.cost)}</td><td>${money(r.expenses)}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(6,'لا توجد بيانات شهرية.');
+
+  const d=repScopeData();
+  if(currentReport==='branchprofit' && q('repBranchProfitBody')){
+    const bySale={}; d.fItems.forEach(it=>{(bySale[it.sale_id]||(bySale[it.sale_id]=[])).push(it);});
+    const m={}; d.fSales.forEach(sl=>{const k=sl.location_id||'none'; const o=m[k]||(m[k]={id:k,count:0,rev:0,cost:0}); o.count++; o.rev+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=productCost(it.product_code)*Number(it.qty||0));});
+    const byRet={}; d.fRetItems.forEach(it=>{(byRet[it.return_id]||(byRet[it.return_id]=[])).push(it);});
+    d.fReturns.forEach(r=>{const o=m[r.location_id]; if(!o)return; o.rev-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=productCost(it.product_code)*Number(it.qty||0));});
+    const rows=Object.values(m).map(r=>({...r,name:locations.find(l=>l.id===r.id)?.name||'غير محدد',profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
+    q('repBranchProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(6);
+  }
+  if(currentReport==='catprofit' && q('repCatProfitBody')){
+    const m={}; const add=(it,sign=1)=>{const p=productByCode(it.product_code); const k=p?.category||'بدون تصنيف'; const o=m[k]||(m[k]={name:k,qty:0,rev:0,cost:0}); o.qty+=sign*Number(it.qty||0); o.rev+=sign*Number(it.line_total||0); o.cost+=sign*productCost(it.product_code)*Number(it.qty||0);};
+    d.fItems.forEach(it=>add(it,1)); d.fRetItems.forEach(it=>add(it,-1)); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
+    q('repCatProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(6);
+  }
+  if(currentReport==='supplierprofit' && q('repSupplierProfitBody')){
+    const m={}; const add=(it,sign=1)=>{const p=productByCode(it.product_code); const k=p?.supplier_name||'بدون مورد'; const o=m[k]||(m[k]={name:k,rev:0,cost:0}); o.rev+=sign*Number(it.line_total||0); o.cost+=sign*productCost(it.product_code)*Number(it.qty||0);};
+    d.fItems.forEach(it=>add(it,1)); d.fRetItems.forEach(it=>add(it,-1)); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
+    q('repSupplierProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(5);
+  }
+  if(currentReport==='lossitems' && q('repLossItemsBody')){
+    const rows=itemProfitRows().filter(r=>r.profit<0).sort((a,b)=>a.profit-b.profit);
+    q('repLossItemsBody').innerHTML=rows.map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="stock-negative">${money(r.profit)}</td><td class="stock-negative">${money(r.margin)}%</td></tr>`).join('')||emptyRow(7,'لا توجد أصناف خاسرة في الفترة المحددة.');
+  }
+  if(currentReport==='losscustomers' && q('repLossCustomersBody')){
+    const rows=customerProfitRows().filter(r=>r.profit<0).sort((a,b)=>a.profit-b.profit);
+    q('repLossCustomersBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="stock-negative">${money(r.profit)}</td><td>${money(r.balance)}</td></tr>`).join('')||emptyRow(6,'لا يوجد زبائن خاسرون في الفترة المحددة.');
+  }
+  if(currentReport==='itemhistory' && q('repItemHistoryBody')){
+    const code=(q('repHistItemCode')?.value||'').split('|')[0].trim().toLowerCase(); const period=q('repHistPeriod')?.value||'month';
+    if(!code){q('repItemHistoryBody').innerHTML=emptyRow(5,'اختر صنفًا أولاً.');}
+    else{const saleDate={}; d.fSales.forEach(s=>saleDate[s.id]=s.sale_date); const m={}; d.fItems.filter(it=>String(it.product_code).toLowerCase()===code).forEach(it=>{const k=bucketKey(saleDate[it.sale_id],period); if(!k)return; const o=m[k]||(m[k]={k,qty:0,rev:0,cost:0}); o.qty+=Number(it.qty||0); o.rev+=Number(it.line_total||0); o.cost+=productCost(it.product_code)*Number(it.qty||0);}); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost})).sort((a,b)=>a.k.localeCompare(b.k)); q('repItemHistoryBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${money(r.qty)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td></tr>`).join('')||emptyRow(5,'لا توجد حركة لهذا الصنف.');}
+  }
+  if(currentReport==='customerhistory' && q('repCustomerHistoryBody')){
+    const cid=q('repHistCustomer')?.value||''; const period=q('repHistCustomerPeriod')?.value||'month';
+    if(!cid){q('repCustomerHistoryBody').innerHTML=emptyRow(4,'اختر زبونًا أولاً.');}
+    else{const saleById={}; d.fSales.forEach(s=>saleById[s.id]=s); const m={}; d.fItems.filter(it=>saleById[it.sale_id]?.customer_id===cid).forEach(it=>{const k=bucketKey(saleById[it.sale_id]?.sale_date,period); if(!k)return; const o=m[k]||(m[k]={k,rev:0,cost:0}); o.rev+=Number(it.line_total||0); o.cost+=productCost(it.product_code)*Number(it.qty||0);}); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost})).sort((a,b)=>a.k.localeCompare(b.k)); q('repCustomerHistoryBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td></tr>`).join('')||emptyRow(4,'لا توجد حركة لهذا الزبون.');}
+  }
+  if(currentReport==='compare' && q('repCompareBody')){
+    const period=q('repComparePeriod')?.value||'month'; const m={}; const ensure=k=>m[k]||(m[k]={k,count:0,rev:0,cost:0,expenses:0});
+    d.fSales.forEach(sl=>{const k=bucketKey(sl.sale_date,period), o=ensure(k); o.count++; o.rev+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>o.cost+=productCost(it.product_code)*Number(it.qty||0));});
+    d.fReturns.forEach(r=>{const k=bucketKey(r.return_date,period), o=ensure(k); o.rev-=Number(r.total||0); saleReturnItems.filter(it=>it.return_id===r.id).forEach(it=>o.cost-=productCost(it.product_code)*Number(it.qty||0));});
+    d.fExpenses.forEach(e=>ensure(bucketKey(e.expense_date,period)).expenses+=Number(e.amount||0)); d.fSalaries.forEach(e=>ensure(bucketKey(e.payment_date,period)).expenses+=Number(e.amount||0));
+    const rows=Object.values(m).filter(r=>r.k).sort((a,b)=>b.k.localeCompare(a.k)); q('repCompareBody').innerHTML=rows.map(r=>{const gp=r.rev-r.cost, net=gp-r.expenses; return `<tr><td>${esc(r.k)}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(gp)}">${money(gp)}</td><td>${money(r.expenses)}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(7);
+  }
+}
+
 function printReports(){
   const content=q('reports').innerHTML;
   const period=`${q('reportFrom')?.value||'—'} ← ${q('reportTo')?.value||'—'}`;
