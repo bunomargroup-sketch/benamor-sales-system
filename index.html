@@ -205,7 +205,35 @@
     .loading{background:var(--text);color:var(--card)}
 
     @media print{header,nav{display:none}}
-  </style>
+  
+
+    /* ===== Hero tile launcher (ERP-style home) ===== */
+    .launcher{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+    .launch-tile{position:relative;overflow:hidden;border:0;border-radius:18px;min-height:128px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;color:#fff;font-family:inherit;font-weight:700;font-size:16px;cursor:pointer;box-shadow:var(--elev-2);transition:transform .15s ease,box-shadow .15s ease,filter .15s}
+    .launch-tile i{font-size:40px}
+    .launch-tile span{position:relative;z-index:1}
+    .launch-tile:hover{transform:translateY(-3px);filter:brightness(1.06);box-shadow:var(--elev-3)}
+    .launch-tile::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 100% 0,rgba(255,255,255,.20),transparent 55%)}
+    .lt-orange{background:linear-gradient(135deg,#ea6a2b,#d2541a)}
+    .lt-blue{background:linear-gradient(135deg,#2a7fd4,#1763b3)}
+    .lt-green{background:linear-gradient(135deg,#3a9e4a,#2c7d39)}
+    .lt-purple{background:linear-gradient(135deg,#7a52c8,#5f3aa8)}
+    .lt-teal{background:linear-gradient(135deg,#2f9e9e,#1f7d7d)}
+    .lt-pink{background:linear-gradient(135deg,#d24d86,#b23568)}
+    .lt-slate{background:linear-gradient(135deg,#4b5a6e,#37434f)}
+    .lt-dark{background:linear-gradient(135deg,#384150,#272d38)}
+    @media(max-width:900px){.launcher{grid-template-columns:repeat(2,1fr)}.launch-tile{min-height:108px;font-size:15px}.launch-tile i{font-size:34px}}
+
+    /* ===== Persistent bottom status bar ===== */
+    body{padding-bottom:42px}
+    .statusbar{position:fixed;inset-block-end:0;inset-inline:0;height:34px;display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -2px 14px rgba(15,23,42,.07);font-size:12.5px;color:var(--muted);z-index:40}
+    .statusbar .sb-item{display:inline-flex;align-items:center;gap:6px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .statusbar .sb-item i{font-size:15px;color:var(--blue)}
+    .statusbar .sb-grow{flex:1}
+    .statusbar .sb-sep{width:1px;height:16px;background:var(--border);flex:none}
+    @media(max-width:760px){.statusbar .sb-date-greg{display:none}}
+    @media print{.statusbar{display:none}}
+</style>
 </head>
 <body>
   <header>
@@ -247,6 +275,16 @@
 
     <main>
       <section id="dashboard" class="section active">
+        <div class="launcher">
+          <button class="launch-tile lt-orange" type="button" onclick="openTab('sales')"><i class="ti ti-shopping-cart"></i><span>فاتورة مبيعات</span></button>
+          <button class="launch-tile lt-blue" type="button" onclick="openTab('purchases')"><i class="ti ti-shopping-bag"></i><span>فاتورة مشتريات</span></button>
+          <button class="launch-tile lt-green" type="button" onclick="openTab('products')"><i class="ti ti-box"></i><span>إضافة صنف</span></button>
+          <button class="launch-tile lt-purple" type="button" onclick="openTab('customers')"><i class="ti ti-user-plus"></i><span>إضافة زبون</span></button>
+          <button class="launch-tile lt-teal" type="button" onclick="openTab('payments')"><i class="ti ti-cash-banknote"></i><span>دفع للمورد</span></button>
+          <button class="launch-tile lt-pink" type="button" onclick="openTab('salesList')"><i class="ti ti-receipt-refund"></i><span>مرتجع مبيعات</span></button>
+          <button class="launch-tile lt-slate" type="button" onclick="openTab('finance')"><i class="ti ti-wallet"></i><span>المصروفات</span></button>
+          <button class="launch-tile lt-dark" type="button" onclick="openTab('reports')"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
+        </div>
         <div class="grid cards">
           <div class="card"><h3>الفروع</h3><div class="num" id="branchesCount">0</div></div>
           <div class="card"><h3>المخازن</h3><div class="num" id="warehousesCount">0</div></div>
@@ -438,7 +476,7 @@
               <div class="pos-head-grid">
                 <div><label>زبون موجود</label><select id="saleCustomer" onchange="renderSaleCustomerInfo();updateSaleTotal()"></select></div>
                 <div><label>رقم الفاتورة</label><input id="saleInvoiceNo" placeholder="اختياري"></div>
-                <div><label>فرع البيع</label><select id="saleLocation" required onchange="refreshSaleAvailability();renderSaleStockInfo()"></select></div>
+                <div><label>فرع البيع</label><select id="saleLocation" required onchange="refreshSaleAvailability();renderSaleStockInfo();renderStatusBar()"></select></div>
                 <div><label>التاريخ</label><input id="saleDate" type="date" required></div>
                 <div><label>طريقة الدفع</label><select id="salePaymentMethod" onchange="updateSaleTotal()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="mixed">مختلط</option><option value="credit">آجل / دين</option></select></div>
                 <div class="pos-currency">العملة: <span style="margin-inline-start:6px">د.ل</span></div>
@@ -942,6 +980,15 @@
     </div>
   </div>
   <div class="payment-backdrop" id="paymentBackdrop" onclick="closeSalePaymentScreen()"></div>
+  <div class="statusbar" id="statusBar">
+    <div class="sb-item"><i class="ti ti-building-store"></i><span id="sbCompany"></span></div>
+    <div class="sb-sep"></div>
+    <div class="sb-item"><i class="ti ti-git-branch"></i><span id="sbBranch">الفرع الرئيسي</span></div>
+    <div class="sb-grow"></div>
+    <div class="sb-item"><i class="ti ti-user"></i><span id="sbUser">—</span></div>
+    <div class="sb-sep"></div>
+    <div class="sb-item"><i class="ti ti-calendar"></i><span id="sbDate"></span></div>
+  </div>
   <div class="loading" id="loading">جاري التحميل...</div>
   <div class="toast" id="toast"></div>
   <datalist id="productsDatalist"></datalist>
@@ -1142,7 +1189,7 @@ async function loadAll(){
   finally{showLoading(false)}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();applyPermissions();setTimeout(setupTableSorting,0)}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();applyPermissions();setTimeout(setupTableSorting,0)}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -2745,9 +2792,23 @@ document.addEventListener('contextmenu',e=>{
   e.preventDefault(); showCtxMenu(e.clientX,e.clientY,items);
 });
 
+
+/* ===== Status bar + Hijri/Gregorian dates ===== */
+function hijriDate(d){try{return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{day:'numeric',month:'long',year:'numeric'}).format(d)+' هـ';}catch(e){return '';}}
+function gregDate(d){try{return new Intl.DateTimeFormat('ar-LY',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(d);}catch(e){return d.toISOString().slice(0,10);}}
+function renderStatusBar(){
+  const d=new Date();
+  if(q('sbCompany')) q('sbCompany').textContent=APP_CONFIG.businessName;
+  if(q('sbUser')) q('sbUser').textContent=appUser?.id ? `${appUser.identifier}${currentRole?.role?(' · '+(ROLE_LABELS[currentRole.role]||'')):''}` : 'غير مسجّل';
+  if(q('sbDate')) q('sbDate').innerHTML=`<span class="sb-date-greg">${esc(gregDate(d))} — </span>${esc(hijriDate(d))}`;
+  const locName=locations.find(l=>l.id===(q('saleLocation')?.value||''))?.name;
+  if(q('sbBranch')) q('sbBranch').textContent=locName||'الفرع الرئيسي';
+}
+setInterval(renderStatusBar,60000);
+
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
+initBranding(); fillSettingsForm(); setToday(); renderStatusBar(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a13e55b47f78a10c',t:'MTc4MjgzNDcxMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
