@@ -233,13 +233,36 @@
     .statusbar .sb-sep{width:1px;height:16px;background:var(--border);flex:none}
     @media(max-width:760px){.statusbar .sb-date-greg{display:none}}
     @media print{.statusbar{display:none}}
+
+
+    /* ===== Wider app + collapsible sidebar (sales-focus) ===== */
+    .wrap{max-width:min(1800px,97vw);padding:0 14px}
+    body.nav-collapsed .wrap{grid-template-columns:1fr}
+    body.nav-collapsed nav{display:none}
+
+    /* Make the invoice items table the hero on the sales screen */
+    #sales .pos-items-card{display:flex;flex-direction:column}
+    #sales .sale-lines-scroll{min-height:64vh;max-height:76vh;flex:1}
+    #sales #saleItemsBody td{padding:14px 10px;vertical-align:middle}
+    #sales #saleItemsBody input{min-height:44px;font-size:16px}
+    #sales .pos-items-card thead th{font-size:14px;padding:13px 10px}
+    #sales .pos-items-card .tools h2{font-size:20px}
+
+    /* Compact the two info cards so the table starts higher and gets more room */
+    #sales .cashier-info-grid{grid-template-columns:1fr 1fr;gap:8px}
+    #sales .cashier-info-grid .info-card{padding:9px 12px}
+    #sales .cashier-info-grid .info-card .num{font-size:20px}
+
+    /* Slightly narrower action rail to give the table more width */
+    #sales .pos-work-area{grid-template-columns:172px minmax(0,1fr)}
+    @media(max-width:1100px){#sales .pos-work-area{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
   <header>
     <div class="top">
       <div class="brand"><h1 id="brandTitle">نظام البيع والمخزون</h1><p id="brandTagline">نظام بيع ومخزون</p></div>
-      <div class="row"><button class="icon-btn" id="themeToggle" type="button" onclick="toggleTheme()" title="تبديل الوضع"><i class="ti ti-moon"></i></button><div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div><div class="pill hidden" id="userPill"><span id="userLabel"></span> <button class="btn secondary" style="padding:6px 10px" onclick="logoutPOS()">خروج</button></div></div>
+      <div class="row"><button class="icon-btn" id="navToggle" type="button" onclick="toggleNav()" title="إظهار/إخفاء القائمة"><i class="ti ti-menu-2"></i></button><button class="icon-btn" id="themeToggle" type="button" onclick="toggleTheme()" title="تبديل الوضع"><i class="ti ti-moon"></i></button><div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div><div class="pill hidden" id="userPill"><span id="userLabel"></span> <button class="btn secondary" style="padding:6px 10px" onclick="logoutPOS()">خروج</button></div></div>
     </div>
   </header>
 
@@ -2035,6 +2058,8 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   btn.classList.add('active');
   q(btn.dataset.tab).classList.add('active');
+  if(btn.dataset.tab==='sales') document.body.classList.add('nav-collapsed');
+  else document.body.classList.toggle('nav-collapsed', (localStorage.getItem('posNavCollapsed')==='1'));
   if(btn.dataset.tab==='sales') setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
 }));
 document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();} if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();} if(e.key==='F8'){e.preventDefault();focusPay('cash');} if(e.key==='F9'){e.preventDefault();focusPay('bank');} if(e.key==='F10'){e.preventDefault();focusPay('card');} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();closeQuickProductModal();q('calculatorPanel')?.classList.remove('show');}});
@@ -2793,6 +2818,12 @@ document.addEventListener('contextmenu',e=>{
 });
 
 
+
+function toggleNav(){
+  document.body.classList.toggle('nav-collapsed');
+  try{localStorage.setItem('posNavCollapsed',document.body.classList.contains('nav-collapsed')?'1':'0')}catch(e){}
+}
+
 /* ===== Status bar + Hijri/Gregorian dates ===== */
 function hijriDate(d){try{return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{day:'numeric',month:'long',year:'numeric'}).format(d)+' هـ';}catch(e){return '';}}
 function gregDate(d){try{return new Intl.DateTimeFormat('ar-LY',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(d);}catch(e){return d.toISOString().slice(0,10);}}
@@ -2807,8 +2838,8 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setToday(); renderStatusBar(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
+initBranding(); fillSettingsForm(); setToday(); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a13ec3b9b8b97945',t:'MTc4MjgzOTIxOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
