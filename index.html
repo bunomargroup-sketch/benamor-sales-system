@@ -84,6 +84,14 @@
     .keypad{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}.keypad button{min-height:56px;border-radius:12px;border:1px solid var(--border);background:var(--table-head);color:#38a3e8;font-size:26px;font-weight:800;cursor:pointer}.keypad button.op{color:#b000c8;background:color-mix(in srgb,#b000c8 8%,var(--card))}.keypad button.enter{background:var(--blue);color:#fff;font-size:20px}.keypad button:hover{filter:brightness(.96)}
     .quick-pay-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}.quick-pay-buttons button{border:1px solid var(--border);background:var(--accent-soft);color:var(--blue);border-radius:12px;padding:10px 6px;font-weight:800;cursor:pointer}.cashier-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.cashier-actions .btn:first-child{grid-column:1/-1;min-height:52px;font-size:17px}
     @media(max-width:1100px){.cashier-form{grid-template-columns:1fr}.cashier-side{position:static}.cashier-top{grid-template-columns:repeat(2,minmax(0,1fr))}.barcode-strip{grid-template-columns:1fr}.cashier-info-grid{grid-template-columns:1fr}}
+
+    /* ===== Professional one-screen cashier workflow ===== */
+    .pos-sales-shell{display:grid;gap:12px}.pos-invoice-head{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:12px;box-shadow:var(--shadow)}
+    .pos-head-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:end}.pos-head-grid .wide{grid-column:span 2}.pos-currency{display:flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--border);border-radius:var(--radius);background:var(--accent-soft);font-weight:800;color:var(--blue)}
+    .pos-work-area{display:grid;grid-template-columns:190px minmax(0,1fr);gap:12px;align-items:stretch}.pos-action-rail{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px}.rail-title{font-size:12px;color:var(--muted);font-weight:800;margin:8px 4px 2px}.rail-btn{border:1px solid var(--border);background:var(--table-head);color:var(--text);border-radius:14px;padding:10px 9px;font-family:inherit;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:8px;text-align:right}.rail-btn i{font-size:20px;color:var(--blue)}.rail-btn:hover{background:var(--accent-soft);border-color:color-mix(in srgb,var(--blue) 28%,var(--border))}.pos-items-card{background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:12px;min-width:0}.pos-items-card .tools{margin-top:0}.pos-items-card .table-scroll{min-height:48vh;max-height:58vh}.add-row-strip{margin-top:10px;border:1px dashed color-mix(in srgb,var(--blue) 45%,var(--border));border-radius:14px;background:var(--accent-soft);color:var(--blue);font-weight:800;text-align:center;padding:12px;cursor:pointer}.add-row-strip:hover{filter:brightness(.98)}
+    .pos-bottom-bar{position:sticky;bottom:42px;z-index:8;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:12px;box-shadow:var(--elev-2);display:grid;grid-template-columns:minmax(280px,1.1fr) minmax(360px,1.6fr) auto;gap:12px;align-items:stretch}.pos-total-panel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pos-total-panel .totalBox{margin:0}.pos-total-panel .grand{grid-column:1/-1;background:var(--primary-grad);color:#fff}.pos-total-panel .grand span,.pos-total-panel .grand b{color:#fff}.pos-payment-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pos-payment-panel input{font-size:19px;font-weight:800;text-align:center}.pos-payment-panel .active-pay{border-color:var(--blue);box-shadow:var(--focus)}.pos-save-panel{display:grid;gap:8px;min-width:180px}.pos-save-panel .btn{min-height:46px}.pos-payment-note{grid-column:1/-1}.pos-mini-keypad{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;grid-column:1/-1}.pos-mini-keypad button{min-height:38px;border-radius:10px;border:1px solid var(--border);background:var(--table-head);color:#38a3e8;font-weight:900;font-size:18px;cursor:pointer}.pos-mini-keypad .op{color:#a21caf}.pos-mini-keypad .enter{background:var(--blue);color:white}
+    .calc-panel{position:fixed;z-index:120;left:22px;bottom:56px;width:310px;background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--elev-3);padding:12px;display:none}.calc-panel.show{display:block}.calc-display{width:100%;font-size:24px;font-weight:800;text-align:left;direction:ltr;margin-bottom:8px}.calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.calc-grid button{min-height:44px;border:1px solid var(--border);border-radius:12px;background:var(--table-head);font:inherit;font-weight:800;cursor:pointer}.calc-grid .eq{background:var(--blue);color:#fff}.quick-product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    @media(max-width:1100px){.pos-head-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pos-head-grid .wide{grid-column:span 1}.pos-work-area{grid-template-columns:1fr}.pos-action-rail{display:grid;grid-template-columns:repeat(2,1fr)}.rail-title{grid-column:1/-1}.pos-bottom-bar{grid-template-columns:1fr}.pos-save-panel{grid-template-columns:repeat(3,1fr)}.pos-save-panel .btn:first-child{grid-column:auto}}
     @media(max-width:900px){.product-workbench{grid-template-columns:1fr}.quick-board{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}.picker-grid{grid-template-columns:1fr}.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}.table-scroll{overflow:auto}}
   </style>
   <style id="pro-theme">
@@ -419,87 +427,86 @@
           </div>
           <div id="saleEditAlert" class="edit-alert hidden">أنت الآن تعدل فاتورة بيع قديمة — تأكد من حفظ التعديل أو إلغائه.</div>
 
-          <form id="saleForm" class="cashier-form">
-            <div class="cashier-main">
-              <div class="cashier-top form">
+          <form id="saleForm" class="pos-sales-shell">
+            <div class="pos-invoice-head">
+              <div class="pos-head-grid">
+                <div><label>عميل موجود</label><select id="saleCustomer" onchange="renderSaleCustomerInfo();updateSaleTotal()"></select></div>
+                <div><label>رقم الفاتورة</label><input id="saleInvoiceNo" placeholder="اختياري"></div>
                 <div><label>فرع البيع</label><select id="saleLocation" required onchange="refreshSaleAvailability();renderSaleStockInfo()"></select></div>
                 <div><label>التاريخ</label><input id="saleDate" type="date" required></div>
-                <div><label>رقم الفاتورة</label><input id="saleInvoiceNo" placeholder="اختياري"></div>
+                <div><label>طريقة الدفع</label><select id="salePaymentMethod" onchange="updateSaleTotal()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="mixed">مختلط</option><option value="credit">آجل / دين</option></select></div>
+                <div class="pos-currency">العملة: <span style="margin-inline-start:6px">د.ل</span></div>
+                <div><label>امسح الباركود</label><input id="saleBarcodeInput" class="ltr barcode-input" placeholder="امسح الباركود ثم Enter" onkeydown="handleBarcodeKey(event)" oninput="handleBarcodeInput()"></div>
                 <div><label>الطباعة</label><select id="salePrintAfterSave"><option value="yes">اطبع بعد الحفظ</option><option value="no">حفظ بدون طباعة</option></select></div>
-                <div><label>عميل موجود</label><select id="saleCustomer" onchange="renderSaleCustomerInfo();updateSaleTotal()"></select></div>
                 <div><label>أو اسم عميل جديد</label><input id="saleNewCustomerName" placeholder="مطلوب إذا يوجد دين"></div>
                 <div><label>هاتف العميل</label><input id="saleNewCustomerPhone" class="ltr" placeholder="اختياري"></div>
-                <div><label>ملاحظات</label><input id="saleNotes" placeholder="اختياري"></div>
-              </div>
-
-              <div class="barcode-strip">
-                <div class="barcode-box"><label>امسح الباركود</label><input id="saleBarcodeInput" class="ltr barcode-input" placeholder="امسح الباركود ثم Enter" onkeydown="handleBarcodeKey(event)" oninput="handleBarcodeInput()"></div>
-                <button class="btn secondary" type="button" onclick="openSaleProductPicker()"><i class="ti ti-search"></i> قائمة المنتجات F3</button>
-                <button class="btn secondary" type="button" onclick="addSaleRow()">+ صنف يدوي</button>
-              </div>
-
-              <div class="cashier-info-grid">
-                <div class="info-card"><h3>رصيد العميل</h3><div class="num" id="saleCustomerBalance">0.00</div><div class="mini" id="saleCustomerInfo">زبون نقدي / بدون عميل</div></div>
-                <div class="info-card"><h3>مخزون المنتج المحدد</h3><div id="saleStockInfo" class="mini">اختر منتجًا لعرض المخزون في الفروع</div></div>
-              </div>
-
-              <div class="tools" style="margin-top:12px">
-                <h2 style="font-size:18px;margin:0">الأصناف</h2>
-                <span class="mini">جدول سريع للكاشير — F3 أو الباركود للإضافة</span>
-              </div>
-              <div class="table-scroll sale-lines-scroll">
-                <table>
-                  <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>خصم السطر</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
-                  <tbody id="saleItemsBody"></tbody>
-                </table>
+                <div class="wide"><label>ملاحظات</label><input id="saleNotes" placeholder="اختياري"></div>
               </div>
             </div>
 
-            <aside class="cashier-side">
-              <div class="payment-card">
-                <h2>الدفع</h2>
-                <div><label>طريقة الدفع</label><select id="salePaymentMethod" onchange="updateSaleTotal()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="mixed">مختلط</option><option value="credit">آجل / دين</option></select></div>
-                <div class="pay-inputs">
-                  <div><label>كاش</label><input id="saleCashAmount" data-pay="cash" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
-                  <div><label>تحويل</label><input id="saleBankAmount" data-pay="bank" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
-                  <div><label>بطاقة</label><input id="saleCardAmount" data-pay="card" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
-                </div>
-                <div class="finance-selects">
-                  <div><label>خزينة الكاش</label><select id="saleCashAccount"></select></div>
-                  <div><label>مصرف التحويل</label><select id="saleBankAccount"></select></div>
-                  <div><label>حساب البطاقة</label><select id="saleCardAccount"></select></div>
-                </div>
-                <div class="pay-summary">
-                  <div><span>خصم الفاتورة</span><input id="saleDiscount" type="number" step="1" value="0" oninput="updateSaleTotal()"></div>
-                  <div><span>المدفوع</span><input id="salePaidAmount" type="number" step="1" value="0" readonly></div>
-                  <div class="strong"><span>إجمالي البيع</span><b id="saleTotal">0.00</b></div>
-                  <div class="strong due"><span>المتبقي / دين</span><b id="saleBalance">0.00</b></div>
-                </div>
-                <div class="mini" id="salePaymentDetected">طريقة الدفع تحفظ تلقائيًا حسب المبالغ المدخلة</div>
+            <div class="pos-work-area">
+              <aside class="pos-action-rail">
+                <div class="rail-title">الأصناف</div>
+                <button class="rail-btn" type="button" onclick="openQuickProductModal()"><i class="ti ti-plus"></i><span>إضافة صنف جديد</span></button>
+                <button class="rail-btn" type="button" onclick="editSelectedSaleLinePrice()"><i class="ti ti-edit"></i><span>تعديل سعر الصنف</span></button>
+                <button class="rail-btn" type="button" onclick="toast('طباعة باركود الصنف قريبًا')"><i class="ti ti-barcode"></i><span>طباعة باركود الصنف</span></button>
+                <div class="rail-title">الفاتورة</div>
+                <button class="rail-btn" type="button" onclick="q('saleBarcodeInput').focus()"><i class="ti ti-bolt"></i><span>إضافة سريعة</span></button>
+                <button class="rail-btn" type="button" onclick="openSaleProductPicker()"><i class="ti ti-search"></i><span>قائمة المنتجات F3</span></button>
+                <div class="rail-title">أخرى</div>
+                <button class="rail-btn" type="button" onclick="applyDiscountCoupon()"><i class="ti ti-ticket"></i><span>كوبون خصم</span></button>
+                <button class="rail-btn" type="button" onclick="toggleCalculator()"><i class="ti ti-calculator"></i><span>الآلة الحاسبة</span></button>
+              </aside>
 
-                <div class="keypad" aria-label="لوحة الدفع">
-                  <button type="button" onclick="keypadInput('7')">7</button><button type="button" onclick="keypadInput('8')">8</button><button type="button" onclick="keypadInput('9')">9</button><button type="button" class="op" onclick="keypadBackspace()"><i class="ti ti-arrow-back-up"></i></button>
+              <div class="pos-items-card">
+                <div class="cashier-info-grid">
+                  <div class="info-card"><h3>رصيد العميل</h3><div class="num" id="saleCustomerBalance">0.00</div><div class="mini" id="saleCustomerInfo">زبون نقدي / بدون عميل</div></div>
+                  <div class="info-card"><h3>مخزون المنتج المحدد</h3><div id="saleStockInfo" class="mini">اختر منتجًا لعرض المخزون في الفروع</div></div>
+                </div>
+                <div class="tools" style="margin-top:12px">
+                  <h2 style="font-size:18px;margin:0">الأصناف</h2>
+                  <div class="row"><button class="btn secondary" type="button" onclick="addSaleRowAndFocus()">+ صنف يدوي</button><button class="btn secondary" type="button" onclick="openSaleProductPicker()">قائمة المنتجات F3</button></div>
+                </div>
+                <div class="table-scroll sale-lines-scroll">
+                  <table>
+                    <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>خصم السطر</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
+                    <tbody id="saleItemsBody"></tbody>
+                  </table>
+                </div>
+                <div class="add-row-strip" onclick="addSaleRowAndFocus()">➕ اضغط هنا لإضافة صنف</div>
+              </div>
+            </div>
+
+            <div class="pos-bottom-bar">
+              <div class="pos-total-panel">
+                <div class="totalBox grand"><span>إجمالي البيع</span><b id="saleTotal">0.00</b></div>
+                <div class="totalBox"><span>المدفوع</span><input id="salePaidAmount" type="number" step="1" value="0" readonly></div>
+                <div class="totalBox"><span>المتبقي / دين</span><b id="saleBalance">0.00</b></div>
+              </div>
+              <div class="pos-payment-panel">
+                <div><label>كاش</label><input id="saleCashAmount" data-pay="cash" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
+                <div><label>تحويل</label><input id="saleBankAmount" data-pay="bank" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
+                <div><label>بطاقة</label><input id="saleCardAmount" data-pay="card" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
+                <div><label>خزينة الكاش</label><select id="saleCashAccount"></select></div>
+                <div><label>مصرف التحويل</label><select id="saleBankAccount"></select></div>
+                <div><label>حساب البطاقة</label><select id="saleCardAccount"></select></div>
+                <div><label>خصم الفاتورة</label><input id="saleDiscount" type="number" step="1" value="0" oninput="updateSaleTotal()"></div>
+                <div class="pos-payment-note mini" id="salePaymentDetected">طريقة الدفع تحفظ تلقائيًا حسب المبالغ المدخلة</div>
+                <div class="pos-mini-keypad">
+                  <button type="button" onclick="keypadInput('7')">7</button><button type="button" onclick="keypadInput('8')">8</button><button type="button" onclick="keypadInput('9')">9</button><button type="button" class="op" onclick="keypadBackspace()">⌫</button>
                   <button type="button" onclick="keypadInput('4')">4</button><button type="button" onclick="keypadInput('5')">5</button><button type="button" onclick="keypadInput('6')">6</button><button type="button" class="op" onclick="keypadClear()">C</button>
                   <button type="button" onclick="keypadInput('1')">1</button><button type="button" onclick="keypadInput('2')">2</button><button type="button" onclick="keypadInput('3')">3</button><button type="button" class="op" onclick="keypadAddExact()">=</button>
                   <button type="button" onclick="keypadInput('0')">0</button><button type="button" onclick="keypadInput('00')">00</button><button type="button" onclick="keypadInput('.')">.</button><button type="button" class="enter" onclick="q('saleForm').requestSubmit()">حفظ</button>
                 </div>
-
-                <div class="quick-pay-buttons">
-                  <button type="button" onclick="focusPay('cash')">كاش F8</button>
-                  <button type="button" onclick="focusPay('bank')">تحويل F9</button>
-                  <button type="button" onclick="focusPay('card')">بطاقة F10</button>
-                  <button type="button" onclick="setCreditSale()">آجل</button>
-                </div>
-
-                <div class="cashier-actions">
-                  <button class="btn" type="button" onclick="q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit()">حفظ وطباعة F7</button>
-                  <button class="btn secondary" type="button" onclick="q('salePrintAfterSave').value='no';q('saleForm').requestSubmit()">حفظ فقط F6</button>
-                  <button class="btn secondary" type="button" onclick="resetSaleForm()">فاتورة جديدة</button>
-                  <button class="btn secondary hidden" id="saleCancelEditBtn" type="button" onclick="resetSaleForm()">إلغاء التعديل</button>
-                  <button class="btn hidden" id="saleSubmitBtn" type="submit">حفظ البيع</button>
-                </div>
               </div>
-            </aside>
+              <div class="pos-save-panel">
+                <button class="btn" type="button" onclick="saleSaveMode='new';q('salePrintAfterSave').value='no';q('saleForm').requestSubmit()">حفظ وجديد</button>
+                <button class="btn" type="button" onclick="saleSaveMode='new';q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit()">حفظ وطباعة</button>
+                <button class="btn secondary" type="button" onclick="saleSaveMode='close';q('salePrintAfterSave').value='no';q('saleForm').requestSubmit()">حفظ وإغلاق</button>
+                <button class="btn secondary hidden" id="saleCancelEditBtn" type="button" onclick="resetSaleForm()">إلغاء التعديل</button>
+                <button class="btn hidden" id="saleSubmitBtn" type="submit">حفظ البيع</button>
+              </div>
+            </div>
           </form>
         </div>
       </section>
@@ -866,6 +873,31 @@
   <datalist id="modelDatalist"></datalist>
   <datalist id="colorDatalist"></datalist>
 
+
+  <div class="modal" id="quickProductModal">
+    <div class="modal-card" style="max-width:720px">
+      <div class="modal-head"><div><h2 style="margin:0">إضافة صنف سريع</h2><div class="mini">سيتم إنشاء الصنف وإضافته مباشرة للفاتورة</div></div><button class="btn secondary" onclick="closeQuickProductModal()">إغلاق</button></div>
+      <div class="quick-product-grid">
+        <div><label>كود الصنف</label><input id="quickProductCode" class="ltr" required></div>
+        <div><label>اسم الصنف</label><input id="quickProductName" required></div>
+        <div><label>سعر البيع</label><input id="quickProductRetail" type="number" step="1" value="0"></div>
+        <div><label>سعر الشراء</label><input id="quickProductCost" type="number" step="1" value="0"></div>
+        <div><label>الباركود</label><input id="quickProductBarcode" class="ltr"></div>
+        <div><label>التصنيف</label><input id="quickProductCategory" list="categoryDatalist"></div>
+      </div>
+      <div class="row" style="margin-top:14px"><button class="btn" onclick="saveQuickProduct()">حفظ وإضافة للفاتورة</button></div>
+    </div>
+  </div>
+  <div class="calc-panel" id="calculatorPanel">
+    <input class="calc-display" id="calcDisplay" readonly value="0">
+    <div class="calc-grid">
+      <button onclick="calcPress('7')">7</button><button onclick="calcPress('8')">8</button><button onclick="calcPress('9')">9</button><button onclick="calcPress('/')">÷</button>
+      <button onclick="calcPress('4')">4</button><button onclick="calcPress('5')">5</button><button onclick="calcPress('6')">6</button><button onclick="calcPress('*')">×</button>
+      <button onclick="calcPress('1')">1</button><button onclick="calcPress('2')">2</button><button onclick="calcPress('3')">3</button><button onclick="calcPress('-')">−</button>
+      <button onclick="calcPress('0')">0</button><button onclick="calcPress('.')">.</button><button class="eq" onclick="calcEquals()">=</button><button onclick="calcPress('+')">+</button>
+      <button onclick="calcClear()">C</button><button onclick="calcBack()">⌫</button><button style="grid-column:span 2" onclick="calcCopyToPrice()">نسخ للسعر</button>
+    </div>
+  </div>
   <div class="modal" id="productViewModal">
     <div class="modal-card" style="max-width:760px">
       <div class="modal-head">
@@ -944,6 +976,9 @@ let editingSaleId=null, originalSale=null, originalSaleItems=[];
 let selectedProductCode=null;
 let selectedSaleId=null;
 let activePayInputId="saleCashAmount";
+let saleSaveMode="new";
+let lastFocusedSaleRow=null;
+let calcExpr="";
 let productSortIndex=13, productSortDir='desc';
 let stockSortIndex=3, stockSortDir='desc';
 let pickerSelectedIndex=0;
@@ -1866,19 +1901,64 @@ async function updateStock(location_id, item, purchaseId){
 
 function openTab(tab){const btn=document.querySelector(`nav button[data-tab="${tab}"]`); if(btn && btn.style.display!=='none') btn.click();}
 
+
+q('saleItemsBody')?.addEventListener('focusin',e=>{const tr=e.target.closest('tr'); if(tr) lastFocusedSaleRow=tr;});
+
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{
-  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  
+q('saleItemsBody')?.addEventListener('focusin',e=>{const tr=e.target.closest('tr'); if(tr) lastFocusedSaleRow=tr;});
+
+document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   btn.classList.add('active');
   q(btn.dataset.tab).classList.add('active');
   if(btn.dataset.tab==='sales') setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
 }));
-document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();q('salePrintAfterSave').value='no';q('saleForm').requestSubmit();} if(e.key==='F7'){e.preventDefault();q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit();} if(e.key==='F8'){e.preventDefault();focusPay('cash');} if(e.key==='F9'){e.preventDefault();focusPay('bank');} if(e.key==='F10'){e.preventDefault();focusPay('card');} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();}});
+document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no';q('saleForm').requestSubmit();} if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit();} if(e.key==='F8'){e.preventDefault();focusPay('cash');} if(e.key==='F9'){e.preventDefault();focusPay('bank');} if(e.key==='F10'){e.preventDefault();focusPay('card');} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();closeQuickProductModal();q('calculatorPanel')?.classList.remove('show');}});
 
 
 
 
 
+
+
+function addSaleRowAndFocus(){addSaleRow(); setTimeout(()=>q('saleItemsBody')?.lastElementChild?.querySelector('.si-code')?.focus(),30)}
+function currentSaleLine(){return lastFocusedSaleRow || q('saleItemsBody')?.lastElementChild || null}
+function editSelectedSaleLinePrice(){
+  const tr=currentSaleLine(); if(!tr){toast('لا يوجد صنف لتعديل السعر');return;}
+  const inp=tr.querySelector('.si-price'); const v=prompt('اكتب السعر الجديد', inp?.value||'0');
+  if(v==null) return; const n=Number(v); if(isNaN(n)||n<0){toast('السعر غير صحيح');return;}
+  inp.value=n; updateSaleTotal(); inp.focus();
+}
+function applyDiscountCoupon(){
+  const raw=prompt('اكتب قيمة الخصم أو نسبة مثل 10%',''); if(raw==null) return;
+  let subtotal=0; [...q('saleItemsBody').querySelectorAll('tr')].forEach(tr=>{const qty=Number(tr.querySelector('.si-qty')?.value||0), price=Number(tr.querySelector('.si-price')?.value||0), base=qty*price; subtotal+=Math.max(0,base-calcLineDiscount(tr.querySelector('.si-discount')?.value||'',base));});
+  q('saleDiscount').value=calcLineDiscount(raw,subtotal); updateSaleTotal();
+}
+function openQuickProductModal(){q('quickProductModal').classList.add('show'); setTimeout(()=>q('quickProductCode')?.focus(),50)}
+function closeQuickProductModal(){q('quickProductModal').classList.remove('show')}
+async function saveQuickProduct(){
+  const code=q('quickProductCode').value.trim(), name=q('quickProductName').value.trim();
+  if(!code||!name){toast('اكتب الكود واسم الصنف');return;}
+  try{
+    showLoading(true);
+    let p=products.find(x=>String(x.code)===String(code));
+    if(!p){
+      await api('pos_products',{method:'POST',body:{code,name,retail_price:Number(q('quickProductRetail').value||0),purchase_price:Number(q('quickProductCost').value||0),barcode:q('quickProductBarcode').value.trim()||null,category:q('quickProductCategory').value.trim()||null,active:true,updated_at:new Date().toISOString()}});
+      await loadAll(); p=products.find(x=>String(x.code)===String(code));
+      toast('تم إنشاء الصنف وإضافته للفاتورة');
+    }else toast('الكود موجود مسبقًا، تمت إضافته للفاتورة');
+    if(p) addOrIncrementSaleProduct(p,1);
+    closeQuickProductModal(); ['quickProductCode','quickProductName','quickProductRetail','quickProductCost','quickProductBarcode','quickProductCategory'].forEach(id=>{if(q(id))q(id).value=''});
+  }catch(err){console.error(err);toast('خطأ في إنشاء الصنف: '+err.message)} finally{showLoading(false)}
+}
+function toggleCalculator(){q('calculatorPanel').classList.toggle('show')}
+function calcUpdate(){q('calcDisplay').value=calcExpr||'0'}
+function calcPress(v){if(calcExpr==='0')calcExpr=''; calcExpr+=v; calcUpdate()}
+function calcClear(){calcExpr=''; calcUpdate()}
+function calcBack(){calcExpr=calcExpr.slice(0,-1); calcUpdate()}
+function calcEquals(){try{const safe=calcExpr.replace(/[^0-9+\-*/.()]/g,''); calcExpr=String(Function('return ('+safe+')')()); calcUpdate()}catch(e){toast('عملية غير صحيحة')}}
+function calcCopyToPrice(){calcEquals(); const tr=currentSaleLine(); const inp=tr?.querySelector('.si-price'); if(inp){inp.value=Number(q('calcDisplay').value||0); updateSaleTotal(); inp.focus();}else toast('اختر سطر صنف أولاً')}
 
 function closeSaleReturnModal(){q('saleReturnModal').classList.remove('show')}
 async function openSaleReturn(id){
@@ -2055,7 +2135,7 @@ q('saleForm').addEventListener('submit', async e=>{
       await api('pos_customer_ledger',{method:'POST',body:{customer_id,entry_date:body.sale_date,entry_type:'sale',description:body.invoice_no?`فاتورة بيع رقم ${body.invoice_no}`:'فاتورة بيع',debit:balance_due,credit:0,reference_table:'pos_sales',reference_id:saleId}});
     }
     const msg=editingSaleId?'تم تعديل فاتورة البيع وتحديث المخزون':'تم حفظ فاتورة البيع وتحديث المخزون';
-    const shouldPrint=q('salePrintAfterSave').value==='yes'; resetSaleForm(); await loadAll(); toast(msg); if(shouldPrint) setTimeout(()=>printSale(saleId),300);
+    const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; resetSaleForm(); await loadAll(); toast(msg); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
   }catch(err){console.error(err);toast('خطأ في حفظ البيع: '+err.message+' - تأكد من تشغيل ملف sales SQL')}
   finally{showLoading(false)}
 });
@@ -2435,5 +2515,5 @@ document.addEventListener('contextmenu',e=>{
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a13ca5d1ac187e68',t:'MTc4MjgxNzAyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
