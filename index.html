@@ -92,6 +92,9 @@
     .pos-bottom-bar{position:sticky;bottom:42px;z-index:8;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:12px;box-shadow:var(--elev-2);display:grid;grid-template-columns:minmax(280px,1.1fr) minmax(360px,1.6fr) auto;gap:12px;align-items:stretch}.pos-total-panel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pos-total-panel .totalBox{margin:0}.pos-total-panel .grand{grid-column:1/-1;background:var(--primary-grad);color:#fff}.pos-total-panel .grand span,.pos-total-panel .grand b{color:#fff}.pos-payment-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.pos-payment-panel input{font-size:19px;font-weight:800;text-align:center}.pos-payment-panel .active-pay{border-color:var(--blue);box-shadow:var(--focus)}.pos-save-panel{display:grid;gap:8px;min-width:180px}.pos-save-panel .btn{min-height:46px}.pos-payment-note{grid-column:1/-1}.pos-mini-keypad{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;grid-column:1/-1}.pos-mini-keypad button{min-height:38px;border-radius:10px;border:1px solid var(--border);background:var(--table-head);color:#38a3e8;font-weight:900;font-size:18px;cursor:pointer}.pos-mini-keypad .op{color:#a21caf}.pos-mini-keypad .enter{background:var(--blue);color:white}
     .calc-panel{position:fixed;z-index:120;left:22px;bottom:56px;width:310px;background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--elev-3);padding:12px;display:none}.calc-panel.show{display:block}.calc-display{width:100%;font-size:24px;font-weight:800;text-align:left;direction:ltr;margin-bottom:8px}.calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.calc-grid button{min-height:44px;border:1px solid var(--border);border-radius:12px;background:var(--table-head);font:inherit;font-weight:800;cursor:pointer}.calc-grid .eq{background:var(--blue);color:#fff}.quick-product-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     @media(max-width:1100px){.pos-head-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pos-head-grid .wide{grid-column:span 1}.pos-work-area{grid-template-columns:1fr}.pos-action-rail{display:grid;grid-template-columns:repeat(2,1fr)}.rail-title{grid-column:1/-1}.pos-bottom-bar{grid-template-columns:1fr}.pos-save-panel{grid-template-columns:repeat(3,1fr)}.pos-save-panel .btn:first-child{grid-column:auto}}
+
+    /* ===== Separated cashier payment step ===== */
+    .sale-finish-bar{position:sticky;bottom:42px;z-index:7;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:12px;box-shadow:var(--elev-2);display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;flex-wrap:wrap}.sale-finish-bar .finish-total{display:flex;align-items:center;gap:10px}.sale-finish-bar .finish-total b{font-size:28px;color:var(--blue);font-variant-numeric:tabular-nums}.sale-finish-bar .finish-actions{display:flex;gap:8px;flex-wrap:wrap}.pos-bottom-bar{display:none}.pos-bottom-bar.payment-open{display:grid;position:fixed;inset:18px;z-index:110;bottom:18px;overflow:auto;align-content:start}.payment-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:109;display:none}.payment-backdrop.show{display:block}.payment-title{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.payment-title h2{margin:0}.payment-title .big{font-size:30px;color:var(--blue);font-weight:800}.return-invoice-head{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}.return-invoice-head .cell{background:var(--table-head);border:1px solid var(--border);border-radius:12px;padding:9px 12px}.return-invoice-head .lbl{font-size:12px;color:var(--muted);font-weight:700}.return-invoice-head .val{font-weight:800}
     @media(max-width:900px){.product-workbench{grid-template-columns:1fr}.quick-board{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr 1fr}.picker-grid{grid-template-columns:1fr}.wrap{grid-template-columns:1fr}nav{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.cards,.form{grid-template-columns:1fr}header{position:static}.top{align-items:flex-start;flex-direction:column}table{font-size:13px}.table-scroll{overflow:auto}}
   </style>
   <style id="pro-theme">
@@ -217,7 +220,7 @@
       <button data-tab="sales"><i class="ti ti-shopping-cart"></i><span>البيع اليومي</span></button>
       <button data-tab="salesList"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
       <button data-tab="proformas"><i class="ti ti-file-description"></i><span>الفواتير المبدئية</span></button>
-      <button data-tab="customers"><i class="ti ti-users"></i><span>العملاء والديون</span></button>
+      <button data-tab="customers"><i class="ti ti-users"></i><span>الالزبائن والديون</span></button>
 
       <div class="nav-group">المشتريات والمخزون</div>
       <button data-tab="products"><i class="ti ti-box"></i><span>قاعدة المنتجات</span></button>
@@ -249,7 +252,7 @@
           <div class="card"><h3>فواتير البيع</h3><div class="num" id="salesCount">0</div></div>
           <div class="card"><h3>مبيعات اليوم</h3><div class="num" id="todaySalesTotal">0</div></div>
           <div class="card"><h3>فواتير اليوم</h3><div class="num" id="todaySalesCount">0</div></div>
-          <div class="card"><h3>ديون العملاء</h3><div class="num" id="customersDebtTotal">0</div></div>
+          <div class="card"><h3>ديون الزبائن</h3><div class="num" id="customersDebtTotal">0</div></div>
           <div class="card"><h3>إجمالي أرصدة الموردين</h3><div class="num" id="suppliersBalance">0</div></div>
           <div class="card"><h3>أصناف تحت حد الطلب</h3><div class="num" id="reorderCount">0</div></div>
         </div>
@@ -263,7 +266,7 @@
                 <button class="quick-tile" type="button" onclick="openTab('sales')"><i class="ti ti-receipt-2"></i><span>فاتورة بيع</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('salesList')"><i class="ti ti-file-invoice"></i><span>فواتير البيع</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('proformas')"><i class="ti ti-file-description"></i><span>فاتورة مبدئية</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('customers')"><i class="ti ti-users"></i><span>العملاء والديون</span></button>
+                <button class="quick-tile" type="button" onclick="openTab('customers')"><i class="ti ti-users"></i><span>الالزبائن والديون</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('products')"><i class="ti ti-box"></i><span>المنتجات</span></button>
               </div>
             </div>
@@ -288,7 +291,7 @@
         </div>
         <div class="panel">
           <h2>آخر فواتير البيع</h2>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>الإجمالي</th><th>الدين</th></tr></thead><tbody id="dashLastSalesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>الإجمالي</th><th>الدين</th></tr></thead><tbody id="dashLastSalesBody"></tbody></table></div>
         </div>
         <div class="panel">
           <h2>آخر حركات المخزون</h2>
@@ -430,7 +433,7 @@
           <form id="saleForm" class="pos-sales-shell">
             <div class="pos-invoice-head">
               <div class="pos-head-grid">
-                <div><label>عميل موجود</label><select id="saleCustomer" onchange="renderSaleCustomerInfo();updateSaleTotal()"></select></div>
+                <div><label>زبون موجود</label><select id="saleCustomer" onchange="renderSaleCustomerInfo();updateSaleTotal()"></select></div>
                 <div><label>رقم الفاتورة</label><input id="saleInvoiceNo" placeholder="اختياري"></div>
                 <div><label>فرع البيع</label><select id="saleLocation" required onchange="refreshSaleAvailability();renderSaleStockInfo()"></select></div>
                 <div><label>التاريخ</label><input id="saleDate" type="date" required></div>
@@ -438,8 +441,8 @@
                 <div class="pos-currency">العملة: <span style="margin-inline-start:6px">د.ل</span></div>
                 <div><label>امسح الباركود</label><input id="saleBarcodeInput" class="ltr barcode-input" placeholder="امسح الباركود ثم Enter" onkeydown="handleBarcodeKey(event)" oninput="handleBarcodeInput()"></div>
                 <div><label>الطباعة</label><select id="salePrintAfterSave"><option value="yes">اطبع بعد الحفظ</option><option value="no">حفظ بدون طباعة</option></select></div>
-                <div><label>أو اسم عميل جديد</label><input id="saleNewCustomerName" placeholder="مطلوب إذا يوجد دين"></div>
-                <div><label>هاتف العميل</label><input id="saleNewCustomerPhone" class="ltr" placeholder="اختياري"></div>
+                <div><label>أو اسم زبون جديد</label><input id="saleNewCustomerName" placeholder="مطلوب إذا يوجد دين"></div>
+                <div><label>هاتف الزبون</label><input id="saleNewCustomerPhone" class="ltr" placeholder="اختياري"></div>
                 <div class="wide"><label>ملاحظات</label><input id="saleNotes" placeholder="اختياري"></div>
               </div>
             </div>
@@ -460,7 +463,7 @@
 
               <div class="pos-items-card">
                 <div class="cashier-info-grid">
-                  <div class="info-card"><h3>رصيد العميل</h3><div class="num" id="saleCustomerBalance">0.00</div><div class="mini" id="saleCustomerInfo">زبون نقدي / بدون عميل</div></div>
+                  <div class="info-card"><h3>رصيد الزبون</h3><div class="num" id="saleCustomerBalance">0.00</div><div class="mini" id="saleCustomerInfo">زبون نقدي / بدون زبون</div></div>
                   <div class="info-card"><h3>مخزون المنتج المحدد</h3><div id="saleStockInfo" class="mini">اختر منتجًا لعرض المخزون في الفروع</div></div>
                 </div>
                 <div class="tools" style="margin-top:12px">
@@ -477,7 +480,12 @@
               </div>
             </div>
 
-            <div class="pos-bottom-bar">
+            <div class="sale-finish-bar">
+              <div class="finish-total"><span>إجمالي الفاتورة</span><b id="saleFinishTotal">0.00</b><span class="mini" id="saleFinishBalance">المتبقي: 0.00</span></div>
+              <div class="finish-actions"><button class="btn" id="salePayBtn" type="button" onclick="openSalePaymentScreen()"><i class="ti ti-cash"></i> الدفع</button><button class="btn secondary" type="button" onclick="resetSaleForm()">فاتورة جديدة</button></div>
+            </div>
+            <div class="pos-bottom-bar" id="salePaymentScreen">
+              <div class="payment-title"><h2>شاشة الدفع</h2><div class="big" id="salePaymentScreenTotal">0.00</div><button class="btn secondary" type="button" onclick="closeSalePaymentScreen()">رجوع للفاتورة</button></div>
               <div class="pos-total-panel">
                 <div class="totalBox grand"><span>إجمالي البيع</span><b id="saleTotal">0.00</b></div>
                 <div class="totalBox"><span>المدفوع</span><input id="salePaidAmount" type="number" step="1" value="0" readonly></div>
@@ -521,7 +529,7 @@
             <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
           </div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th></tr></thead><tbody id="salesBody"></tbody></table></div>
         </div>
       </section>
 
@@ -534,9 +542,9 @@
               <div><label>الفرع</label><select id="proformaLocation" required></select></div>
               <div><label>التاريخ</label><input id="proformaDate" type="date" required></div>
               <div><label>رقم الفاتورة المبدئية</label><input id="proformaNo" placeholder="اختياري"></div>
-              <div><label>عميل موجود</label><select id="proformaCustomer"></select></div>
-              <div><label>أو اسم عميل جديد</label><input id="proformaCustomerName" placeholder="اختياري"></div>
-              <div><label>هاتف العميل</label><input id="proformaCustomerPhone" class="ltr" placeholder="اختياري"></div>
+              <div><label>زبون موجود</label><select id="proformaCustomer"></select></div>
+              <div><label>أو اسم زبون جديد</label><input id="proformaCustomerName" placeholder="اختياري"></div>
+              <div><label>هاتف الزبون</label><input id="proformaCustomerPhone" class="ltr" placeholder="اختياري"></div>
               <div><label>ملاحظات</label><input id="proformaNotes" placeholder="اختياري"></div>
             </div>
             <div class="tools" style="margin-top:16px">
@@ -556,29 +564,29 @@
         </div>
         <div class="panel">
           <div class="tools"><h2>الفواتير المبدئية</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>العميل</th><th>الإجمالي</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="proformasBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>الإجمالي</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="proformasBody"></tbody></table></div>
         </div>
       </section>
 
 
       <section id="customers" class="section">
         <div class="panel">
-          <h2>إضافة عميل / رصيد افتتاحي</h2>
+          <h2>إضافة زبون / رصيد افتتاحي</h2>
           <form class="form" id="customerForm">
-            <div><label>اسم العميل</label><input id="customerName" required placeholder="اسم العميل"></div>
+            <div><label>اسم الزبون</label><input id="customerName" required placeholder="اسم الزبون"></div>
             <div><label>الهاتف</label><input id="customerPhone" class="ltr" placeholder="+218..."></div>
             <div><label>العنوان</label><input id="customerAddress" placeholder="اختياري"></div>
             <div><label>الرصيد الافتتاحي</label><input id="customerOpening" type="number" step="0.001" value="0"></div>
-            <div><label>نوع الرصيد</label><select id="customerOpeningType"><option value="debit">على العميل</option><option value="credit">للعميل رصيد عندنا</option></select></div>
+            <div><label>نوع الرصيد</label><select id="customerOpeningType"><option value="debit">على الزبون</option><option value="credit">للزبون رصيد عندنا</option></select></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="customerNotes" placeholder="اختياري"></textarea></div>
-            <button class="btn" type="submit">حفظ العميل</button>
+            <button class="btn" type="submit">حفظ الزبون</button>
           </form>
         </div>
 
         <div class="panel">
-          <h2>تسجيل دفعة من عميل</h2>
+          <h2>تسجيل دفعة من زبون</h2>
           <form class="form" id="customerPaymentForm">
-            <div><label>العميل</label><select id="customerPaymentCustomer" required></select></div>
+            <div><label>الزبون</label><select id="customerPaymentCustomer" required></select></div>
             <div><label>التاريخ</label><input id="customerPaymentDate" type="date" required></div>
             <div><label>المبلغ</label><input id="customerPaymentAmount" type="number" step="0.001" min="0.001" required></div>
             <div><label>طريقة الدفع</label><select id="customerPaymentMethod"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
@@ -588,14 +596,14 @@
         </div>
 
         <div class="panel">
-          <div class="tools"><h2>قائمة العملاء والديون</h2><input id="customerSearch" placeholder="بحث عن عميل..." style="max-width:300px" oninput="renderCustomers()"></div>
-          <div class="table-scroll"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>العنوان</th><th>الرصيد</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="customersBody"></tbody></table></div>
+          <div class="tools"><h2>قائمة الالزبائن والديون</h2><input id="customerSearch" placeholder="بحث عن زبون..." style="max-width:300px" oninput="renderCustomers()"></div>
+          <div class="table-scroll"><table><thead><tr><th>الزبون</th><th>الهاتف</th><th>العنوان</th><th>الرصيد</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="customersBody"></tbody></table></div>
         </div>
 
         <div class="panel">
-          <div class="tools"><h2>كشف حساب العميل</h2><select id="customerLedgerCustomer" style="max-width:340px" onchange="renderCustomerLedger()"></select></div>
+          <div class="tools"><h2>كشف حساب الزبون</h2><select id="customerLedgerCustomer" style="max-width:340px" onchange="renderCustomerLedger()"></select></div>
           <div class="card" style="box-shadow:none;margin-bottom:12px"><h3>الرصيد الحالي</h3><div class="num" id="customerLedgerBalance">0</div><div id="customerLedgerStatus" class="muted"></div></div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>على العميل</th><th>دفعة / له</th><th>الرصيد بعد الحركة</th></tr></thead><tbody id="customerLedgerBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>على الزبون</th><th>دفعة / له</th><th>الرصيد بعد الحركة</th></tr></thead><tbody id="customerLedgerBody"></tbody></table></div>
         </div>
       </section>
 
@@ -791,13 +799,13 @@
               <button class="btn secondary" onclick="printReports()">طباعة التقرير</button>
             </div>
           </div>
-          <p class="muted">تقارير سريعة للمبيعات بعد خصم المرتجعات، الأرباح التقديرية، المخزون، أرصدة الموردين، وأرصدة العملاء.</p>
+          <p class="muted">تقارير سريعة للمبيعات بعد خصم المرتجعات، الأرباح التقديرية، المخزون، أرصدة الموردين، وأرصدة الزبائن.</p>
           <div class="grid cards">
             <div class="card"><h3>إجمالي المبيعات</h3><div class="num" id="repSalesTotal">0</div></div>
             <div class="card"><h3>إجمالي المرتجعات</h3><div class="num" id="repReturnsTotal">0</div></div>
             <div class="card"><h3>عدد فواتير البيع</h3><div class="num" id="repSalesCount">0</div></div>
             <div class="card"><h3>ربح تقديري</h3><div class="num" id="repProfit">0</div></div>
-            <div class="card"><h3>ديون العملاء</h3><div class="num" id="repCustomerDebt">0</div></div>
+            <div class="card"><h3>ديون الزبائن</h3><div class="num" id="repCustomerDebt">0</div></div>
             <div class="card"><h3>أرصدة الموردين علينا</h3><div class="num" id="repSupplierDebt">0</div></div>
             <div class="card"><h3>قيمة المخزون بسعر الشراء</h3><div class="num" id="repStockValue">0</div></div>
           </div>
@@ -819,10 +827,10 @@
         </div>
 
         <div class="panel">
-          <h2>أرصدة الموردين والعملاء</h2>
+          <h2>أرصدة الموردين والزبائن</h2>
           <div class="grid" style="grid-template-columns:1fr 1fr">
             <div class="table-scroll"><table><thead><tr><th>المورد</th><th>الرصيد</th><th>الحالة</th></tr></thead><tbody id="repSuppliersBody"></tbody></table></div>
-            <div class="table-scroll"><table><thead><tr><th>العميل</th><th>الرصيد</th><th>الحالة</th></tr></thead><tbody id="repCustomersBody"></tbody></table></div>
+            <div class="table-scroll"><table><thead><tr><th>الزبون</th><th>الرصيد</th><th>الحالة</th></tr></thead><tbody id="repCustomersBody"></tbody></table></div>
           </div>
         </div>
       </section>
@@ -865,6 +873,7 @@
       </div>
     </div>
   </div>
+  <div class="payment-backdrop" id="paymentBackdrop" onclick="closeSalePaymentScreen()"></div>
   <div class="loading" id="loading">جاري التحميل...</div>
   <div class="toast" id="toast"></div>
   <datalist id="productsDatalist"></datalist>
@@ -912,17 +921,18 @@
   <div class="modal" id="saleReturnModal">
     <div class="modal-card">
       <div class="modal-head">
-        <div><h2 id="saleReturnTitle" style="margin:0">مرتجع فاتورة بيع</h2><div class="mini" id="saleReturnSub"></div></div>
+        <div><h2 id="saleReturnTitle" style="margin:0">فاتورة مرتجع بيع</h2><div class="mini" id="saleReturnSub"></div></div>
         <button class="btn secondary" onclick="closeSaleReturnModal()">إغلاق</button>
       </div>
       <form id="saleReturnForm">
+        <div class="return-invoice-head" id="returnInvoiceInfo"></div>
         <div class="form">
           <div><label>التاريخ</label><input id="saleReturnDate" type="date" required></div>
-          <div><label>طريقة الاسترداد</label><select id="saleReturnRefundMethod"><option value="cash">إرجاع نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="credit_reduction">تخفيض دين العميل</option><option value="none">بدون استرداد نقدي</option></select></div>
+          <div><label>طريقة الدفع للزبون</label><select id="saleReturnRefundMethod"><option value="cash">دفع نقدي للزبون</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="credit_reduction">تخفيض دين الزبون</option><option value="none">بدون استرداد نقدي</option></select></div>
           <div style="grid-column:1/-1"><label>ملاحظات</label><input id="saleReturnNotes" placeholder="اختياري"></div>
         </div>
         <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المباع</th><th>سعر البيع</th><th>خصم السطر</th><th>كمية المرتجع</th></tr></thead><tbody id="saleReturnItemsBody"></tbody></table></div>
-        <div class="row" style="margin-top:12px"><button class="btn" type="submit">حفظ المرتجع</button><span class="mini" id="saleReturnTotal">الإجمالي: 0</span></div>
+        <div class="row" style="margin-top:12px"><button class="btn" type="submit">حفظ فاتورة المرتجع</button><span class="mini" id="saleReturnTotal">الإجمالي: 0</span></div>
       </form>
     </div>
   </div>
@@ -994,7 +1004,7 @@ function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDig
 function showLoading(v){q('loading').style.display=v?'block':'none'; q('syncState').textContent=v?'جاري المزامنة...':'متصل مع Supabase'}
 function toast(msg){const t=q('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
-function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع عميل'}[t]||t}
+function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون'}[t]||t}
 
 async function api(table, opts={}){
   const qs = opts.qs || '';
@@ -1382,14 +1392,14 @@ function renderSuppliers(){
 
 function badgeCustomer(balance){
   balance=Number(balance||0);
-  if(balance>0) return `<span class="badge red">على العميل</span>`;
-  if(balance<0) return `<span class="badge green">للعميل رصيد</span>`;
+  if(balance>0) return `<span class="badge red">على الزبون</span>`;
+  if(balance<0) return `<span class="badge green">للزبون رصيد</span>`;
   return `<span class="badge gray">متوازن</span>`;
 }
 function renderCustomers(){
   const term=(q('customerSearch')?.value||'').trim();
   const rows=customers.filter(c=>!term || (c.name||'').includes(term) || (c.phone||'').includes(term));
-  q('customersBody').innerHTML = rows.map(c=>`<tr><td><b>${c.name}</b><div class="muted">${c.notes||''}</div></td><td class="ltr">${c.phone||''}</td><td>${c.address||''}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td><td><button class="btn secondary" onclick="openCustomerLedger('${c.id}')">كشف الحساب</button></td></tr>`).join('') || '<tr><td colspan="6">لا يوجد عملاء بعد.</td></tr>';
+  q('customersBody').innerHTML = rows.map(c=>`<tr><td><b>${c.name}</b><div class="muted">${c.notes||''}</div></td><td class="ltr">${c.phone||''}</td><td>${c.address||''}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td><td><button class="btn secondary" onclick="openCustomerLedger('${c.id}')">كشف الحساب</button></td></tr>`).join('') || '<tr><td colspan="6">لا يوجد زبائن بعد.</td></tr>';
 }
 function openCustomerLedger(id){document.querySelector('[data-tab="customers"]').click(); q('customerLedgerCustomer').value=id; renderCustomerLedger()}
 function renderCustomerLedger(){
@@ -1399,7 +1409,7 @@ function renderCustomerLedger(){
   const rendered=rows.map(l=>{running += Number(l.debit||0)-Number(l.credit||0); return `<tr><td>${l.entry_date}</td><td>${typeLabel(l.entry_type)}</td><td>${l.description||''}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
   const bal=rows.reduce((a,l)=>a+Number(l.debit||0)-Number(l.credit||0),0);
   q('customerLedgerBalance').textContent=money(bal); q('customerLedgerStatus').innerHTML=badgeCustomer(bal);
-  q('customerLedgerBody').innerHTML = cid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا العميل.</td></tr>') : '<tr><td colspan="6">اختر العميل أولاً.</td></tr>';
+  q('customerLedgerBody').innerHTML = cid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا الزبون.</td></tr>') : '<tr><td colspan="6">اختر الزبون أولاً.</td></tr>';
 }
 
 function fillSupplierSelects(){
@@ -1414,10 +1424,10 @@ function fillSupplierSelects(){
   q('transferTo').innerHTML = locOptions;
   q('stockLocationFilter').innerHTML = '<option value="">كل الفروع والمخازن</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
   q('saleLocation').innerHTML = '<option value="">اختر فرع البيع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  q('saleCustomer').innerHTML = '<option value="">زبون نقدي / بدون عميل</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}${Number(c.balance||0)>0?' - دين '+money(c.balance):''}</option>`).join('');
-  if(q('proformaCustomer')) q('proformaCustomer').innerHTML = '<option value="">بدون عميل</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
+  q('saleCustomer').innerHTML = '<option value="">زبون نقدي / بدون زبون</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}${Number(c.balance||0)>0?' - دين '+money(c.balance):''}</option>`).join('');
+  if(q('proformaCustomer')) q('proformaCustomer').innerHTML = '<option value="">بدون زبون</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
   if(q('proformaLocation')) q('proformaLocation').innerHTML = '<option value="">اختر الفرع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  const customerOptions = '<option value="">اختر العميل</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
+  const customerOptions = '<option value="">اختر الزبون</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
   q('customerPaymentCustomer').innerHTML = customerOptions;
   q('customerLedgerCustomer').innerHTML = customerOptions;
   q('reportLocation').innerHTML = '<option value="">كل الفروع</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
@@ -1668,7 +1678,7 @@ function renderSaleCustomerInfo(){
   const c=customers.find(x=>x.id===q('saleCustomer')?.value);
   const bal=Number(c?.balance||0);
   if(q('saleCustomerBalance')) q('saleCustomerBalance').textContent=money(bal);
-  if(q('saleCustomerInfo')) q('saleCustomerInfo').textContent=c?`${c.name}${c.phone?' - '+c.phone:''}`:'زبون نقدي / بدون عميل';
+  if(q('saleCustomerInfo')) q('saleCustomerInfo').textContent=c?`${c.name}${c.phone?' - '+c.phone:''}`:'زبون نقدي / بدون زبون';
 }
 function renderSaleStockInfo(productCode){
   const code=productCode || q('saleItemsBody')?.lastElementChild?.querySelector('.si-code')?.value || '';
@@ -1688,7 +1698,7 @@ function updateSaleTotal(){
   syncPaymentPreset(total);
   const paid=Math.min(getSalePaymentBreakdown().reduce((a,x)=>a+Number(x.amount||0),0), total); const bal=Math.max(0,total-paid);
   q('salePaidAmount').value=money(paid);
-  q('saleTotal').textContent=money(total); if(q('saleHeaderTotal')) q('saleHeaderTotal').textContent=money(total); q('saleBalance').textContent=money(bal); renderSaleCustomerInfo(); if(q('salePaymentDetected')) q('salePaymentDetected').textContent='طريقة الدفع: '+typeLabel(detectSalePaymentMethod(bal))+' — '+(paymentBreakdownText(getSalePaymentBreakdown())||'لم يتم إدخال دفع');
+  q('saleTotal').textContent=money(total); if(q('saleHeaderTotal')) q('saleHeaderTotal').textContent=money(total); if(q('saleFinishTotal')) q('saleFinishTotal').textContent=money(total); if(q('salePaymentScreenTotal')) q('salePaymentScreenTotal').textContent=money(total); q('saleBalance').textContent=money(bal); if(q('saleFinishBalance')) q('saleFinishBalance').textContent='المتبقي: '+money(bal)+' '+APP_CONFIG.currency; renderSaleCustomerInfo(); if(q('salePaymentDetected')) q('salePaymentDetected').textContent='طريقة الدفع: '+typeLabel(detectSalePaymentMethod(bal))+' — '+(paymentBreakdownText(getSalePaymentBreakdown())||'لم يتم إدخال دفع');
 }
 async function ensureSaleCustomer(balanceDue){
   let customer_id=q('saleCustomer').value||null;
@@ -1697,7 +1707,7 @@ async function ensureSaleCustomer(balanceDue){
     const created=await api('pos_customers',{method:'POST',body:{name:newName,phone:newPhone||null,active:true}});
     customer_id=created[0].id;
   }
-  if(balanceDue>0 && !customer_id) throw new Error('يجب اختيار أو إضافة عميل إذا كانت الفاتورة آجل أو فيها مبلغ متبقي');
+  if(balanceDue>0 && !customer_id) throw new Error('يجب اختيار أو إضافة زبون إذا كانت الفاتورة آجل أو فيها مبلغ متبقي');
   return customer_id;
 }
 function resetSaleForm(){
@@ -1783,7 +1793,7 @@ async function printSale(id){
         <div class="doc"><div class="title">فاتورة بيع</div><div class="meta">رقم: <b class="ltr">${esc(sl.invoice_no||sl.id.slice(0,8))}</b><br>التاريخ: <b>${esc(sl.sale_date)}</b></div><div>${statusBadge}</div></div>
       </div>
       <div class="info">
-        <div class="cell"><div class="lbl">العميل</div><div class="val">${esc(cust?.name||'زبون نقدي')}</div></div>
+        <div class="cell"><div class="lbl">الزبون</div><div class="val">${esc(cust?.name||'زبون نقدي')}</div></div>
         <div class="cell"><div class="lbl">الهاتف</div><div class="val ltr" style="text-align:right">${esc(cust?.phone||'-')}</div></div>
         <div class="cell"><div class="lbl">الفرع</div><div class="val">${esc(loc?.name||'-')}</div></div>
         <div class="cell"><div class="lbl">طريقة الدفع</div><div class="val">${esc(typeLabel(sl.payment_method))}</div></div>
@@ -1799,7 +1809,7 @@ async function printSale(id){
           <div class="r"><span>المتبقي</span><b>${money(balance)} ${esc(APP_CONFIG.currency)}</b></div>
         </div>
       </div>
-      <div class="sign"><div>توقيع البائع</div><div>توقيع العميل</div></div>
+      <div class="sign"><div>توقيع البائع</div><div>توقيع الزبون</div></div>
       <div class="thanks">شكرًا لتعاملكم معنا — ${esc(APP_CONFIG.businessName)}</div>
     </div></body></html>`;
     const w=window.open('','_blank'); if(!w){toast('المتصفح منع نافذة الطباعة. اسمح بالنوافذ المنبثقة أو اختر حفظ بدون طباعة.'); return;} w.document.write(html); w.document.close();
@@ -1914,13 +1924,28 @@ document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'))
   q(btn.dataset.tab).classList.add('active');
   if(btn.dataset.tab==='sales') setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
 }));
-document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no';q('saleForm').requestSubmit();} if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit();} if(e.key==='F8'){e.preventDefault();focusPay('cash');} if(e.key==='F9'){e.preventDefault();focusPay('bank');} if(e.key==='F10'){e.preventDefault();focusPay('card');} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();closeQuickProductModal();q('calculatorPanel')?.classList.remove('show');}});
+document.addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();} if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();} if(e.key==='F8'){e.preventDefault();focusPay('cash');} if(e.key==='F9'){e.preventDefault();focusPay('bank');} if(e.key==='F10'){e.preventDefault();focusPay('card');} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();closeQuickProductModal();q('calculatorPanel')?.classList.remove('show');}});
 
 
 
 
 
 
+
+
+function openSalePaymentScreen(){
+  const items=getSaleItems();
+  if(!items.length){toast('أضف صنفًا واحدًا على الأقل قبل الدفع');return;}
+  updateSaleTotal();
+  q('paymentBackdrop')?.classList.add('show');
+  q('salePaymentScreen')?.classList.add('payment-open');
+  setTimeout(()=>focusPay('cash'),80);
+}
+function closeSalePaymentScreen(){
+  q('paymentBackdrop')?.classList.remove('show');
+  q('salePaymentScreen')?.classList.remove('payment-open');
+  setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
+}
 
 function addSaleRowAndFocus(){addSaleRow(); setTimeout(()=>q('saleItemsBody')?.lastElementChild?.querySelector('.si-code')?.focus(),30)}
 function currentSaleLine(){return lastFocusedSaleRow || q('saleItemsBody')?.lastElementChild || null}
@@ -1967,8 +1992,10 @@ async function openSaleReturn(id){
     returningSale=sales.find(x=>x.id===id) || (await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
     returningSaleId=id;
     returningSaleItems=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`});
-    q('saleReturnTitle').textContent='مرتجع فاتورة بيع';
+    q('saleReturnTitle').textContent='فاتورة مرتجع بيع';
     q('saleReturnSub').textContent=(returningSale.invoice_no||returningSale.id.slice(0,8))+' - '+returningSale.sale_date;
+    const rl=locations.find(x=>x.id===returningSale.location_id), rc=customers.find(x=>x.id===returningSale.customer_id);
+    q('returnInvoiceInfo').innerHTML=`<div class="cell"><div class="lbl">الزبون</div><div class="val">${esc(rc?.name||'زبون نقدي')}</div></div><div class="cell"><div class="lbl">الفرع</div><div class="val">${esc(rl?.name||'')}</div></div><div class="cell"><div class="lbl">الفاتورة الأصلية</div><div class="val ltr">${esc(returningSale.invoice_no||returningSale.id.slice(0,8))}</div></div><div class="cell"><div class="lbl">الإجمالي الأصلي</div><div class="val">${money(returningSale.total)} ${APP_CONFIG.currency}</div></div>`;
     q('saleReturnDate').value=new Date().toISOString().slice(0,10);
     q('saleReturnRefundMethod').value=Number(returningSale.balance_due||0)>0?'credit_reduction':'cash';
     q('saleReturnItemsBody').innerHTML=returningSaleItems.map(it=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td><input class="ri-qty" data-item-id="${it.id}" type="number" step="1" min="0" max="${Number(it.qty||0)}" value="0" oninput="updateSaleReturnTotal()"></td></tr>`).join('');
@@ -2023,12 +2050,12 @@ q('saleReturnForm').addEventListener('submit', async e=>{
     const ret=await api('pos_sale_returns',{method:'POST',body:{sale_id:returningSaleId,return_date:q('saleReturnDate').value,location_id:returningSale.location_id,customer_id:returningSale.customer_id,total,refund_method:method,notes:q('saleReturnNotes').value.trim()||null}});
     const returnId=ret[0].id;
     await api('pos_sale_return_items',{method:'POST',body:items.map(it=>({...it,return_id:returnId}))});
-    for(const it of items){await adjustStockDoc(returningSale.location_id,it,Math.abs(it.qty),'return_customer','pos_sale_returns',returnId,'مرتجع عميل')}
+    for(const it of items){await adjustStockDoc(returningSale.location_id,it,Math.abs(it.qty),'return_customer','pos_sale_returns',returnId,'مرتجع زبون')}
     if(returningSale.customer_id && (method==='credit_reduction' || Number(returningSale.balance_due||0)>0)){
-      await api('pos_customer_ledger',{method:'POST',body:{customer_id:returningSale.customer_id,entry_date:q('saleReturnDate').value,entry_type:'return',description:'مرتجع فاتورة بيع',debit:0,credit:total,reference_table:'pos_sale_returns',reference_id:returnId}});
+      await api('pos_customer_ledger',{method:'POST',body:{customer_id:returningSale.customer_id,entry_date:q('saleReturnDate').value,entry_type:'return',description:'فاتورة مرتجع بيع',debit:0,credit:total,reference_table:'pos_sale_returns',reference_id:returnId}});
     }
-    closeSaleReturnModal(); toast('تم حفظ المرتجع وتحديث المخزون'); await loadAll();
-  }catch(err){console.error(err);toast('خطأ في حفظ المرتجع: '+err.message+' - تأكد من تشغيل SQL المرتجعات')}
+    closeSaleReturnModal(); toast('تم حفظ فاتورة المرتجع وتحديث المخزون'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ فاتورة المرتجع: '+err.message+' - تأكد من تشغيل SQL المرتجعات')}
   finally{showLoading(false)}
 });
 
@@ -2073,8 +2100,8 @@ q('customerForm').addEventListener('submit', async e=>{
       const isDebit=q('customerOpeningType').value==='debit';
       await api('pos_customer_ledger',{method:'POST',body:{customer_id:c.id,entry_type:'opening',description:'رصيد افتتاحي',debit:isDebit?opening:0,credit:isDebit?0:opening}});
     }
-    e.target.reset(); q('customerOpening').value=0; toast('تم حفظ العميل'); await loadAll();
-  }catch(err){console.error(err);toast('خطأ في حفظ العميل: '+err.message+' - تأكد من تشغيل ملف sales SQL')}
+    e.target.reset(); q('customerOpening').value=0; toast('تم حفظ الزبون'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ الزبون: '+err.message+' - تأكد من تشغيل ملف sales SQL')}
   finally{showLoading(false)}
 });
 
@@ -2085,8 +2112,8 @@ q('customerPaymentForm').addEventListener('submit', async e=>{
     const amount=Number(q('customerPaymentAmount').value||0);
     const method=typeLabel(q('customerPaymentMethod').value);
     const notes=q('customerPaymentNotes').value.trim();
-    await api('pos_customer_ledger',{method:'POST',body:{customer_id:q('customerPaymentCustomer').value,entry_date:q('customerPaymentDate').value,entry_type:'payment',description:notes||`دفعة عميل - ${method}`,debit:0,credit:amount}});
-    e.target.reset(); setToday(); toast('تم تسجيل دفعة العميل'); await loadAll();
+    await api('pos_customer_ledger',{method:'POST',body:{customer_id:q('customerPaymentCustomer').value,entry_date:q('customerPaymentDate').value,entry_type:'payment',description:notes||`دفعة زبون - ${method}`,debit:0,credit:amount}});
+    e.target.reset(); setToday(); toast('تم تسجيل دفعة الزبون'); await loadAll();
   }catch(err){console.error(err);toast('خطأ في تسجيل الدفعة: '+err.message)}
   finally{showLoading(false)}
 });
@@ -2135,7 +2162,7 @@ q('saleForm').addEventListener('submit', async e=>{
       await api('pos_customer_ledger',{method:'POST',body:{customer_id,entry_date:body.sale_date,entry_type:'sale',description:body.invoice_no?`فاتورة بيع رقم ${body.invoice_no}`:'فاتورة بيع',debit:balance_due,credit:0,reference_table:'pos_sales',reference_id:saleId}});
     }
     const msg=editingSaleId?'تم تعديل فاتورة البيع وتحديث المخزون':'تم حفظ فاتورة البيع وتحديث المخزون';
-    const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; resetSaleForm(); await loadAll(); toast(msg); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
+    const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); resetSaleForm(); await loadAll(); toast(msg); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
   }catch(err){console.error(err);toast('خطأ في حفظ البيع: '+err.message+' - تأكد من تشغيل ملف sales SQL')}
   finally{showLoading(false)}
 });
@@ -2385,7 +2412,7 @@ function renderReports(){
   q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${st.product_code}</b></td><td>${st.product_name||''}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
 
   q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${s.name}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
-  q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${c.name}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة عملاء.</td></tr>';
+  q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${c.name}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة زبائن.</td></tr>';
 }
 function printReports(){
   const content=q('reports').innerHTML;
@@ -2485,9 +2512,9 @@ const CTX_BUILDERS={
       {label:'تسجيل دفعة للمورد',icon:'ti-cash',action:()=>{openTab('payments'); if(q('paymentSupplier'))q('paymentSupplier').value=id;}}];
   },
   customersBody(tr){const id=ctxArg(tr.querySelector('button[onclick^="openCustomerLedger"]'),'openCustomerLedger'); if(!id) return [];
-    return [{head:'العميل'},
+    return [{head:'الزبون'},
       {label:'كشف الحساب',icon:'ti-file-analytics',action:()=>openCustomerLedger(id)},
-      {label:'تسجيل دفعة من العميل',icon:'ti-cash',action:()=>{openTab('customers'); if(q('customerPaymentCustomer'))q('customerPaymentCustomer').value=id;}}];
+      {label:'تسجيل دفعة من الزبون',icon:'ti-cash',action:()=>{openTab('customers'); if(q('customerPaymentCustomer'))q('customerPaymentCustomer').value=id;}}];
   },
   purchasesBody(tr){const id=ctxArg(tr.querySelector('button[onclick^="openPurchaseForEdit"]'),'openPurchaseForEdit'); if(!id) return [];
     return [{head:'فاتورة شراء'},{label:'فتح / تعديل',icon:'ti-edit',action:()=>openPurchaseForEdit(id)}];
@@ -2515,5 +2542,6 @@ document.addEventListener('contextmenu',e=>{
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a13ca5d1ac187e68',t:'MTc4MjgxNzAyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
 </html>
