@@ -223,7 +223,7 @@
       <button data-tab="sales"><i class="ti ti-shopping-cart"></i><span>البيع اليومي</span></button>
       <button data-tab="salesList"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
       <button data-tab="proformas"><i class="ti ti-file-description"></i><span>الفواتير المبدئية</span></button>
-      <button data-tab="customers"><i class="ti ti-users"></i><span>الالزبائن والديون</span></button>
+      <button data-tab="customers"><i class="ti ti-users"></i><span>الزبائن والديون</span></button>
 
       <div class="nav-group">المشتريات والمخزون</div>
       <button data-tab="products"><i class="ti ti-box"></i><span>قاعدة المنتجات</span></button>
@@ -269,7 +269,7 @@
                 <button class="quick-tile" type="button" onclick="openTab('sales')"><i class="ti ti-receipt-2"></i><span>فاتورة بيع</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('salesList')"><i class="ti ti-file-invoice"></i><span>فواتير البيع</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('proformas')"><i class="ti ti-file-description"></i><span>فاتورة مبدئية</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('customers')"><i class="ti ti-users"></i><span>الالزبائن والديون</span></button>
+                <button class="quick-tile" type="button" onclick="openTab('customers')"><i class="ti ti-users"></i><span>الزبائن والديون</span></button>
                 <button class="quick-tile" type="button" onclick="openTab('products')"><i class="ti ti-box"></i><span>المنتجات</span></button>
               </div>
             </div>
@@ -599,7 +599,7 @@
         </div>
 
         <div class="panel">
-          <div class="tools"><h2>قائمة الالزبائن والديون</h2><input id="customerSearch" placeholder="بحث عن زبون..." style="max-width:300px" oninput="renderCustomers()"></div>
+          <div class="tools"><h2>قائمة الزبائن والديون</h2><input id="customerSearch" placeholder="بحث عن زبون..." style="max-width:300px" oninput="renderCustomers()"></div>
           <div class="table-scroll"><table><thead><tr><th>الزبون</th><th>الهاتف</th><th>العنوان</th><th>الرصيد</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="customersBody"></tbody></table></div>
         </div>
 
@@ -1984,10 +1984,7 @@ function openTab(tab){const btn=document.querySelector(`nav button[data-tab="${t
 q('saleItemsBody')?.addEventListener('focusin',e=>{const tr=e.target.closest('tr'); if(tr) lastFocusedSaleRow=tr;});
 
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{
-  
-q('saleItemsBody')?.addEventListener('focusin',e=>{const tr=e.target.closest('tr'); if(tr) lastFocusedSaleRow=tr;});
-
-document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   btn.classList.add('active');
   q(btn.dataset.tab).classList.add('active');
@@ -2006,9 +2003,18 @@ function openSalePaymentScreen(){
   const items=getSaleItems();
   if(!items.length){toast('أضف صنفًا واحدًا على الأقل قبل الدفع');return;}
   updateSaleTotal();
+  const total=Number((q('saleTotal').textContent||'0').replace(/,/g,''))||0;
+  const entered=getSalePaymentBreakdown().reduce((a,x)=>a+Number(x.amount||0),0);
+  const method=q('salePaymentMethod').value;
+  const payType=method==='bank_transfer'?'bank':method==='card'?'card':'cash';
+  if(entered===0 && method!=='credit' && total>0){
+    const id=payType==='bank'?'saleBankAmount':payType==='card'?'saleCardAmount':'saleCashAmount';
+    if(q(id)) q(id).value=total;
+    updateSaleTotal();
+  }
   q('paymentBackdrop')?.classList.add('show');
   q('salePaymentScreen')?.classList.add('payment-open');
-  setTimeout(()=>focusPay('cash'),80);
+  setTimeout(()=>focusPay(payType),80);
 }
 function closeSalePaymentScreen(){
   q('paymentBackdrop')?.classList.remove('show');
@@ -2628,7 +2634,7 @@ function printReports(){
     .top{display:flex;align-items:center;gap:14px;border-bottom:3px solid #1d4ed8;padding-bottom:16px;margin-bottom:6px}
     .logo{width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;text-align:center;padding:6px;background:linear-gradient(135deg,#1d4ed8,#2563eb)}
     .top h1{margin:0;color:#1d4ed8;font-size:23px}.top .tag{color:#64748b;font-size:13px}
-    .tools,.row,button,input,select,.btn{display:none!important}
+    .tools,.row,button,input,select,.btn,.seg,.hidden{display:none!important}
     .panel{margin:18px 0}
     .panel h2{font-size:17px;border-right:4px solid #1d4ed8;padding-right:10px;margin:0 0 10px}
     .cards{display:flex;flex-wrap:wrap;gap:10px}
@@ -2742,6 +2748,6 @@ document.addEventListener('contextmenu',e=>{
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setToday(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a13e55b47f78a10c',t:'MTc4MjgzNDcxMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
