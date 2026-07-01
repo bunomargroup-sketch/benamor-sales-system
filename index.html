@@ -293,7 +293,6 @@
       <div class="nav-group">النظام</div>
       <button data-tab="users"><i class="ti ti-shield-lock"></i><span>المستخدمون والصلاحيات</span></button>
       <button data-tab="settings"><i class="ti ti-settings"></i><span>الإعدادات</span></button>
-      <button data-tab="next"><i class="ti ti-rocket"></i><span>المرحلة القادمة</span></button>
     </nav>
 
     <main>
@@ -473,7 +472,8 @@
             <div><label>المورد</label><select id="paymentSupplier" required></select></div>
             <div><label>التاريخ</label><input id="paymentDate" type="date" required></div>
             <div><label>المبلغ</label><input id="paymentAmount" type="number" step="0.001" min="0.001" required></div>
-            <div><label>طريقة الدفع</label><select id="paymentMethod"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
+            <div><label>طريقة الدفع</label><select id="paymentMethod" onchange="selectDefaultSupplierPaymentAccount()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
+            <div><label>الحساب المالي</label><select id="paymentFinanceAccount"></select></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="paymentNotes" placeholder="اختياري"></textarea></div>
             <button class="btn" type="submit">حفظ الدفعة</button>
           </form>
@@ -501,7 +501,7 @@
                 <div><label>رقم الفاتورة</label><input id="saleInvoiceNo" placeholder="اختياري"></div>
                 <div><label>فرع البيع</label><select id="saleLocation" required onchange="refreshSaleAvailability();renderSaleStockInfo();renderStatusBar()"></select></div>
                 <div><label>التاريخ</label><input id="saleDate" type="date" required></div>
-                <div><label>طريقة الدفع</label><select id="salePaymentMethod" onchange="updateSaleTotal()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="mixed">مختلط</option><option value="credit">آجل / دين</option></select></div>
+                <div class="hidden"><label>طريقة الدفع</label><select id="salePaymentMethod" onchange="updateSaleTotal()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="mixed">مختلط</option><option value="credit">آجل / دين</option></select></div>
                 <div class="pos-currency">العملة: <span style="margin-inline-start:6px">د.ل</span></div>
                 <div><label>امسح الباركود</label><input id="saleBarcodeInput" class="ltr barcode-input" placeholder="امسح الباركود ثم Enter" onkeydown="handleBarcodeKey(event)" oninput="handleBarcodeInput()"></div>
                 <div><label>الطباعة</label><select id="salePrintAfterSave"><option value="yes">اطبع بعد الحفظ</option><option value="no">حفظ بدون طباعة</option></select></div>
@@ -564,6 +564,7 @@
                 <div><label>حساب البطاقة</label><select id="saleCardAccount"></select></div>
                 <div><label>خصم الفاتورة</label><input id="saleDiscount" type="number" step="1" value="0" oninput="updateSaleTotal()"></div>
                 <div class="pos-payment-note mini" id="salePaymentDetected">طريقة الدفع تحفظ تلقائيًا حسب المبالغ المدخلة</div>
+                <div class="quick-pay-buttons" style="grid-column:1/-1"><button type="button" onclick="setFullPayment('cash')">دفع كامل كاش</button><button type="button" onclick="setFullPayment('bank')">دفع كامل تحويل</button><button type="button" onclick="setFullPayment('card')">دفع كامل بطاقة</button><button type="button" onclick="setCreditSale()">آجل / دين</button></div>
                 <div class="pos-mini-keypad">
                   <button type="button" onclick="keypadInput('7')">7</button><button type="button" onclick="keypadInput('8')">8</button><button type="button" onclick="keypadInput('9')">9</button><button type="button" class="op" onclick="keypadBackspace()">⌫</button>
                   <button type="button" onclick="keypadInput('4')">4</button><button type="button" onclick="keypadInput('5')">5</button><button type="button" onclick="keypadInput('6')">6</button><button type="button" class="op" onclick="keypadClear()">C</button>
@@ -761,6 +762,7 @@
           <form class="form" id="roleForm">
             <div><label>معرّف المستخدم</label><input id="roleIdentifier" required placeholder="مثال: ahmed" class="ltr"></div>
             <div><label>الاسم الظاهر</label><input id="roleDisplayName" placeholder="اختياري"></div>
+            <div><label>كود الدخول الجديد</label><input id="roleCode" class="ltr" placeholder="اختياري عند إنشاء مستخدم"></div>
             <div><label>الدور</label><select id="roleName"><option value="admin">مدير</option><option value="seller_11">بائع فرع 11 يونيو</option><option value="seller_sarraj">بائع فرع السراج</option><option value="warehouse">مخزن</option><option value="accountant">محاسب</option><option value="viewer">مشاهدة فقط</option></select></div>
             <div><label>ملاحظات</label><input id="roleNotes" placeholder="اختياري"></div>
             <button class="btn" type="submit">حفظ الصلاحية</button>
@@ -999,7 +1001,7 @@
         <div><label>المعرّف</label><input id="loginIdentifier" class="ltr" placeholder="مثال: admin"></div>
         <div><label>الكود</label><input id="loginCode" type="password" class="ltr" placeholder="الكود"></div>
         <div><label>الفرع</label><select id="loginBranch"><option value="">اختر الفرع</option></select></div>
-        <div class="row"><button class="btn" onclick="loginPOS(false)">دخول</button><button class="btn secondary" onclick="loginPOS(true)">إنشاء مستخدم</button></div>
+        <div class="row"><button class="btn" onclick="loginPOS(false)">دخول</button></div>
       </div>
     </div>
   </div>
@@ -1146,6 +1148,7 @@ let currentReport="overview";
 let productSortIndex=13, productSortDir='desc';
 let stockSortIndex=3, stockSortDir='desc';
 let pickerSelectedIndex=0;
+let pickerSortIndex=5, pickerSortDir='desc';
 let productPickerTarget='sale';
 let editingProformaId=null;
 let returningSaleId=null, returningSale=null, returningSaleItems=[];
@@ -1265,7 +1268,7 @@ function renderDashboardLists(){
 
 const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
 const ROLE_TABS={
-  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','transfers','finance','reports','users','settings','next'],
+  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','transfers','finance','reports','users','settings'],
   seller_11:['dashboard','products','sales','salesList','proformas','stock'],
   seller_sarraj:['dashboard','products','sales','salesList','proformas','stock'],
   warehouse:['dashboard','products','stock','transfers','purchases'],
@@ -1285,6 +1288,7 @@ async function ensureRoleAfterLogin(){
   currentRole=role || {identifier:appUser.identifier,role:'viewer',active:true};
 }
 async function loginPOS(create=false){
+  if(create){toast('إنشاء المستخدمين يتم من المدير فقط','warn');return;}
   const identifier=q('loginIdentifier').value.trim().toLowerCase(); const code=q('loginCode').value.trim();
   const branch_id=q('loginBranch')?.value||''; const branch_name=locations.find(l=>l.id===branch_id)?.name||'';
   if(identifier.length<2||code.length<3){toast('اكتب المعرّف والكود');return;}
@@ -1319,12 +1323,12 @@ function applyPermissions(){
   if(active && active.style.display==='none'){
     const first=[...document.querySelectorAll('nav button[data-tab]')].find(b=>b.style.display!=='none'); if(first) first.click();
   }
-  if(appUser?.branch_id && q('saleLocation') && !q('saleLocation').disabled){q('saleLocation').value=appUser.branch_id;}
+  if(appUser?.branch_id && q('saleLocation')){q('saleLocation').value=appUser.branch_id; q('saleLocation').disabled=true;}
   // Branch sellers are locked to their branch in sales screen.
   if(currentRole?.role==='seller_11' || currentRole?.role==='seller_sarraj'){
     const wanted=currentRole.role==='seller_11'?'فرع 11 يونيو':'فرع السراج'; const loc=locations.find(l=>l.name===wanted);
     if(loc && q('saleLocation')){q('saleLocation').value=loc.id; q('saleLocation').disabled=true;}
-  }else if(q('saleLocation')) q('saleLocation').disabled=false;
+  }else if(q('saleLocation') && !appUser?.branch_id) q('saleLocation').disabled=false;
 }
 function renderRoles(){
   if(!q('rolesBody')) return;
@@ -1500,11 +1504,14 @@ function openPurchaseProductPicker(){
 function renderSaleProductPicker(){
   const term=(q('salePickerSearch')?.value||'').trim().toLowerCase();
   const cat=q('salePickerCategory')?.value||'', brand=q('salePickerBrand')?.value||'', color=q('salePickerColor')?.value||'', supplier=q('salePickerSupplier')?.value||'';
-  const loc=(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:q('saleLocation')?.value))||'';
   const rows=products.filter(p=>{
     const hay=[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].join(' ').toLowerCase();
     return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&(!term||hay.includes(term));
   });
+  const pickerCols=['code','name','brand','color','supplier_name','available','retail_price','margin_value','margin_pct'];
+  const key=pickerCols[pickerSortIndex]||'available';
+  const loc=(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:q('saleLocation')?.value))||'';
+  rows.sort((a,b)=>{const av=key==='available'?getStockQty(loc,a.code):(key==='margin_value'?marginValue(a.code,a.retail_price):(key==='margin_pct'?marginPct(a.code,a.retail_price):(a[key]??''))); const bv=key==='available'?getStockQty(loc,b.code):(key==='margin_value'?marginValue(b.code,b.retail_price):(key==='margin_pct'?marginPct(b.code,b.retail_price):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,250);
   q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr class="${shown.indexOf(p)===pickerSelectedIndex?'selected-row':''}" ondblclick="addSaleProductFromPicker('${safe}')"><td class="ltr"><b>${p.code||''}</b></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td>${money(marginValue(p.code,p.retail_price))}</td><td>${money(marginPct(p.code,p.retail_price))}%</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="10">لا توجد منتجات مطابقة للفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
@@ -1605,6 +1612,7 @@ function fillSupplierSelects(){
   q('customerPaymentCustomer').innerHTML = customerOptions;
   q('customerLedgerCustomer').innerHTML = customerOptions;
   q('reportLocation').innerHTML = '<option value="">كل الفروع</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+  if(q('paymentFinanceAccount')) q('paymentFinanceAccount').innerHTML='<option value="">تلقائي حسب الطريقة</option>'+financeAccounts.map(a=>`<option value="${a.id}">${a.name} - ${accountTypeLabel(a.account_type)}</option>`).join('');
 
   const accountOpts='<option value="">اختر الحساب</option>'+financeAccounts.map(a=>`<option value="${a.id}">${a.name} - ${money(a.balance)}</option>`).join('');
   ['financeTransferFrom','financeTransferTo','expenseAccount','salaryAccount'].forEach(id=>{if(q(id)) q(id).innerHTML=accountOpts});
@@ -1836,6 +1844,22 @@ function focusPay(type){
   const id=type==='bank'?'saleBankAmount':type==='card'?'saleCardAmount':'saleCashAmount';
   const el=q(id); if(el){el.focus();setActivePayInput(el);}
 }
+
+function setFullPayment(type){
+  const total=Number((q('saleTotal').textContent||'0').replace(/,/g,''))||0;
+  ['saleCashAmount','saleBankAmount','saleCardAmount'].forEach(id=>{if(q(id))q(id).value=0});
+  const id=type==='bank'?'saleBankAmount':type==='card'?'saleCardAmount':'saleCashAmount';
+  if(q(id)) q(id).value=total;
+  q('salePaymentMethod').value=type==='bank'?'bank_transfer':type==='card'?'card':'cash';
+  focusPay(type); updateSaleTotal();
+}
+function defaultFinanceAccountFor(method){
+  if(method==='cash') return financeAccounts.find(a=>a.account_type==='cash' && a.location_id===appUser?.branch_id)?.id || financeAccounts.find(a=>a.account_type==='cash')?.id || null;
+  if(method==='bank_transfer') return financeAccounts.find(a=>a.account_type==='bank')?.id || null;
+  if(method==='card') return financeAccounts.find(a=>a.account_type==='card')?.id || null;
+  return null;
+}
+
 function keypadTarget(){const el=q(activePayInputId)||q('saleCashAmount'); setActivePayInput(el); return el;}
 function keypadInput(v){const el=keypadTarget(); if(v==='.' && String(el.value).includes('.')) return; el.value=String(el.value||'0')==='0'?String(v):String(el.value)+String(v); updateSaleTotal();}
 function keypadBackspace(){const el=keypadTarget(); el.value=String(el.value||'').slice(0,-1)||'0'; updateSaleTotal();}
@@ -2250,7 +2274,7 @@ q('saleReturnForm').addEventListener('submit', async e=>{
 
 
 q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_finance_accounts',{method:'POST',body:{name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:Number(q('financeOpeningBalance').value||0),notes:q('financeAccountNotes').value.trim()||null}});e.target.reset();toast('تم حفظ الحساب');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message)}finally{showLoading(false);window.__busy=false}});
-q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=Number(q('financeTransferAmount').value||0),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب');return;}await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await loadAll();}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=Number(q('financeTransferAmount').value||0),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await loadAll();}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
 q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={expense_date:q('expenseDate').value,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:Number(q('expenseAmount').value||0),notes:q('expenseNotes').value.trim()||null};const r=await api('pos_expenses',{method:'POST',body});await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset();setToday();toast('تم حفظ المصروف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_employees',{method:'POST',body:{name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:Number(q('employeeMonthlySalary').value||0)}});e.target.reset();toast('تم حفظ الموظف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:Number(q('salaryAmount').value||0),notes:q('salaryNotes').value.trim()||null};const r=await api('pos_salary_payments',{method:'POST',body});await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب موظف');e.target.reset();setToday();toast('تم دفع المرتب');await loadAll();}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
@@ -2271,8 +2295,10 @@ q('roleForm').addEventListener('submit', async e=>{
     const identifier=q('roleIdentifier').value.trim().toLowerCase();
     const body={identifier,display_name:q('roleDisplayName').value.trim()||null,role:q('roleName').value,location_name:null,active:true,notes:q('roleNotes').value.trim()||null,updated_at:new Date().toISOString()};
     const found=userRoles.find(r=>r.identifier===identifier);
-    if(found){const patch={...body}; delete patch.identifier; await api('pos_user_roles',{method:'PATCH',qs:`?id=eq.${found.id}`,body:patch}); toast('تم تعديل الصلاحية');}
-    else {await api('pos_user_roles',{method:'POST',body}); toast('تم حفظ الصلاحية');}
+    const newCode=q('roleCode')?.value.trim()||'';
+    if(!found && newCode){await rpc('create_app_user',{p_identifier:identifier,p_code:newCode}).catch(e=>console.warn('create app user skipped/failed',e));}
+    if(found){const patch={...body}; delete patch.identifier; await api('pos_user_roles',{method:'PATCH',qs:`?id=eq.${found.id}`,body:patch}); toast('تم تعديل الصلاحية','success');}
+    else {await api('pos_user_roles',{method:'POST',body}); toast('تم حفظ الصلاحية وإنشاء المستخدم إن كان الكود جديدًا','success');}
     e.target.reset(); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ الصلاحية: '+err.message+' - تأكد من تشغيل ملف users SQL')}
   finally{showLoading(false);window.__busy=false}
@@ -2411,6 +2437,8 @@ q('supplierForm').addEventListener('submit', async e=>{
   }catch(err){console.error(err);toast('خطأ في حفظ المورد: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
 
+function selectDefaultSupplierPaymentAccount(){const m=q('paymentMethod')?.value; const id=defaultFinanceAccountFor(m); if(q('paymentFinanceAccount')&&id) q('paymentFinanceAccount').value=id;}
+
 q('paymentForm').addEventListener('submit', async e=>{
   e.preventDefault();
   if(window.__busy) return; window.__busy=true;
@@ -2419,6 +2447,7 @@ q('paymentForm').addEventListener('submit', async e=>{
     const body={supplier_id:q('paymentSupplier').value,payment_date:q('paymentDate').value,amount:Number(q('paymentAmount').value),payment_method:q('paymentMethod').value,notes:q('paymentNotes').value.trim()};
     const pay=await api('pos_supplier_payments',{method:'POST',body});
     await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.payment_date,entry_type:'payment',description:body.notes||'دفعة للمورد',debit:body.amount,credit:0,reference_table:'pos_supplier_payments',reference_id:pay[0].id}});
+    await addFinanceMovement(q('paymentFinanceAccount')?.value||defaultFinanceAccountFor(body.payment_method),'out','supplier_payment',body.amount,body.payment_date,'pos_supplier_payments',pay[0].id,body.notes||'دفعة للمورد');
     e.target.reset(); setToday(); toast('تم حفظ الدفعة وتحديث كشف الحساب'); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ الدفعة: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
@@ -2795,6 +2824,7 @@ function setupTableSorting(){
         const dir=th.dataset.dir==='asc'?'desc':'asc'; th.dataset.dir=dir;
         if(tbody.id==='productsBody'){productSortIndex=idx; productSortDir=dir; renderProducts(); return;}
         if(tbody.id==='stockBody'){stockSortIndex=idx; stockSortDir=dir; renderStock(); return;}
+        if(tbody.id==='salePickerBody'){pickerSortIndex=idx; pickerSortDir=dir; renderSaleProductPicker(); return;}
         const rows=[...tbody.querySelectorAll('tr')].filter(r=>r.children.length>1);
         const val=(r)=>{let t=(r.children[idx]?.innerText||'').trim().replace(/,/g,''); let n=parseFloat(t); return isNaN(n)?t:n;};
         rows.sort((a,b)=>{const va=val(a), vb=val(b); let c=(typeof va==='number'&&typeof vb==='number')?va-vb:String(va).localeCompare(String(vb),'ar'); return dir==='asc'?c:-c;});
@@ -2895,6 +2925,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a143c947cb3e7c51',t:'MTc4Mjg5MTg3NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a14459522e277945',t:'MTc4Mjg5Nzc3NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
 </html>
