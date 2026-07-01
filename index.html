@@ -1351,6 +1351,41 @@ function renderLocations(){
 }
 
 
+
+function normText(v){
+  return String(v==null?'':v).toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g,'')
+    .replace(/[إأآا]/g,'ا').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ة/g,'ه')
+    .replace(/[ـ\-_/\\.,;:|()[\]{}+*؟?،]/g,' ')
+    .replace(/\s+/g,' ').trim();
+}
+function editDistance(a,b,limit=2){
+  a=normText(a); b=normText(b); if(a===b) return 0; if(Math.abs(a.length-b.length)>limit) return limit+1;
+  const dp=Array(b.length+1).fill(0).map((_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+    let prev=dp[0]; dp[0]=i; let best=dp[0];
+    for(let j=1;j<=b.length;j++){
+      const tmp=dp[j];
+      dp[j]=Math.min(dp[j]+1,dp[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));
+      prev=tmp; best=Math.min(best,dp[j]);
+    }
+    if(best>limit) return limit+1;
+  }
+  return dp[b.length];
+}
+function smartMatch(query, fields){
+  const q=normText(query); if(!q) return true;
+  const hay=normText(Array.isArray(fields)?fields.join(' '):fields);
+  if(hay.includes(q)) return true;
+  const hayWords=hay.split(' ').filter(Boolean);
+  return q.split(' ').filter(Boolean).every(tok=>{
+    if(hay.includes(tok)) return true;
+    const lim=tok.length>=7?2:(tok.length>=4?1:0);
+    return hayWords.some(w=>w.includes(tok)||tok.includes(w)||(lim&&editDistance(tok,w,lim)<=lim));
+  });
+}
+function productSearchFields(p){return [p.code,p.barcode,p.name,p.brand,p.model,p.color,p.category,p.supplier_name]}
+
 function renderProductDatalist(){
   const dl=q('productsDatalist');
   if(!dl) return;
@@ -1409,8 +1444,7 @@ function renderProducts(){
   const cat=q('productCategoryFilter')?.value||'', brand=q('productBrandFilter')?.value||'', color=q('productColorFilter')?.value||'', supplier=q('productSupplierFilter')?.value||'';
   renderProductCategoryTree(cat);
   const rows=products.filter(p=>{
-    const hay=[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].join(' ').toLowerCase();
-    return (!cat || p.category===cat) && (!brand || p.brand===brand) && (!color || p.color===color) && (!supplier || p.supplier_name===supplier) && (!term || hay.includes(term));
+    return (!cat || p.category===cat) && (!brand || p.brand===brand) && (!color || p.color===color) && (!supplier || p.supplier_name===supplier) && smartMatch(term, productSearchFields(p));
   });
   const productCols=['code','name','brand','color','barcode','supplier_name','category','purchase_price','retail_price','margin_value','margin_pct','reorder_point','stock_11_june','stock_sarraj','stock_janzour','total_stock'];
   const key=productCols[productSortIndex]||'total_stock';
@@ -1505,8 +1539,7 @@ function renderSaleProductPicker(){
   const term=(q('salePickerSearch')?.value||'').trim().toLowerCase();
   const cat=q('salePickerCategory')?.value||'', brand=q('salePickerBrand')?.value||'', color=q('salePickerColor')?.value||'', supplier=q('salePickerSupplier')?.value||'';
   const rows=products.filter(p=>{
-    const hay=[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].join(' ').toLowerCase();
-    return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&(!term||hay.includes(term));
+    return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&smartMatch(term, productSearchFields(p));
   });
   const pickerCols=['code','name','brand','color','supplier_name','available','retail_price','margin_value','margin_pct'];
   const key=pickerCols[pickerSortIndex]||'available';
@@ -2890,6 +2923,31 @@ const CTX_BUILDERS={
       {label:'فتح / تعديل',icon:'ti-edit',action:()=>openProformaForEdit(id)},
       {label:'تحويل إلى بيع',icon:'ti-shopping-cart',action:()=>convertProformaToSale(id)}];
   },
+
+  saleItemsBody(tr){const code=tr.querySelector('.si-code')?.value?.split('|')[0]?.trim(); if(!code) return []; lastFocusedSaleRow=tr; const p=products.find(x=>String(x.code)===String(code));
+    return [{head:p?`${code} — ${p.name||''}`:code},
+      {label:'مشاهدة المنتج',icon:'ti-eye',action:()=>{selectedProductCode=code;viewSelectedProduct()}},
+      {label:'حركات المنتج',icon:'ti-history',action:()=>openProductMovements(code)},
+      {label:'تعديل السعر',icon:'ti-edit',action:()=>editSelectedSaleLinePrice()},
+      {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.si-qty'); qn.value=Number(qn.value||0)+1; updateSaleTotal(); updateSaleAvailable(qn);}},
+      {sep:true},{label:'حذف من الفاتورة',icon:'ti-trash',action:()=>{tr.remove(); updateSaleTotal();}}];
+  },
+  proformaItemsBody(tr){const code=tr.querySelector('.pr-code')?.value?.split('|')[0]?.trim(); if(!code) return []; const p=products.find(x=>String(x.code)===String(code));
+    return [{head:p?`${code} — ${p.name||''}`:code},
+      {label:'مشاهدة المنتج',icon:'ti-eye',action:()=>{selectedProductCode=code;viewSelectedProduct()}},
+      {label:'حركات المنتج',icon:'ti-history',action:()=>openProductMovements(code)},
+      {label:'تعديل السعر',icon:'ti-edit',action:()=>{const inp=tr.querySelector('.pr-price'); const v=prompt('اكتب السعر الجديد',inp.value||0); if(v!=null){inp.value=Number(v)||0; updateProformaTotal();}}},
+      {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.pr-qty'); qn.value=Number(qn.value||0)+1; updateProformaTotal();}},
+      {sep:true},{label:'حذف من المبدئية',icon:'ti-trash',action:()=>{tr.remove(); updateProformaTotal();}}];
+  },
+  purchaseItemsBody(tr){const code=tr.querySelector('.pi-code')?.value?.split('|')[0]?.trim(); if(!code) return []; const p=products.find(x=>String(x.code)===String(code));
+    return [{head:p?`${code} — ${p.name||''}`:code},
+      {label:'مشاهدة المنتج',icon:'ti-eye',action:()=>{selectedProductCode=code;viewSelectedProduct()}},
+      {label:'حركات المنتج',icon:'ti-history',action:()=>openProductMovements(code)},
+      {label:'تعديل سعر الشراء',icon:'ti-edit',action:()=>{const inp=tr.querySelector('.pi-cost'); const v=prompt('اكتب سعر الشراء الجديد',inp.value||0); if(v!=null){inp.value=Number(v)||0; updatePurchaseTotal();}}},
+      {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.pi-qty'); qn.value=Number(qn.value||0)+1; updatePurchaseTotal();}},
+      {sep:true},{label:'حذف من الفاتورة',icon:'ti-trash',action:()=>{tr.remove(); updatePurchaseTotal();}}];
+  },
   stockBody(tr){const code=tr.children[1]?.innerText.trim(); if(!code) return [];
     return [{head:code},{label:'حركات الصنف',icon:'ti-history',action:()=>openProductMovements(code)}];
   }
@@ -2925,6 +2983,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a14499b7dc487951',t:'MTc4MjkwMDQxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a145064faa5f18ec',t:'MTc4MjkwNDg2MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
