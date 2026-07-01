@@ -681,6 +681,9 @@
               <div><label>مكان دخول البضاعة</label><select id="purchaseLocation" required></select></div>
               <div><label>تاريخ الفاتورة</label><input id="purchaseDate" type="date" required></div>
               <div><label>رقم فاتورة المورد</label><input id="purchaseInvoiceNo" placeholder="اختياري"></div>
+              <div><label>المدفوع للمورد</label><input id="purchasePaidAmount" type="number" step="1" min="0" value="0"></div>
+              <div><label>طريقة الدفع</label><select id="purchasePaymentMethod" onchange="selectDefaultPurchasePaymentAccount()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
+              <div><label>الحساب المالي</label><select id="purchaseFinanceAccount"></select></div>
               <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="purchaseNotes" placeholder="اختياري"></textarea></div>
             </div>
 
@@ -1116,7 +1119,7 @@
         <div><h2 id="movementsTitle" style="margin:0">حركات الصنف</h2><div class="mini" id="movementsSub"></div></div>
         <button class="btn secondary" onclick="closeMovementsModal()">إغلاق</button>
       </div>
-      <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>المكان</th><th>الكمية</th><th>المرجع</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
+      <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>رقم الفاتورة</th><th>البائع</th><th>الفرع</th><th>الكمية</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
     </div>
   </div>
 
@@ -1579,6 +1582,30 @@ function editProduct(code){
   q('productSubmitBtn').textContent='حفظ تعديل المنتج';
   q('productCode').focus();
 }
+
+function movementDocInfo(m){
+  const table=m.reference_table||''; const id=m.reference_id||''; let doc=null, no='', seller='غير مسجل', branch='';
+  if(table==='pos_sales'){
+    doc=sales.find(x=>x.id===id); no=doc?.invoice_no||doc?.id?.slice(0,8)||id?.slice(0,8)||''; branch=locations.find(l=>l.id===doc?.location_id)?.name||'';
+  }else if(table==='pos_purchases'){
+    doc=purchases.find(x=>x.id===id); no=doc?.invoice_no||doc?.id?.slice(0,8)||id?.slice(0,8)||''; branch=locations.find(l=>l.id===doc?.location_id)?.name||'';
+  }else if(table==='pos_stock_transfers'){
+    doc=transfers.find(x=>x.id===id); no=doc?.id?.slice(0,8)||id?.slice(0,8)||''; const from=locations.find(l=>l.id===doc?.from_location_id)?.name||''; const to=locations.find(l=>l.id===doc?.to_location_id)?.name||''; branch=from&&to?`${from} ← ${to}`:'';
+  }else if(table==='pos_sale_returns'){
+    doc=saleReturns.find(x=>x.id===id); no=doc?.id?.slice(0,8)||id?.slice(0,8)||''; branch=locations.find(l=>l.id===doc?.location_id)?.name||'';
+  }
+  if(!branch) branch=locations.find(l=>l.id===m.location_id)?.name||'';
+  return {no,seller,branch,table,id};
+}
+function openMovementDocument(table,id){
+  if(!table||!id){toast('لا يوجد مستند مرتبط بهذه الحركة','warn');return;}
+  if(table==='pos_sales') return openSaleForEdit(id);
+  if(table==='pos_purchases') return openPurchaseForEdit(id);
+  if(table==='pos_stock_transfers') return openTransferForEdit(id);
+  if(table==='pos_sale_returns') return toast('هذه الحركة مرتبطة بفاتورة مرتجع. افتح فاتورة البيع الأصلية من فواتير البيع.','info');
+  toast('نوع المستند غير معروف','warn');
+}
+
 async function openProductMovements(code){
   try{
     showLoading(true);
@@ -1587,9 +1614,9 @@ async function openProductMovements(code){
     q('movementsSub').textContent=p ? (p.name||'') : '';
     const rows=await api('pos_stock_movements',{qs:`?select=*&product_code=eq.${encodeURIComponent(code)}&order=movement_date.desc&limit=300`});
     q('movementsBody').innerHTML = rows.map(m=>{
-      const l=locations.find(x=>x.id===m.location_id); const qty=Number(m.qty_change||0);
-      return `<tr><td>${(m.movement_date||m.created_at||'').replace('T',' ').slice(0,19)}</td><td>${typeLabel(m.movement_type)}</td><td>${l?.name||''}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}"><b>${money(qty)}</b></td><td>${m.reference_table||''}<div class="mini ltr">${m.reference_id||''}</div></td><td>${m.notes||''}</td></tr>`;
-    }).join('') || '<tr><td colspan="6">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
+      const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
+      return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,19))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><b>${esc(info.no)}</b></td><td>${esc(info.seller)}</td><td>${esc(info.branch)}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}"><b>${money(qty)}</b></td><td>${esc(m.notes)}</td></tr>`;
+    }).join('') || '<tr><td colspan="7">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
     q('movementsModal').classList.add('show');
   }catch(err){console.error(err);toast('خطأ في تحميل حركات الصنف: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
@@ -1654,7 +1681,8 @@ function fillSupplierSelects(){
   if(q('salaryEmployee')) q('salaryEmployee').innerHTML='<option value="">اختر الموظف</option>'+employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
   if(q('saleCashAccount')) q('saleCashAccount').innerHTML='<option value="">خزينة الفرع تلقائيًا</option>'+financeAccounts.filter(a=>a.account_type==='cash').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
   if(q('saleBankAccount')) q('saleBankAccount').innerHTML='<option value="">اختر المصرف</option>'+financeAccounts.filter(a=>a.account_type==='bank').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
-  if(q('saleCardAccount')) q('saleCardAccount').innerHTML='<option value="">اختر حساب البطاقة</option>'+financeAccounts.filter(a=>a.account_type==='card').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if(q('saleCardAccount')) q('saleCardAccount').innerHTML='<option value="">اختر حساب البطاقة/المصرف</option>'+financeAccounts.filter(a=>a.account_type==='card'||a.account_type==='bank').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if(q('purchaseFinanceAccount')) q('purchaseFinanceAccount').innerHTML='<option value="">تلقائي حسب الطريقة</option>'+financeAccounts.map(a=>`<option value="${a.id}">${a.name} - ${accountTypeLabel(a.account_type)}</option>`).join('');
 }
 function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id; renderLedger()}
 function renderLedger(){
@@ -1889,7 +1917,7 @@ function setFullPayment(type){
 function defaultFinanceAccountFor(method){
   if(method==='cash') return financeAccounts.find(a=>a.account_type==='cash' && a.location_id===appUser?.branch_id)?.id || financeAccounts.find(a=>a.account_type==='cash')?.id || null;
   if(method==='bank_transfer') return financeAccounts.find(a=>a.account_type==='bank')?.id || null;
-  if(method==='card') return financeAccounts.find(a=>a.account_type==='card')?.id || null;
+  if(method==='card') return financeAccounts.find(a=>a.account_type==='card')?.id || financeAccounts.find(a=>a.account_type==='bank')?.id || null;
   return null;
 }
 
@@ -2471,6 +2499,7 @@ q('supplierForm').addEventListener('submit', async e=>{
 });
 
 function selectDefaultSupplierPaymentAccount(){const m=q('paymentMethod')?.value; const id=defaultFinanceAccountFor(m); if(q('paymentFinanceAccount')&&id) q('paymentFinanceAccount').value=id;}
+function selectDefaultPurchasePaymentAccount(){const m=q('purchasePaymentMethod')?.value; const id=defaultFinanceAccountFor(m); if(q('purchaseFinanceAccount')&&id) q('purchaseFinanceAccount').value=id;}
 
 q('paymentForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -2535,7 +2564,7 @@ q('purchaseForm').addEventListener('submit', async e=>{
     showLoading(true);
     updatePurchaseTotal();
     const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=Number(q('purchaseDiscount').value||0); const total=Math.max(0, subtotal-discount);
-    const body={supplier_id:q('purchaseSupplier').value,location_id:q('purchaseLocation').value,invoice_no:q('purchaseInvoiceNo').value.trim(),purchase_date:q('purchaseDate').value,subtotal,discount,total,paid_amount:0,status:'posted',notes:q('purchaseNotes').value.trim()};
+    const purchasePaid=Number(q('purchasePaidAmount')?.value||0); const purchasePayMethod=q('purchasePaymentMethod')?.value||'cash'; const body={supplier_id:q('purchaseSupplier').value,location_id:q('purchaseLocation').value,invoice_no:q('purchaseInvoiceNo').value.trim(),purchase_date:q('purchaseDate').value,subtotal,discount,total,paid_amount:purchasePaid,status:'posted',notes:q('purchaseNotes').value.trim()};
     let purchaseId=editingPurchaseId;
     if(editingPurchaseId){
       await reversePurchaseEffects();
@@ -2548,6 +2577,10 @@ q('purchaseForm').addEventListener('submit', async e=>{
     for(const it of items){ await updateStock(body.location_id,it,purchaseId); }
     if(total>0){
       await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',description:body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء',debit:0,credit:total,reference_table:'pos_purchases',reference_id:purchaseId}});
+    }
+    if(purchasePaid>0){
+      await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'payment',description:'دفعة على فاتورة شراء',debit:Math.min(purchasePaid,total),credit:0,reference_table:'pos_purchases',reference_id:purchaseId}});
+      await addFinanceMovement(q('purchaseFinanceAccount')?.value||defaultFinanceAccountFor(purchasePayMethod),'out','supplier_payment',Math.min(purchasePaid,total),body.purchase_date,'pos_purchases',purchaseId,'دفع فاتورة شراء');
     }
     const msg=editingPurchaseId?'تم تعديل فاتورة الشراء وتحديث المخزون':'تم حفظ فاتورة الشراء وزيادة المخزون';
     resetPurchaseForm(); toast(msg); await loadAll();
@@ -2645,7 +2678,7 @@ function productCost(code){
 }
 
 function marginValue(code, price){return Number(price||0)-productCost(code)}
-function marginPct(code, price){price=Number(price||0); return price?marginValue(code,price)/price*100:0}
+function marginPct(code, price){const cost=productCost(code); return cost?marginValue(code,price)/cost*100:0}
 function marginHtml(code, price){const m=marginValue(code,price), pct=marginPct(code,price); return `<div class="${m>=0?'stock-positive':'stock-negative'}"><b>${money(m)}</b><div class="mini">${money(pct)}%</div></div>`}
 
 function bucketKey(date, period){
@@ -2948,6 +2981,12 @@ const CTX_BUILDERS={
       {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.pi-qty'); qn.value=Number(qn.value||0)+1; updatePurchaseTotal();}},
       {sep:true},{label:'حذف من الفاتورة',icon:'ti-trash',action:()=>{tr.remove(); updatePurchaseTotal();}}];
   },
+
+  movementsBody(tr){const table=tr.dataset.refTable, id=tr.dataset.refId; if(!table||!id) return [];
+    return [{head:'حركة صنف'},
+      {label:'فتح المستند المرتبط',icon:'ti-file-invoice',action:()=>openMovementDocument(table,id)},
+      {label:'نسخ رقم الفاتورة',icon:'ti-copy',action:()=>{navigator.clipboard?.writeText(tr.children[2]?.innerText.trim()||'');toast('تم نسخ رقم الفاتورة','success')}}];
+  },
   stockBody(tr){const code=tr.children[1]?.innerText.trim(); if(!code) return [];
     return [{head:code},{label:'حركات الصنف',icon:'ti-history',action:()=>openProductMovements(code)}];
   }
@@ -2983,6 +3022,5 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadAll().then(async()=>{if(appUser?.id){await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}});
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a145064faa5f18ec',t:'MTc4MjkwNDg2MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a145e3fb1e6e18ec',t:'MTc4MjkxMzkzOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
