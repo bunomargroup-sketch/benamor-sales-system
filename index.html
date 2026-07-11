@@ -1245,7 +1245,7 @@ function friendlyError(err){
   return m||'حدث خطأ غير متوقع';
 }
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
-function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون'}[t]||t}
+function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون',customer_refund:'استرداد للزبون'}[t]||t}
 
 function staffEmail(id){return String(id||'').trim().toLowerCase()+'@bag.com'} async function authSignIn(identifier,code){const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:staffEmail(identifier),password:code})}); const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error_description||data.msg||data.message||'auth failed'); authSession=data; localStorage.setItem('posAuthSession',JSON.stringify(authSession)); return data.user} async function api(table, opts={}){
   const qs = opts.qs || '';
@@ -2094,7 +2094,7 @@ function focusPay(type){
 }
 
 function setFullPayment(type){
-  const total=Number((q('saleTotal').textContent||'0').replace(/,/g,''))||0;
+  const total=Math.abs(Number((q('saleTotal').textContent||'0').replace(/,/g,''))||0);
   ['saleCashAmount','saleBankAmount','saleCardAmount'].forEach(id=>{if(q(id))q(id).value=0});
   const id=type==='bank'?'saleBankAmount':type==='card'?'saleCardAmount':'saleCashAmount';
   if(q(id)) q(id).value=total;
@@ -2114,7 +2114,7 @@ function keypadBackspace(){const el=keypadTarget(); el.value=String(el.value||''
 function keypadClear(){const el=keypadTarget(); el.value='0'; updateSaleTotal();}
 function keypadAddExact(){
   updateSaleTotal();
-  const total=Number((q('saleTotal').textContent||'0').replace(/,/g,''))||0;
+  const total=Math.abs(Number((q('saleTotal').textContent||'0').replace(/,/g,''))||0);
   const current=getSalePaymentBreakdown().reduce((a,x)=>a+Number(x.amount||0),0);
   const remaining=Math.max(0,total-current);
   const el=keypadTarget(); el.value=Number(el.value||0)+remaining; updateSaleTotal();
@@ -2143,9 +2143,9 @@ function updateSaleTotal(){
   });
   const discount=Number(q('saleDiscount').value||0); const total=subtotal-discount;
   syncPaymentPreset(total);
-  const rawPaid=getSalePaymentBreakdown().reduce((a,x)=>a+Number(x.amount||0),0); const over=Math.max(0,rawPaid-total); const paid=rawPaid; const bal=Math.max(0,total-rawPaid);
-  q('salePaidAmount').value=money(paid);
-  q('saleTotal').textContent=money(total); if(q('saleHeaderTotal')) q('saleHeaderTotal').textContent=money(total); if(q('saleFinishTotal')) q('saleFinishTotal').textContent=money(total); if(q('salePaymentScreenTotal')) q('salePaymentScreenTotal').textContent=money(total); q('saleBalance').textContent=over>0?('+'+money(over)):money(bal); if(q('saleFinishBalance')) q('saleFinishBalance').textContent=(over>0?'زيادة: ':'المتبقي: ')+money(over>0?over:bal)+' '+APP_CONFIG.currency; renderSaleCustomerInfo(); if(q('salePaymentDetected')) {q('salePaymentDetected').textContent=over>0?'تنبيه: المدفوع أكبر من إجمالي الفاتورة بمبلغ '+money(over)+' '+APP_CONFIG.currency:'طريقة الدفع: '+typeLabel(detectSalePaymentMethod(bal))+' — '+(paymentBreakdownText(getSalePaymentBreakdown())||'لم يتم إدخال دفع'); q('salePaymentDetected').style.color=over>0?'var(--bad)':'';}
+  const rawPaid=getSalePaymentBreakdown().reduce((a,x)=>a+Number(x.amount||0),0); const isRefund=total<0; const required=isRefund?Math.abs(total):total; const over=Math.max(0,rawPaid-required); const bal=isRefund?Math.max(0,required-rawPaid):Math.max(0,total-rawPaid);
+  q('salePaidAmount').value=money(isRefund?-rawPaid:rawPaid);
+  q('saleTotal').textContent=money(total); if(q('saleHeaderTotal')) q('saleHeaderTotal').textContent=money(total); if(q('saleFinishTotal')) q('saleFinishTotal').textContent=money(total); if(q('salePaymentScreenTotal')) q('salePaymentScreenTotal').textContent=isRefund?'استرداد '+money(required):money(total); q('saleBalance').textContent=over>0?('+'+money(over)):money(bal); if(q('saleFinishBalance')) q('saleFinishBalance').textContent=isRefund?('المطلوب رده للزبون: '+money(required)+' '+APP_CONFIG.currency):((over>0?'زيادة: ':'المتبقي: ')+money(over>0?over:bal)+' '+APP_CONFIG.currency); renderSaleCustomerInfo(); if(q('salePaymentDetected')) {q('salePaymentDetected').textContent=isRefund?(over>0?'تنبيه: مبلغ الاسترداد أكبر من المطلوب بمبلغ '+money(over)+' '+APP_CONFIG.currency:'استرداد للزبون: '+money(required)+' '+APP_CONFIG.currency+' — '+(paymentBreakdownText(getSalePaymentBreakdown())||'اختر طريقة الاسترداد')):(over>0?'تنبيه: المدفوع أكبر من إجمالي الفاتورة بمبلغ '+money(over)+' '+APP_CONFIG.currency:'طريقة الدفع: '+typeLabel(detectSalePaymentMethod(bal))+' — '+(paymentBreakdownText(getSalePaymentBreakdown())||'لم يتم إدخال دفع')); q('salePaymentDetected').style.color=(over>0||isRefund)?'var(--bad)':'';}
 }
 async function ensureSaleCustomer(balanceDue){
   let customer_id=q('saleCustomer').value||null;
@@ -2421,9 +2421,9 @@ function openSalePaymentScreen(){
   const entered=getSalePaymentBreakdown().reduce((a,x)=>a+Number(x.amount||0),0);
   const method=q('salePaymentMethod').value;
   const payType=method==='bank_transfer'?'bank':method==='card'?'card':'cash';
-  if(entered===0 && method!=='credit' && total>0){
+  if(entered===0 && method!=='credit' && total!==0){
     const id=payType==='bank'?'saleBankAmount':payType==='card'?'saleCardAmount':'saleCashAmount';
-    if(q(id)) q(id).value=total;
+    if(q(id)) q(id).value=Math.abs(total);
     updateSaleTotal();
   }
   q('paymentBackdrop')?.classList.add('show');
@@ -2511,12 +2511,16 @@ function defaultAccountFor(method, location_id){
   if(method==='card') return q('saleCardAccount')?.value || financeAccounts.find(a=>a.account_type==='card')?.id || null;
   return null;
 }
-async function addFinanceMovement(account_id,direction,movement_type,amount,date,reference_table,reference_id,notes){
-  if(!account_id || !(Number(amount)>0)) return;
-  await api('pos_finance_movements',{method:'POST',body:{account_id,direction,movement_type,amount:Number(amount),movement_date:date,reference_table,reference_id,notes}}).catch(e=>console.warn('finance movement failed',e));
+async function addFinanceMovement(account_id,direction,movement_type,amount,date,reference_table,reference_id,notes,strict=false){
+  if(!account_id || !(Number(amount)>0)){ if(strict) throw new Error('لم يتم اختيار حساب مالي للحركة'); return; }
+  const run=()=>api('pos_finance_movements',{method:'POST',body:{account_id,direction,movement_type,amount:Number(amount),movement_date:date,reference_table,reference_id,notes}});
+  if(strict) await run(); else await run().catch(e=>console.warn('finance movement failed',e));
 }
-async function recordSaleFinanceMovements(saleId, location_id, saleDate, payRows){
-  for(const r of payRows){await addFinanceMovement(defaultAccountFor(r.payment_method,location_id),'in','sale_payment',r.amount,saleDate,'pos_sales',saleId,'تحصيل فاتورة بيع')}
+async function recordSaleFinanceMovements(saleId, location_id, saleDate, payRows, saleTotal=0){
+  const isRefund=Number(saleTotal||0)<0;
+  for(const r of payRows){
+    await addFinanceMovement(defaultAccountFor(r.payment_method,location_id),isRefund?'out':'in',isRefund?'customer_refund':'sale_payment',r.amount,saleDate,'pos_sales',saleId,isRefund?`Customer Refund / استرداد للزبون - فاتورة ${q('saleInvoiceNo')?.value||''}${appUser?.identifier?' - المستخدم: '+appUser.identifier:''}`:`تحصيل فاتورة بيع${appUser?.identifier?' - المستخدم: '+appUser.identifier:''}`,isRefund)
+  }
 }
 function renderFinance(){
   if(!q('financeAccountsBody')) return;
@@ -2622,7 +2626,11 @@ q('saleForm').addEventListener('submit', async e=>{
   const location_id=q('saleLocation').value; if(!location_id){toast('اختر فرع البيع','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   updateSaleTotal();
   const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=Number(q('saleDiscount').value||0); const total=subtotal-discount;
-  const payRows=getSalePaymentBreakdown(); const rawPaid=payRows.reduce((a,x)=>a+Number(x.amount||0),0); if(total>=0 && rawPaid>total){toast('المدفوع أكبر من إجمالي الفاتورة. صحّح مبالغ الدفع قبل الحفظ.','warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;} const paid=rawPaid; const balance_due=Math.max(0,total-paid); if(total>0 && payRows.length===0 && balance_due===total){toast('يجب تحديد طريقة الدفع: كاش أو تحويل أو بطاقة أو آجل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  const payRows=getSalePaymentBreakdown(); const rawPaid=payRows.reduce((a,x)=>a+Number(x.amount||0),0); const isRefundInvoice=total<0; const refundRequired=Math.abs(total);
+  if(!isRefundInvoice && rawPaid>total){toast('المدفوع أكبر من إجمالي الفاتورة. صحّح مبالغ الدفع قبل الحفظ.','warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  if(isRefundInvoice && Math.abs(rawPaid-refundRequired)>0.001){toast('هذه فاتورة مرتجع. يجب إدخال مبلغ الاسترداد كاملًا: '+money(refundRequired)+' '+APP_CONFIG.currency,'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  if(isRefundInvoice){const missing=payRows.find(r=>!defaultAccountFor(r.payment_method,location_id)); if(missing){toast('اختر حسابًا ماليًا لطريقة الاسترداد: '+typeLabel(missing.payment_method),'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}}
+  const paid=isRefundInvoice?-rawPaid:rawPaid; const balance_due=isRefundInvoice?0:Math.max(0,total-rawPaid); if(total>0 && payRows.length===0 && balance_due===total){toast('يجب تحديد طريقة الدفع: كاش أو تحويل أو بطاقة أو آجل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   const virtualStock=new Map(stock.map(r=>[`${r.location_id}|${String(r.product_code).toLowerCase()}`,Number(r.qty||0)]));
   if(editingSaleId && originalSale){
     for(const it of originalSaleItems){
@@ -2653,7 +2661,7 @@ q('saleForm').addEventListener('submit', async e=>{
     await api('pos_sale_items',{method:'POST',body:items.map(it=>({...it,sale_id:saleId}))});
     const paymentsToSave=payRows.map(r=>({...r,sale_id:saleId,payment_date:body.sale_date}));
     if(paymentsToSave.length) await api('pos_sale_payments',{method:'POST',body:paymentsToSave}).catch(e=>console.warn('sale payments save failed',e));
-    await recordSaleFinanceMovements(saleId, body.location_id, body.sale_date, paymentsToSave);
+    await recordSaleFinanceMovements(saleId, body.location_id, body.sale_date, paymentsToSave, body.total);
     for(const it of items){ await adjustStockDoc(location_id,it,-Number(it.qty||0),'sale','pos_sales',saleId,it.qty<0?'مرتجع داخل فاتورة بيع':'فاتورة بيع'); }
     if(balance_due>0){
       await api('pos_customer_ledger',{method:'POST',body:{customer_id,entry_date:body.sale_date,entry_type:'sale',description:body.invoice_no?`فاتورة بيع رقم ${body.invoice_no}`:'فاتورة بيع',debit:balance_due,credit:0,reference_table:'pos_sales',reference_id:saleId}});
