@@ -269,6 +269,17 @@
     /* Slightly narrower action rail to give the table more width */
     #sales .pos-work-area{grid-template-columns:172px minmax(0,1fr)}
     @media(max-width:1100px){#sales .pos-work-area{grid-template-columns:1fr}}
+
+    /* Selling page readability and cashier accuracy */
+    #sales,#saleProductPickerModal{font-size:15px}
+    #sales label,#saleProductPickerModal label{font-size:14px;color:#334155}
+    #sales .mini,#saleProductPickerModal .mini{font-size:13px;color:#475569}
+    #sales input,#sales select,#saleProductPickerModal input,#saleProductPickerModal select{font-size:16px;color:var(--text)}
+    #sales table th,#saleProductPickerModal table th{font-size:14px;color:#334155}
+    #sales table td,#saleProductPickerModal table td{font-size:14.5px}
+    html[data-theme="dark"] #sales label,html[data-theme="dark"] #saleProductPickerModal label,html[data-theme="dark"] #sales table th,html[data-theme="dark"] #saleProductPickerModal table th{color:#cbd5e1}
+    html[data-theme="dark"] #sales .mini,html[data-theme="dark"] #saleProductPickerModal .mini{color:#b6c2d2}
+    #saleItemsBody .si-name[readonly]{background:var(--table-head);color:var(--text);font-weight:700;cursor:not-allowed}
 </style>
 
 <link rel="manifest" href="manifest.webmanifest">
@@ -554,7 +565,7 @@
                 </div>
                 <div class="table-scroll sale-lines-scroll">
                   <table>
-                    <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
+                    <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر %</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
                     <tbody id="saleItemsBody"></tbody>
                   </table>
                 </div>
@@ -580,7 +591,7 @@
                 <div><label>خزينة الكاش</label><select id="saleCashAccount"></select></div>
                 <div><label>مصرف التحويل</label><select id="saleBankAccount"></select></div>
                 <div><label>حساب البطاقة</label><select id="saleCardAccount"></select></div>
-                <div><label>خصم الفاتورة</label><input id="saleDiscount" type="number" step="1" value="0" oninput="updateSaleTotal()"></div>
+                <div><label>خصم الفاتورة (قيمة)</label><input id="saleDiscount" type="number" step="1" value="0" oninput="updateSaleTotal()"></div>
                 <div class="pos-payment-note mini" id="salePaymentDetected">طريقة الدفع تحفظ تلقائيًا حسب المبالغ المدخلة</div>
                 <div class="quick-pay-buttons" style="grid-column:1/-1"><button type="button" onclick="setFullPayment('cash')">دفع كامل كاش</button><button type="button" onclick="setFullPayment('bank')">دفع كامل تحويل</button><button type="button" onclick="setFullPayment('card')">دفع كامل بطاقة</button><button type="button" onclick="setCreditSale()">آجل / دين</button></div>
                 <div class="pos-mini-keypad">
@@ -1121,14 +1132,14 @@
         <button class="btn secondary" onclick="closeSaleProductPicker()">إغلاق</button>
       </div>
       <div class="picker-grid">
-        <div><label>بحث</label><input id="salePickerSearch" onkeydown="handleSalePickerKey(event)" placeholder="كود، اسم، ماركة، لون، مورد..." oninput="renderSaleProductPicker()"></div>
+        <div><label>بحث</label><input id="salePickerSearch" onkeydown="handleSalePickerKey(event)" placeholder="اسم، كود، باركود، SKU، موديل، مورد..." oninput="pickerSelectedIndex=0;renderSaleProductPicker()"></div>
         <div><label>التصنيف</label><select id="salePickerCategory" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
         <div><label>الماركة</label><select id="salePickerBrand" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
         <div><label>اللون</label><select id="salePickerColor" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
         <div><label>المورد</label><select id="salePickerSupplier" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
         <div><label>الكمية</label><input id="salePickerQty" onkeydown="handleSalePickerKey(event)" type="number" step="1" min="1" value="1"></div>
       </div>
-      <div class="table-scroll"><table><thead><tr><th>رقم</th><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>المتوفر في الفرع</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>إجراء</th></tr></thead><tbody id="salePickerBody"></tbody></table></div>
+      <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>المتوفر في الفرع</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>إجراء</th></tr></thead><tbody id="salePickerBody"></tbody></table></div>
       <div class="mini" id="salePickerInfo" style="margin-top:10px"></div>
     </div>
   </div>
@@ -1445,12 +1456,13 @@ function smartMatch(query, fields){
   if(hay.includes(q)) return true;
   const hayWords=hay.split(' ').filter(Boolean);
   return q.split(' ').filter(Boolean).every(tok=>{
+    if(!tok) return true;
     if(hay.includes(tok)) return true;
-    const lim=tok.length>=7?2:(tok.length>=4?1:0);
-    return hayWords.some(w=>w.includes(tok)||tok.includes(w)||(lim&&editDistance(tok,w,lim)<=lim));
+    const lim=tok.length>=7?2:(tok.length>=5?1:0);
+    return hayWords.some(w=>w.startsWith(tok)||w.includes(tok)||(lim&&editDistance(tok,w,lim)<=lim));
   });
 }
-function productSearchFields(p){return [p.code,p.barcode,p.name,p.brand,p.model,p.color,p.category,p.supplier_name]}
+function productSearchFields(p){return [p.product_no,p.code,p.barcode,p.sku,p.item_no,p.name,p.brand,p.model,p.color,p.category,p.supplier_name]}
 
 function renderProductDatalist(){
   const dl=q('productsDatalist');
@@ -1607,12 +1619,13 @@ function renderSaleProductPicker(){
   const rows=products.filter(p=>{
     return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&smartMatch(term, productSearchFields(p));
   });
-  const pickerCols=['product_no','code','name','brand','color','supplier_name','available','retail_price','margin_value','margin_pct'];
+  const pickerCols=['code','name','brand','color','supplier_name','available','retail_price','margin_value','margin_pct'];
   const key=pickerCols[pickerSortIndex]||'available';
   const loc=(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:q('saleLocation')?.value))||'';
   rows.sort((a,b)=>{const av=key==='available'?getStockQty(loc,a.code):(key==='margin_value'?marginValue(a.code,a.retail_price):(key==='margin_pct'?marginPct(a.code,a.retail_price):(a[key]??''))); const bv=key==='available'?getStockQty(loc,b.code):(key==='margin_value'?marginValue(b.code,b.retail_price):(key==='margin_pct'?marginPct(b.code,b.retail_price):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,250);
-  q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr class="${shown.indexOf(p)===pickerSelectedIndex?'selected-row':''}" ondblclick="addSaleProductFromPicker('${safe}')"><td class="ltr">${esc(p.product_no)}</td><td class="ltr"><b>${p.code||''}</b></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td>${money(marginValue(p.code,p.retail_price))}</td><td>${money(marginPct(p.code,p.retail_price))}%</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="11">لا توجد منتجات مطابقة للفلاتر.</td></tr>';
+  if(pickerSelectedIndex>=shown.length) pickerSelectedIndex=Math.max(0,shown.length-1);
+  q('salePickerBody').innerHTML=shown.map(p=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const available=loc?getStockQty(loc,p.code):0; return `<tr class="${shown.indexOf(p)===pickerSelectedIndex?'selected-row':''}" ondblclick="addSaleProductFromPicker('${safe}')"><td class="ltr"><b>${esc(p.code||'')}</b><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td>${esc(p.name)}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="${available>0?'stock-positive':available<0?'stock-negative':''}"><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td>${money(marginValue(p.code,p.retail_price))}</td><td>${money(marginPct(p.code,p.retail_price))}%</td><td><button class="btn secondary" type="button" onclick="addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="10">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
   setupTableSorting();
 }
@@ -1873,7 +1886,7 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 }
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><input class="si-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="si-qty" type="number" step="1" min="1" value="${item.qty||1}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="number" step="1" min="0" value="${item.unit_price||0}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><input class="si-name" value="${item.product_name||''}" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج"></td><td><input class="si-qty" type="number" step="1" min="1" value="${item.qty||1}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="number" step="1" min="0" value="${item.unit_price||0}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
   q('saleItemsBody').appendChild(tr); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function fillSaleRow(input){
@@ -1896,8 +1909,13 @@ function refreshSaleAvailability(){[...q('saleItemsBody').querySelectorAll('.si-
 function calcLineDiscount(raw, base){
   raw=String(raw||'').trim();
   if(!raw) return 0;
-  if(raw.endsWith('%')) return Math.min(base, Math.max(0, base*(Number(raw.slice(0,-1))||0)/100));
-  return Math.min(base, Math.max(0, Number(raw)||0));
+  const lower=raw.toLowerCase();
+  if(lower.startsWith('amount:') || /د|دل|dinar|lyd/.test(lower)){
+    const amount=Number(lower.replace('amount:','').replace(/[^0-9.\-]/g,''))||0;
+    return Math.min(base, Math.max(0, amount));
+  }
+  const pct=Number(raw.replace('%',''))||0;
+  return Math.min(base, Math.max(0, base*pct/100));
 }
 function findProductByCodeOrBarcode(value){
   const v=String(value||'').trim().toLowerCase(); if(!v) return null;
@@ -1931,7 +1949,7 @@ function handleBarcodeInput(){const v=q('saleBarcodeInput').value.trim(); const 
 function getSaleItems(){
   return [...q('saleItemsBody').querySelectorAll('tr')].map(tr=>{
     let code=tr.querySelector('.si-code').value.trim(); let name=tr.querySelector('.si-name').value.trim();
-    const picked=findProductByInput(code); if(picked){code=picked.code||code; if(!name) name=picked.name||name;}
+    const picked=findProductByInput(code); if(picked){code=picked.code||code; name=picked.name||name;}
     if(code.includes('|')) code=code.split('|')[0].trim();
     const qty=Number(tr.querySelector('.si-qty').value||0); const unit_price=Number(tr.querySelector('.si-price').value||0); const base=qty*unit_price; const discount_text=tr.querySelector('.si-discount')?.value||''; const line_discount=calcLineDiscount(discount_text,base);
     return {product_code:code||name, product_name:name, qty, unit_price, line_discount, discount_text, line_total:Math.max(0,base-line_discount)};
@@ -3086,5 +3104,5 @@ function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate
 initBranding(); fillSettingsForm(); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); addSaleRow(); if(q('proformaItemsBody')) addProformaRow(); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a196cab63f2c18ec',t:'MTc4Mzc2MjI1MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
