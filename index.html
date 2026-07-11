@@ -429,8 +429,8 @@
             <div><label>اللون</label><input id="productColor" list="colorDatalist" placeholder="مثال: أبيض / أسود / ذهبي"></div>
             <div><label>الباركود</label><input id="productBarcode" class="ltr" placeholder="اختياري"></div>
             <div><label>حد الطلب</label><input id="productReorderPoint" type="number" step="1" value="0"></div>
-            <div><label>سعر الشراء</label><input id="productPurchasePrice" type="number" step="1" value="0"></div>
-            <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="number" step="1" value="0"></div>
+            <div><label>سعر الشراء</label><input id="productPurchasePrice" type="text" inputmode="decimal" value="0"></div>
+            <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="text" inputmode="decimal" value="0"></div>
             <div class="row"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="duplicateSelectedProduct()">نسخ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
           </form>
           <p class="mini">يمكنك إضافة التصنيف عند إنشاء المنتج. إذا كتبت كود منتج موجود سيتم تعديل بياناته.</p>
@@ -487,7 +487,7 @@
           <form class="form" id="supplierForm">
             <div><label>اسم المورد</label><input id="supplierName" required placeholder="مثال: شركة ..."></div>
             <div><label>الهاتف</label><input id="supplierPhone" class="ltr" placeholder="+218..."></div>
-            <div><label>الرصيد الافتتاحي</label><input id="supplierOpening" type="number" step="0.001" value="0"></div>
+            <div><label>الرصيد الافتتاحي</label><input id="supplierOpening" type="text" inputmode="decimal" value="0"></div>
             <div><label>نوع الرصيد</label><select id="openingType"><option value="credit">علينا للمورد</option><option value="debit">لنا عند المورد</option></select></div>
             <div style="grid-column:1/-1"><label>العنوان / ملاحظات</label><textarea id="supplierNotes" placeholder="اختياري"></textarea></div>
             <button class="btn" type="submit">حفظ المورد</button>
@@ -513,7 +513,7 @@
           <form class="form" id="paymentForm">
             <div><label>المورد</label><select id="paymentSupplier" required></select></div>
             <div><label>التاريخ</label><input id="paymentDate" type="date" required></div>
-            <div><label>المبلغ</label><input id="paymentAmount" type="number" step="0.001" min="0.001" required></div>
+            <div><label>المبلغ</label><input id="paymentAmount" type="text" inputmode="decimal" required></div>
             <div><label>طريقة الدفع</label><select id="paymentMethod" onchange="selectDefaultSupplierPaymentAccount()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
             <div><label>الحساب المالي</label><select id="paymentFinanceAccount"></select></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="paymentNotes" placeholder="اختياري"></textarea></div>
@@ -594,17 +594,17 @@
               <div class="payment-title"><h2>شاشة الدفع</h2><div class="big" id="salePaymentScreenTotal">0.00</div><button class="btn secondary" type="button" onclick="closeSalePaymentScreen()">رجوع للفاتورة</button></div>
               <div class="pos-total-panel">
                 <div class="totalBox grand"><span>إجمالي البيع</span><b id="saleTotal">0.00</b></div>
-                <div class="totalBox"><span>المدفوع</span><input id="salePaidAmount" type="number" step="1" value="0" readonly></div>
+                <div class="totalBox"><span>المدفوع</span><input id="salePaidAmount" type="text" inputmode="decimal" value="0" readonly></div>
                 <div class="totalBox"><span>المتبقي / دين</span><b id="saleBalance">0.00</b></div>
               </div>
               <div class="pos-payment-panel">
-                <div><label>كاش</label><input id="saleCashAmount" data-pay="cash" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
-                <div><label>تحويل</label><input id="saleBankAmount" data-pay="bank" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
-                <div><label>بطاقة</label><input id="saleCardAmount" data-pay="card" type="number" step="1" min="0" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
+                <div><label>كاش</label><input id="saleCashAmount" data-pay="cash" type="text" inputmode="decimal" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
+                <div><label>تحويل</label><input id="saleBankAmount" data-pay="bank" type="text" inputmode="decimal" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
+                <div><label>بطاقة</label><input id="saleCardAmount" data-pay="card" type="text" inputmode="decimal" value="0" onfocus="setActivePayInput(this)" oninput="updateSaleTotal()"></div>
                 <div><label>خزينة الكاش</label><select id="saleCashAccount"></select></div>
                 <div><label>مصرف التحويل</label><select id="saleBankAccount"></select></div>
                 <div><label>حساب البطاقة</label><select id="saleCardAccount"></select></div>
-                <div><label>خصم الفاتورة (قيمة)</label><input id="saleDiscount" type="number" step="1" value="0" oninput="updateSaleTotal()"></div>
+                <div><label>خصم الفاتورة (قيمة)</label><input id="saleDiscount" type="text" inputmode="decimal" value="0" oninput="updateSaleTotal()"></div>
                 <div class="pos-payment-note mini" id="salePaymentDetected">طريقة الدفع تحفظ تلقائيًا حسب المبالغ المدخلة</div>
                 <div class="quick-pay-buttons" style="grid-column:1/-1"><button type="button" onclick="setFullPayment('cash')">دفع كامل كاش</button><button type="button" onclick="setFullPayment('bank')">دفع كامل تحويل</button><button type="button" onclick="setFullPayment('card')">دفع كامل بطاقة</button><button type="button" onclick="setCreditSale()">آجل / دين</button></div>
                 <div class="pos-mini-keypad">
@@ -677,7 +677,7 @@
               <table><thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر</th><th>الإجمالي</th><th></th></tr></thead><tbody id="proformaItemsBody"></tbody></table>
             </div>
             <div class="form sale-summary" style="margin-top:12px">
-              <div><label>خصم</label><input id="proformaDiscount" type="number" step="1" value="0" oninput="updateProformaTotal()"></div>
+              <div><label>خصم</label><input id="proformaDiscount" type="text" inputmode="decimal" value="0" oninput="updateProformaTotal()"></div>
               <div class="totalBox"><span>إجمالي المبدئية</span><b id="proformaTotal">0.00</b></div>
               <div class="row"><button class="btn" id="proformaSubmitBtn" type="submit">حفظ الفاتورة المبدئية</button><button class="btn secondary hidden" id="proformaCancelEditBtn" type="button" onclick="resetProformaForm()">إلغاء التعديل</button></div>
             </div>
@@ -697,7 +697,7 @@
             <div><label>اسم الزبون</label><input id="customerName" required placeholder="اسم الزبون"></div>
             <div><label>الهاتف</label><input id="customerPhone" class="ltr" placeholder="+218..."></div>
             <div><label>العنوان</label><input id="customerAddress" placeholder="اختياري"></div>
-            <div><label>الرصيد الافتتاحي</label><input id="customerOpening" type="number" step="0.001" value="0"></div>
+            <div><label>الرصيد الافتتاحي</label><input id="customerOpening" type="text" inputmode="decimal" value="0"></div>
             <div><label>نوع الرصيد</label><select id="customerOpeningType"><option value="debit">على الزبون</option><option value="credit">للزبون رصيد عندنا</option></select></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="customerNotes" placeholder="اختياري"></textarea></div>
             <button class="btn" type="submit">حفظ الزبون</button>
@@ -709,7 +709,7 @@
           <form class="form" id="customerPaymentForm">
             <div><label>الزبون</label><select id="customerPaymentCustomer" required></select></div>
             <div><label>التاريخ</label><input id="customerPaymentDate" type="date" required></div>
-            <div><label>المبلغ</label><input id="customerPaymentAmount" type="number" step="0.001" min="0.001" required></div>
+            <div><label>المبلغ</label><input id="customerPaymentAmount" type="text" inputmode="decimal" required></div>
             <div><label>طريقة الدفع</label><select id="customerPaymentMethod"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="customerPaymentNotes" placeholder="اختياري"></textarea></div>
             <button class="btn" type="submit">حفظ الدفعة</button>
@@ -737,7 +737,7 @@
               <div><label>مكان دخول البضاعة</label><select id="purchaseLocation" required></select></div>
               <div><label>تاريخ الفاتورة</label><input id="purchaseDate" type="date" required></div>
               <div><label>رقم فاتورة المورد</label><input id="purchaseInvoiceNo" placeholder="اختياري"></div>
-              <div><label>المدفوع للمورد</label><input id="purchasePaidAmount" type="number" step="1" min="0" value="0"></div>
+              <div><label>المدفوع للمورد</label><input id="purchasePaidAmount" type="text" inputmode="decimal" value="0"></div>
               <div><label>طريقة الدفع</label><select id="purchasePaymentMethod" onchange="selectDefaultPurchasePaymentAccount()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
               <div><label>الحساب المالي</label><select id="purchaseFinanceAccount"></select></div>
               <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="purchaseNotes" placeholder="اختياري"></textarea></div>
@@ -755,7 +755,7 @@
             </div>
             <p class="mini">اكتب كود المنتج أو جزء من الاسم في خانة اختيار المنتج، ثم اختر المنتج من القائمة ليتم تعبئة الاسم وسعر الشراء تلقائيًا. يمكنك أيضًا كتابة منتج جديد يدويًا.</p>
             <div class="form" style="margin-top:12px">
-              <div><label>خصم</label><input id="purchaseDiscount" type="number" step="0.001" value="0" oninput="updatePurchaseTotal()"></div>
+              <div><label>خصم</label><input id="purchaseDiscount" type="text" inputmode="decimal" value="0" oninput="updatePurchaseTotal()"></div>
               <div class="totalBox"><span>إجمالي الفاتورة</span><b id="purchaseTotal">0.00</b></div>
               <div class="row"><button class="btn" id="purchaseSubmitBtn" type="submit">حفظ الفاتورة وزيادة المخزون</button><button class="btn secondary hidden" id="purchaseCancelEditBtn" type="button" onclick="resetPurchaseForm()">إلغاء التعديل</button></div>
             </div>
@@ -853,7 +853,7 @@
             <div><label>الفرع</label><select id="financeAccountLocation"></select></div>
             <div><label>اسم المصرف</label><input id="financeBankName" placeholder="اختياري"></div>
             <div><label>رقم الحساب</label><input id="financeAccountNo" class="ltr" placeholder="اختياري"></div>
-            <div><label>رصيد افتتاحي</label><input id="financeOpeningBalance" type="number" step="1" value="0"></div>
+            <div><label>رصيد افتتاحي</label><input id="financeOpeningBalance" type="text" inputmode="decimal" value="0"></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><input id="financeAccountNotes" placeholder="اختياري"></div>
             <button class="btn" type="submit">حفظ الحساب</button>
           </form>
@@ -865,7 +865,7 @@
             <div><label>من حساب</label><select id="financeTransferFrom" required></select></div>
             <div><label>إلى حساب</label><select id="financeTransferTo" required></select></div>
             <div><label>التاريخ</label><input id="financeTransferDate" type="date" required></div>
-            <div><label>المبلغ</label><input id="financeTransferAmount" type="number" step="1" min="1" required></div>
+            <div><label>المبلغ</label><input id="financeTransferAmount" type="text" inputmode="decimal" required></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><input id="financeTransferNotes" placeholder="مثال: إيداع مبيعات فرع السراج في المصرف"></div>
             <button class="btn" type="submit">حفظ التحويل</button>
           </form>
@@ -877,7 +877,7 @@
             <div><label>الحساب المدفوع منه</label><select id="expenseAccount" required></select></div>
             <div><label>التصنيف</label><select id="expenseCategory"></select></div>
             <div><label>التاريخ</label><input id="expenseDate" type="date" required></div>
-            <div><label>المبلغ</label><input id="expenseAmount" type="number" step="1" min="1" required></div>
+            <div><label>المبلغ</label><input id="expenseAmount" type="text" inputmode="decimal" required></div>
             <div style="grid-column:1/-1"><label>البيان</label><input id="expenseTitle" required placeholder="مثال: مصاريف وقود"></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><input id="expenseNotes" placeholder="اختياري"></div>
             <button class="btn" type="submit">حفظ المصروف</button>
@@ -890,7 +890,7 @@
             <div><label>اسم الموظف</label><input id="employeeName" required></div>
             <div><label>الهاتف</label><input id="employeePhone" class="ltr"></div>
             <div><label>الوظيفة</label><input id="employeePosition"></div>
-            <div><label>المرتب الشهري</label><input id="employeeMonthlySalary" type="number" step="1" value="0"></div>
+            <div><label>المرتب الشهري</label><input id="employeeMonthlySalary" type="text" inputmode="decimal" value="0"></div>
             <button class="btn" type="submit">حفظ الموظف</button>
           </form>
           <hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
@@ -899,7 +899,7 @@
             <div><label>الحساب المدفوع منه</label><select id="salaryAccount" required></select></div>
             <div><label>التاريخ</label><input id="salaryPaymentDate" type="date" required></div>
             <div><label>الفترة</label><input id="salaryPeriod" placeholder="مثال: 2026-06"></div>
-            <div><label>المبلغ</label><input id="salaryAmount" type="number" step="1" min="1" required></div>
+            <div><label>المبلغ</label><input id="salaryAmount" type="text" inputmode="decimal" required></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><input id="salaryNotes" placeholder="اختياري"></div>
             <button class="btn" type="submit">دفع مرتب</button>
           </form>
@@ -1114,8 +1114,8 @@
       <div class="quick-product-grid">
         <div><label>كود الصنف</label><input id="quickProductCode" class="ltr" required></div>
         <div><label>اسم الصنف</label><input id="quickProductName" required></div>
-        <div><label>سعر البيع</label><input id="quickProductRetail" type="number" step="1" value="0"></div>
-        <div><label>سعر الشراء</label><input id="quickProductCost" type="number" step="1" value="0"></div>
+        <div><label>سعر البيع</label><input id="quickProductRetail" type="text" inputmode="decimal" value="0"></div>
+        <div><label>سعر الشراء</label><input id="quickProductCost" type="text" inputmode="decimal" value="0"></div>
         <div><label>الباركود</label><input id="quickProductBarcode" class="ltr"></div>
         <div><label>التصنيف</label><input id="quickProductCategory" list="categoryDatalist"></div>
       </div>
@@ -1229,6 +1229,43 @@ function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'
 function cfgText(v){return esc(v)}
 function initBranding(){document.title=APP_CONFIG.businessName+' - '+APP_CONFIG.tagline; if(q('brandTitle'))q('brandTitle').textContent=APP_CONFIG.businessName; if(q('brandTagline'))q('brandTagline').textContent=APP_CONFIG.tagline; if(q('loginTitle'))q('loginTitle').textContent='دخول '+APP_CONFIG.businessName;}
 function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function normalizeDigits(v){return String(v??'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}
+function parseDecimal(v){
+  let s=normalizeDigits(v).trim().replace(/\s/g,'');
+  if(!s) return 0;
+  const hasComma=s.includes(','), hasDot=s.includes('.');
+  if(hasComma && hasDot){
+    // If both exist, treat the last separator as decimal and the other as thousands.
+    if(s.lastIndexOf(',')>s.lastIndexOf('.')) s=s.replace(/\./g,'').replace(',','.');
+    else s=s.replace(/,/g,'');
+  }else if(hasComma) s=s.replace(',','.');
+  s=s.replace(/[^0-9.\-]/g,'');
+  const n=Number(s);
+  return Number.isFinite(n)?n:0;
+}
+function moneyVal(v){return parseDecimal(v)}
+function cleanDecimalInputValue(v){
+  let s=normalizeDigits(v).replace(/[^0-9.,\-]/g,'');
+  const neg=s.startsWith('-')?'-':''; s=s.replace(/-/g,'');
+  const firstSep=[s.indexOf('.'),s.indexOf(',')].filter(i=>i>=0).sort((a,b)=>a-b)[0];
+  if(firstSep==null) return neg+s;
+  const int=s.slice(0,firstSep).replace(/[.,]/g,'');
+  const dec=s.slice(firstSep+1).replace(/[.,]/g,'');
+  return neg+int+s[firstSep]+dec;
+}
+function setupDecimalInputs(){
+  document.addEventListener('input',e=>{
+    const el=e.target;
+    if(!el?.matches?.('input[inputmode="decimal"]')) return;
+    const cleaned=cleanDecimalInputValue(el.value);
+    if(el.value!==cleaned){const pos=el.selectionStart; el.value=cleaned; try{el.setSelectionRange(Math.max(0,pos-1),Math.max(0,pos-1))}catch(_){}}
+  });
+  document.addEventListener('blur',e=>{
+    const el=e.target;
+    if(!el?.matches?.('input[inputmode="decimal"]')) return;
+    if(String(el.value).trim()!=='') el.value=String(parseDecimal(el.value));
+  },true);
+}
 function showLoading(v){q('loading').style.display=v?'block':'none'; q('syncState').textContent=v?'جاري المزامنة...':'متصل مع Supabase'}
 function toast(msg,type='info'){
   const t=q('toast'); const colors={success:'var(--good)',error:'var(--bad)',warn:'var(--warn)',info:'var(--blue)'};
@@ -2024,7 +2061,7 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
   const isReturn=Number(item.qty||1)<0 || item.line_type==='return'; const qv=Math.abs(Number(item.qty||1))||1;
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><select class="si-kind" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" ${isReturn?'':'selected'}>بيع</option><option value="return" ${isReturn?'selected':''}>مرتجع</option></select></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="number" step="1" min="0" value="${item.unit_price||0}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><select class="si-kind" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" ${isReturn?'':'selected'}>بيع</option><option value="return" ${isReturn?'selected':''}>مرتجع</option></select></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${item.unit_price||0}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
   q('saleItemsBody').appendChild(tr); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function updateSaleLineKind(el){
@@ -2053,10 +2090,10 @@ function calcLineDiscount(raw, base){
   if(!raw) return 0;
   const lower=raw.toLowerCase();
   if(lower.startsWith('amount:') || /د|دل|dinar|lyd/.test(lower)){
-    const amount=Number(lower.replace('amount:','').replace(/[^0-9.\-]/g,''))||0;
+    const amount=moneyVal(lower.replace('amount:',''));
     return Math.min(base, Math.max(0, amount));
   }
-  const pct=Number(raw.replace('%',''))||0;
+  const pct=moneyVal(raw.replace('%',''));
   return Math.min(base, Math.max(0, base*pct/100));
 }
 function findProductByCodeOrBarcode(value){
@@ -2093,16 +2130,16 @@ function getSaleItems(){
     let code=tr.querySelector('.si-code').value.trim(); let name=tr.querySelector('.si-name').value.trim();
     const picked=findProductByInput(code); if(picked){code=picked.code||code; name=picked.name||name;}
     if(code.includes('|')) code=code.split('|')[0].trim();
-    const qtyRaw=Math.abs(Number(tr.querySelector('.si-qty').value||0)); const sign=tr.querySelector('.si-kind')?.value==='return'?-1:1; const qty=sign*qtyRaw; const unit_price=Number(tr.querySelector('.si-price').value||0); const baseAbs=qtyRaw*unit_price; const discount_text=tr.querySelector('.si-discount')?.value||''; const line_discount=calcLineDiscount(discount_text,baseAbs);
+    const qtyRaw=Math.abs(Number(tr.querySelector('.si-qty').value||0)); const sign=tr.querySelector('.si-kind')?.value==='return'?-1:1; const qty=sign*qtyRaw; const unit_price=moneyVal(tr.querySelector('.si-price').value); const baseAbs=qtyRaw*unit_price; const discount_text=tr.querySelector('.si-discount')?.value||''; const line_discount=calcLineDiscount(discount_text,baseAbs);
     return {product_code:code||name, product_name:name, qty, unit_price, line_discount, discount_text, line_total:sign*Math.max(0,baseAbs-line_discount)};
   }).filter(x=>x.product_name && x.qty!==0);
 }
 
 function getSalePaymentBreakdown(){
   return [
-    {payment_method:'cash',amount:Number(q('saleCashAmount')?.value||0)},
-    {payment_method:'bank_transfer',amount:Number(q('saleBankAmount')?.value||0)},
-    {payment_method:'card',amount:Number(q('saleCardAmount')?.value||0)}
+    {payment_method:'cash',amount:moneyVal(q('saleCashAmount')?.value)},
+    {payment_method:'bank_transfer',amount:moneyVal(q('saleBankAmount')?.value)},
+    {payment_method:'card',amount:moneyVal(q('saleCardAmount')?.value)}
   ].filter(x=>x.amount>0);
 }
 function detectSalePaymentMethod(balanceDue=0){
@@ -2173,11 +2210,11 @@ function renderSaleStockInfo(productCode){
 function updateSaleTotal(){
   let subtotal=0;
   [...q('saleItemsBody').querySelectorAll('tr')].forEach(tr=>{
-    const qtyRaw=Math.abs(Number(tr.querySelector('.si-qty').value||0)); const sign=tr.querySelector('.si-kind')?.value==='return'?-1:1; const qty=sign*qtyRaw; const price=Number(tr.querySelector('.si-price').value||0); const code=(tr.querySelector('.si-code')?.value||'').split('|')[0].trim(); const baseAbs=qtyRaw*price; const line=sign*Math.max(0,baseAbs-calcLineDiscount(tr.querySelector('.si-discount')?.value||'',baseAbs)); subtotal+=line; tr.classList.toggle('return-line',sign<0);
+    const qtyRaw=Math.abs(Number(tr.querySelector('.si-qty').value||0)); const sign=tr.querySelector('.si-kind')?.value==='return'?-1:1; const qty=sign*qtyRaw; const price=moneyVal(tr.querySelector('.si-price').value); const code=(tr.querySelector('.si-code')?.value||'').split('|')[0].trim(); const baseAbs=qtyRaw*price; const line=sign*Math.max(0,baseAbs-calcLineDiscount(tr.querySelector('.si-discount')?.value||'',baseAbs)); subtotal+=line; tr.classList.toggle('return-line',sign<0);
     const mv=marginValue(code,price)*qty, mp=marginPct(code,price); if(tr.querySelector('.si-margin')) tr.querySelector('.si-margin').innerHTML=`<b class="${mv>=0?'stock-positive':'stock-negative'}">${money(mv)}</b>`; if(tr.querySelector('.si-margin-pct')) tr.querySelector('.si-margin-pct').innerHTML=`<span class="${mv>=0?'stock-positive':'stock-negative'}">${money(mp)}%</span>`;
     tr.querySelector('.si-line').innerHTML=`<b>${money(line)}</b>`;
   });
-  const discount=Number(q('saleDiscount').value||0); const total=subtotal-discount;
+  const discount=moneyVal(q('saleDiscount').value); const total=subtotal-discount;
   syncPaymentPreset(total);
   const rawPaid=getSalePaymentBreakdown().reduce((a,x)=>a+Number(x.amount||0),0); const isRefund=total<0; const required=isRefund?Math.abs(total):total; const over=Math.max(0,rawPaid-required); const bal=isRefund?Math.max(0,required-rawPaid):Math.max(0,total-rawPaid);
   q('salePaidAmount').value=money(isRefund?-rawPaid:rawPaid);
@@ -2318,7 +2355,7 @@ async function printSale(id){
 
 function addProformaRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="pr-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillProformaRow(this)}" onchange="fillProformaRow(this)"><div class="mini pr-note"></div></td><td><input class="pr-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pr-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updateProformaTotal()"></td><td><input class="pr-price" type="number" step="1" min="0" value="${item.unit_price||0}" oninput="updateProformaTotal()"></td><td class="pr-margin">0.00</td><td class="pr-margin-pct">0%</td><td><input class="pr-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateProformaTotal()"></td><td class="pr-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateProformaTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="pr-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillProformaRow(this)}" onchange="fillProformaRow(this)"><div class="mini pr-note"></div></td><td><input class="pr-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pr-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updateProformaTotal()"></td><td><input class="pr-price" type="text" inputmode="decimal" value="${item.unit_price||0}" oninput="updateProformaTotal()"></td><td class="pr-margin">0.00</td><td class="pr-margin-pct">0%</td><td><input class="pr-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateProformaTotal()"></td><td class="pr-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateProformaTotal()">حذف</button></td>`;
   q('proformaItemsBody').appendChild(tr); updateProformaTotal();
 }
 function fillProformaRow(input){
@@ -2344,13 +2381,13 @@ function addOrIncrementProformaProduct(p, qty=1){
 function getProformaItems(){
   return [...q('proformaItemsBody').querySelectorAll('tr')].map(tr=>{
     let code=tr.querySelector('.pr-code').value.trim(); let name=tr.querySelector('.pr-name').value.trim(); const picked=findProductByInput(code); if(picked){code=picked.code||code; if(!name) name=picked.name||name;} if(code.includes('|')) code=code.split('|')[0].trim();
-    const qty=Number(tr.querySelector('.pr-qty').value||0), unit_price=Number(tr.querySelector('.pr-price').value||0), base=qty*unit_price, discount_text=tr.querySelector('.pr-discount').value||'', line_discount=calcLineDiscount(discount_text,base);
+    const qty=Number(tr.querySelector('.pr-qty').value||0), unit_price=moneyVal(tr.querySelector('.pr-price').value), base=qty*unit_price, discount_text=tr.querySelector('.pr-discount').value||'', line_discount=calcLineDiscount(discount_text,base);
     return {product_code:code||name,product_name:name,qty,unit_price,line_discount,discount_text,line_total:Math.max(0,base-line_discount)};
   }).filter(x=>x.product_name&&x.qty>0);
 }
 function updateProformaTotal(){
-  let subtotal=0; [...q('proformaItemsBody').querySelectorAll('tr')].forEach(tr=>{const qty=Number(tr.querySelector('.pr-qty').value||0), price=Number(tr.querySelector('.pr-price').value||0), code=(tr.querySelector('.pr-code')?.value||'').split('|')[0].trim(), base=qty*price, line=Math.max(0,base-calcLineDiscount(tr.querySelector('.pr-discount').value||'',base)); subtotal+=line; const mv=marginValue(code,price)*qty, mp=marginPct(code,price); if(tr.querySelector('.pr-margin')) tr.querySelector('.pr-margin').innerHTML=`<b class="${mv>=0?'stock-positive':'stock-negative'}">${money(mv)}</b>`; if(tr.querySelector('.pr-margin-pct')) tr.querySelector('.pr-margin-pct').innerHTML=`<span class="${mv>=0?'stock-positive':'stock-negative'}">${money(mp)}%</span>`; tr.querySelector('.pr-line').innerHTML=`<b>${money(line)}</b>`});
-  const total=Math.max(0,subtotal-Number(q('proformaDiscount').value||0)); q('proformaTotal').textContent=money(total);
+  let subtotal=0; [...q('proformaItemsBody').querySelectorAll('tr')].forEach(tr=>{const qty=Number(tr.querySelector('.pr-qty').value||0), price=moneyVal(tr.querySelector('.pr-price').value), code=(tr.querySelector('.pr-code')?.value||'').split('|')[0].trim(), base=qty*price, line=Math.max(0,base-calcLineDiscount(tr.querySelector('.pr-discount').value||'',base)); subtotal+=line; const mv=marginValue(code,price)*qty, mp=marginPct(code,price); if(tr.querySelector('.pr-margin')) tr.querySelector('.pr-margin').innerHTML=`<b class="${mv>=0?'stock-positive':'stock-negative'}">${money(mv)}</b>`; if(tr.querySelector('.pr-margin-pct')) tr.querySelector('.pr-margin-pct').innerHTML=`<span class="${mv>=0?'stock-positive':'stock-negative'}">${money(mp)}%</span>`; tr.querySelector('.pr-line').innerHTML=`<b>${money(line)}</b>`});
+  const total=Math.max(0,subtotal-moneyVal(q('proformaDiscount').value)); q('proformaTotal').textContent=money(total);
 }
 function resetProformaForm(){editingProformaId=null; q('proformaForm').reset(); q('proformaItemsBody').innerHTML=''; addProformaRow(); setToday(); q('proformaSubmitBtn').textContent='حفظ الفاتورة المبدئية'; q('proformaCancelEditBtn').classList.add('hidden'); updateProformaTotal();}
 function renderProformas(){
@@ -2374,7 +2411,7 @@ function addOrIncrementPurchaseProduct(p, qty=1){
 
 function addPurchaseRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="number" step="1" min="0" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
   q('purchaseItemsBody').appendChild(tr); updatePurchaseTotal();
 }
 function getPurchaseItems(){
@@ -2383,17 +2420,17 @@ function getPurchaseItems(){
     const picked=findProductByInput(code);
     if(picked){ code=picked.code||code; if(!name) name=picked.name||name; }
     if(code.includes('|')) code=code.split('|')[0].trim();
-    const qty=Number(tr.querySelector('.pi-qty').value||0); const unit_cost=Number(tr.querySelector('.pi-cost').value||0);
+    const qty=Number(tr.querySelector('.pi-qty').value||0); const unit_cost=moneyVal(tr.querySelector('.pi-cost').value);
     return {product_code:code||name, product_name:name, qty, unit_cost, line_total:qty*unit_cost};
   }).filter(x=>x.product_name && x.qty>0);
 }
 function updatePurchaseTotal(){
   let subtotal=0;
   [...q('purchaseItemsBody').querySelectorAll('tr')].forEach(tr=>{
-    const qty=Number(tr.querySelector('.pi-qty').value||0); const cost=Number(tr.querySelector('.pi-cost').value||0); const line=qty*cost; subtotal+=line;
+    const qty=Number(tr.querySelector('.pi-qty').value||0); const cost=moneyVal(tr.querySelector('.pi-cost').value); const line=qty*cost; subtotal+=line;
     tr.querySelector('.pi-line').innerHTML=`<b>${money(line)}</b>`;
   });
-  const discount=Number(q('purchaseDiscount').value||0); q('purchaseTotal').textContent=money(Math.max(0, subtotal-discount));
+  const discount=moneyVal(q('purchaseDiscount').value); q('purchaseTotal').textContent=money(Math.max(0, subtotal-discount));
 }
 async function updateStock(location_id, item, purchaseId){
   const code=encodeURIComponent(item.product_code);
@@ -2470,12 +2507,12 @@ function currentSaleLine(){return lastFocusedSaleRow || q('saleItemsBody')?.last
 function editSelectedSaleLinePrice(){
   const tr=currentSaleLine(); if(!tr){toast('لا يوجد صنف لتعديل السعر');return;}
   const inp=tr.querySelector('.si-price'); const v=prompt('اكتب السعر الجديد', inp?.value||'0');
-  if(v==null) return; const n=Number(v); if(isNaN(n)||n<0){toast('السعر غير صحيح');return;}
+  if(v==null) return; const n=moneyVal(v); if(isNaN(n)||n<0){toast('السعر غير صحيح');return;}
   inp.value=n; updateSaleTotal(); inp.focus();
 }
 function applyDiscountCoupon(){
   const raw=prompt('اكتب قيمة الخصم أو نسبة مثل 10%',''); if(raw==null) return;
-  let subtotal=0; [...q('saleItemsBody').querySelectorAll('tr')].forEach(tr=>{const qty=Number(tr.querySelector('.si-qty')?.value||0), price=Number(tr.querySelector('.si-price')?.value||0), base=qty*price; subtotal+=Math.max(0,base-calcLineDiscount(tr.querySelector('.si-discount')?.value||'',base));});
+  let subtotal=0; [...q('saleItemsBody').querySelectorAll('tr')].forEach(tr=>{const qty=Number(tr.querySelector('.si-qty')?.value||0), price=moneyVal(tr.querySelector('.si-price')?.value), base=qty*price; subtotal+=Math.max(0,base-calcLineDiscount(tr.querySelector('.si-discount')?.value||'',base));});
   q('saleDiscount').value=calcLineDiscount(raw,subtotal); updateSaleTotal();
 }
 function openQuickProductModal(){q('quickProductModal').classList.add('show'); setTimeout(()=>q('quickProductCode')?.focus(),50)}
@@ -2487,7 +2524,7 @@ async function saveQuickProduct(){
     showLoading(true);
     let p=products.find(x=>String(x.code)===String(code));
     if(!p){
-      await api('pos_products',{method:'POST',body:{code,name,retail_price:Number(q('quickProductRetail').value||0),purchase_price:Number(q('quickProductCost').value||0),barcode:q('quickProductBarcode').value.trim()||null,category:q('quickProductCategory').value.trim()||null,active:true,updated_at:new Date().toISOString()}});
+      await api('pos_products',{method:'POST',body:{code,name,retail_price:moneyVal(q('quickProductRetail').value),purchase_price:moneyVal(q('quickProductCost').value),barcode:q('quickProductBarcode').value.trim()||null,category:q('quickProductCategory').value.trim()||null,active:true,updated_at:new Date().toISOString()}});
       await loadAll(); p=products.find(x=>String(x.code)===String(code));
       toast('تم إنشاء الصنف وإضافته للفاتورة');
     }else toast('الكود موجود مسبقًا، تمت إضافته للفاتورة');
@@ -2501,7 +2538,7 @@ function calcPress(v){if(calcExpr==='0')calcExpr=''; calcExpr+=v; calcUpdate()}
 function calcClear(){calcExpr=''; calcUpdate()}
 function calcBack(){calcExpr=calcExpr.slice(0,-1); calcUpdate()}
 function calcEquals(){try{const safe=calcExpr.replace(/[^0-9+\-*/.()]/g,''); calcExpr=String(Function('return ('+safe+')')()); calcUpdate()}catch(e){toast('عملية غير صحيحة')}}
-function calcCopyToPrice(){calcEquals(); const tr=currentSaleLine(); const inp=tr?.querySelector('.si-price'); if(inp){inp.value=Number(q('calcDisplay').value||0); updateSaleTotal(); inp.focus();}else toast('اختر سطر صنف أولاً')}
+function calcCopyToPrice(){calcEquals(); const tr=currentSaleLine(); const inp=tr?.querySelector('.si-price'); if(inp){inp.value=moneyVal(q('calcDisplay').value); updateSaleTotal(); inp.focus();}else toast('اختر سطر صنف أولاً')}
 
 function closeSaleReturnModal(){q('saleReturnModal').classList.remove('show')}
 async function openSaleReturn(id){
@@ -2584,11 +2621,11 @@ q('saleReturnForm').addEventListener('submit', async e=>{
 
 
 
-q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_finance_accounts',{method:'POST',body:{name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:Number(q('financeOpeningBalance').value||0),notes:q('financeAccountNotes').value.trim()||null}});e.target.reset();toast('تم حفظ الحساب');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message)}finally{showLoading(false);window.__busy=false}});
-q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=Number(q('financeTransferAmount').value||0),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await loadAll();}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
-q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={expense_date:q('expenseDate').value,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:Number(q('expenseAmount').value||0),notes:q('expenseNotes').value.trim()||null};const r=await api('pos_expenses',{method:'POST',body});await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset();setToday();toast('تم حفظ المصروف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
-q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_employees',{method:'POST',body:{name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:Number(q('employeeMonthlySalary').value||0)}});e.target.reset();toast('تم حفظ الموظف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message)}finally{showLoading(false);window.__busy=false}});
-q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:Number(q('salaryAmount').value||0),notes:q('salaryNotes').value.trim()||null};const r=await api('pos_salary_payments',{method:'POST',body});await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب موظف');e.target.reset();setToday();toast('تم دفع المرتب');await loadAll();}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_finance_accounts',{method:'POST',body:{name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:moneyVal(q('financeOpeningBalance').value),notes:q('financeAccountNotes').value.trim()||null}});e.target.reset();toast('تم حفظ الحساب');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=moneyVal(q('financeTransferAmount').value),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await loadAll();}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={expense_date:q('expenseDate').value,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null};const r=await api('pos_expenses',{method:'POST',body});await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset();setToday();toast('تم حفظ المصروف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_employees',{method:'POST',body:{name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:moneyVal(q('employeeMonthlySalary').value)}});e.target.reset();toast('تم حفظ الموظف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:moneyVal(q('salaryAmount').value),notes:q('salaryNotes').value.trim()||null};const r=await api('pos_salary_payments',{method:'POST',body});await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب موظف');e.target.reset();setToday();toast('تم دفع المرتب');await loadAll();}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 q('settingsForm')?.addEventListener('submit',e=>{
   e.preventDefault();
@@ -2620,7 +2657,7 @@ q('customerForm').addEventListener('submit', async e=>{
   if(window.__busy) return; window.__busy=true;
   try{
     showLoading(true);
-    const opening=Math.abs(Number(q('customerOpening').value||0));
+    const opening=Math.abs(moneyVal(q('customerOpening').value));
     const created=await api('pos_customers',{method:'POST',body:{name:q('customerName').value.trim(),phone:q('customerPhone').value.trim()||null,address:q('customerAddress').value.trim()||null,notes:q('customerNotes').value.trim()||null,active:true}});
     const c=created[0];
     if(opening>0){
@@ -2637,7 +2674,7 @@ q('customerPaymentForm').addEventListener('submit', async e=>{
   if(window.__busy) return; window.__busy=true;
   try{
     showLoading(true);
-    const amount=Number(q('customerPaymentAmount').value||0);
+    const amount=moneyVal(q('customerPaymentAmount').value);
     const method=typeLabel(q('customerPaymentMethod').value);
     const notes=q('customerPaymentNotes').value.trim();
     await api('pos_customer_ledger',{method:'POST',body:{customer_id:q('customerPaymentCustomer').value,entry_date:q('customerPaymentDate').value,entry_type:'payment',description:notes||`دفعة زبون - ${method}`,debit:0,credit:amount}});
@@ -2654,7 +2691,7 @@ q('saleForm').addEventListener('submit', async e=>{
   if(!items.length){toast('أضف صنف واحد على الأقل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   const location_id=q('saleLocation').value; if(!location_id){toast('اختر فرع البيع','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   updateSaleTotal();
-  const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=Number(q('saleDiscount').value||0); const total=subtotal-discount;
+  const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=moneyVal(q('saleDiscount').value); const total=subtotal-discount;
   const payRows=getSalePaymentBreakdown(); const rawPaid=payRows.reduce((a,x)=>a+Number(x.amount||0),0); const isRefundInvoice=total<0; const refundRequired=Math.abs(total);
   if(!isRefundInvoice && rawPaid>total){toast('المدفوع أكبر من إجمالي الفاتورة. صحّح مبالغ الدفع قبل الحفظ.','warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   if(isRefundInvoice && Math.abs(rawPaid-refundRequired)>0.001){toast('هذه فاتورة مرتجع. يجب إدخال مبلغ الاسترداد كاملًا: '+money(refundRequired)+' '+APP_CONFIG.currency,'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
@@ -2717,8 +2754,8 @@ q('productForm').addEventListener('submit', async e=>{
       reorder_point:Number(q('productReorderPoint').value||0),
       category:q('productCategory').value.trim()||null,
       supplier_id:q('productSupplier').value||null,
-      purchase_price:Number(q('productPurchasePrice').value||0),
-      retail_price:Number(q('productRetailPrice').value||0),
+      purchase_price:moneyVal(q('productPurchasePrice').value),
+      retail_price:moneyVal(q('productRetailPrice').value),
       active:true,
       updated_at:new Date().toISOString()
     };
@@ -2743,7 +2780,7 @@ q('supplierForm').addEventListener('submit', async e=>{
   if(window.__busy) return; window.__busy=true;
   try{
     showLoading(true);
-    const opening=Math.abs(Number(q('supplierOpening').value||0));
+    const opening=Math.abs(moneyVal(q('supplierOpening').value));
     const supplier = await api('pos_suppliers',{method:'POST',body:{name:q('supplierName').value.trim(),phone:q('supplierPhone').value.trim(),notes:q('supplierNotes').value.trim(),opening_balance:opening}});
     const s=supplier[0];
     if(opening>0){
@@ -2762,7 +2799,7 @@ q('paymentForm').addEventListener('submit', async e=>{
   if(window.__busy) return; window.__busy=true;
   try{
     showLoading(true);
-    const body={supplier_id:q('paymentSupplier').value,payment_date:q('paymentDate').value,amount:Number(q('paymentAmount').value),payment_method:q('paymentMethod').value,notes:q('paymentNotes').value.trim()};
+    const body={supplier_id:q('paymentSupplier').value,payment_date:q('paymentDate').value,amount:moneyVal(q('paymentAmount').value),payment_method:q('paymentMethod').value,notes:q('paymentNotes').value.trim()};
     const pay=await api('pos_supplier_payments',{method:'POST',body});
     await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.payment_date,entry_type:'payment',description:body.notes||'دفعة للمورد',debit:body.amount,credit:0,reference_table:'pos_supplier_payments',reference_id:pay[0].id}});
     await addFinanceMovement(q('paymentFinanceAccount')?.value||defaultFinanceAccountFor(body.payment_method),'out','supplier_payment',body.amount,body.payment_date,'pos_supplier_payments',pay[0].id,body.notes||'دفعة للمورد');
@@ -2808,7 +2845,7 @@ async function reversePurchaseEffects(){
 
 q('proformaForm')?.addEventListener('submit',async e=>{
   e.preventDefault(); const items=getProformaItems(); if(!items.length){toast('أضف صنف واحد على الأقل');return;}
-  try{showLoading(true); const subtotal=items.reduce((a,x)=>a+Number(x.line_total||0),0), discount=Number(q('proformaDiscount').value||0), total=Math.max(0,subtotal-discount); const body={proforma_no:q('proformaNo').value.trim()||null,proforma_date:q('proformaDate').value,location_id:q('proformaLocation').value,customer_id:q('proformaCustomer').value||null,customer_name:q('proformaCustomerName').value.trim()||null,customer_phone:q('proformaCustomerPhone').value.trim()||null,subtotal,discount,total,status:'draft',notes:q('proformaNotes').value.trim()||null}; let id=editingProformaId; if(id){await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{...body,updated_at:new Date().toISOString()}}); await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});}else{const pr=await api('pos_proformas',{method:'POST',body}); id=pr[0].id;} await api('pos_proforma_items',{method:'POST',body:items.map(it=>({...it,proforma_id:id}))}); resetProformaForm(); toast('تم حفظ الفاتورة المبدئية'); await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المبدئية: '+err.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}
+  try{showLoading(true); const subtotal=items.reduce((a,x)=>a+Number(x.line_total||0),0), discount=moneyVal(q('proformaDiscount').value), total=Math.max(0,subtotal-discount); const body={proforma_no:q('proformaNo').value.trim()||null,proforma_date:q('proformaDate').value,location_id:q('proformaLocation').value,customer_id:q('proformaCustomer').value||null,customer_name:q('proformaCustomerName').value.trim()||null,customer_phone:q('proformaCustomerPhone').value.trim()||null,subtotal,discount,total,status:'draft',notes:q('proformaNotes').value.trim()||null}; let id=editingProformaId; if(id){await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{...body,updated_at:new Date().toISOString()}}); await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});}else{const pr=await api('pos_proformas',{method:'POST',body}); id=pr[0].id;} await api('pos_proforma_items',{method:'POST',body:items.map(it=>({...it,proforma_id:id}))}); resetProformaForm(); toast('تم حفظ الفاتورة المبدئية'); await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المبدئية: '+err.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}
 });
 
 q('purchaseForm').addEventListener('submit', async e=>{
@@ -2819,8 +2856,8 @@ q('purchaseForm').addEventListener('submit', async e=>{
   try{
     showLoading(true);
     updatePurchaseTotal();
-    const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=Number(q('purchaseDiscount').value||0); const total=Math.max(0, subtotal-discount);
-    const purchasePaid=Number(q('purchasePaidAmount')?.value||0); const purchasePayMethod=q('purchasePaymentMethod')?.value||'cash'; const body={supplier_id:q('purchaseSupplier').value,location_id:q('purchaseLocation').value,invoice_no:q('purchaseInvoiceNo').value.trim(),purchase_date:q('purchaseDate').value,subtotal,discount,total,paid_amount:purchasePaid,status:'posted',notes:q('purchaseNotes').value.trim()};
+    const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=moneyVal(q('purchaseDiscount').value); const total=Math.max(0, subtotal-discount);
+    const purchasePaid=moneyVal(q('purchasePaidAmount')?.value); const purchasePayMethod=q('purchasePaymentMethod')?.value||'cash'; const body={supplier_id:q('purchaseSupplier').value,location_id:q('purchaseLocation').value,invoice_no:q('purchaseInvoiceNo').value.trim(),purchase_date:q('purchaseDate').value,subtotal,discount,total,paid_amount:purchasePaid,status:'posted',notes:q('purchaseNotes').value.trim()};
     let purchaseId=editingPurchaseId;
     if(editingPurchaseId){
       await reversePurchaseEffects();
@@ -3237,7 +3274,7 @@ const CTX_BUILDERS={
     return [{head:p?`${code} — ${p.name||''}`:code},
       {label:'مشاهدة المنتج',icon:'ti-eye',action:()=>{selectedProductCode=code;viewSelectedProduct()}},
       {label:'حركات المنتج',icon:'ti-history',action:()=>openProductMovements(code)},
-      {label:'تعديل السعر',icon:'ti-edit',action:()=>{const inp=tr.querySelector('.pr-price'); const v=prompt('اكتب السعر الجديد',inp.value||0); if(v!=null){inp.value=Number(v)||0; updateProformaTotal();}}},
+      {label:'تعديل السعر',icon:'ti-edit',action:()=>{const inp=tr.querySelector('.pr-price'); const v=prompt('اكتب السعر الجديد',inp.value||0); if(v!=null){inp.value=moneyVal(v); updateProformaTotal();}}},
       {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.pr-qty'); qn.value=Number(qn.value||0)+1; updateProformaTotal();}},
       {sep:true},{label:'حذف من المبدئية',icon:'ti-trash',action:()=>{tr.remove(); updateProformaTotal();}}];
   },
@@ -3245,7 +3282,7 @@ const CTX_BUILDERS={
     return [{head:p?`${code} — ${p.name||''}`:code},
       {label:'مشاهدة المنتج',icon:'ti-eye',action:()=>{selectedProductCode=code;viewSelectedProduct()}},
       {label:'حركات المنتج',icon:'ti-history',action:()=>openProductMovements(code)},
-      {label:'تعديل سعر الشراء',icon:'ti-edit',action:()=>{const inp=tr.querySelector('.pi-cost'); const v=prompt('اكتب سعر الشراء الجديد',inp.value||0); if(v!=null){inp.value=Number(v)||0; updatePurchaseTotal();}}},
+      {label:'تعديل سعر الشراء',icon:'ti-edit',action:()=>{const inp=tr.querySelector('.pi-cost'); const v=prompt('اكتب سعر الشراء الجديد',inp.value||0); if(v!=null){inp.value=moneyVal(v); updatePurchaseTotal();}}},
       {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.pi-qty'); qn.value=Number(qn.value||0)+1; updatePurchaseTotal();}},
       {sep:true},{label:'حذف من الفاتورة',icon:'ti-trash',action:()=>{tr.remove(); updatePurchaseTotal();}}];
   },
@@ -3288,7 +3325,7 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); setupDecimalInputs(); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
