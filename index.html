@@ -284,6 +284,7 @@
     #sales .pos-items-card th:nth-child(2),#sales .pos-items-card td:nth-child(2){min-width:300px;width:34%}
     #saleItemsBody textarea.si-name{min-height:54px;line-height:1.35;resize:vertical;white-space:normal;overflow:auto}
     .print-preview-card{width:min(980px,98vw);height:92vh;display:flex;flex-direction:column;padding:12px}
+    #productViewModal,#movementsModal{z-index:120!important}
     .print-preview-frame{width:100%;flex:1;border:1px solid var(--border);border-radius:12px;background:#fff}
     #sales .pos-invoice-head{padding:10px 12px}
     #sales .pos-head-grid{gap:8px;grid-template-columns:repeat(6,minmax(0,1fr))}
@@ -1743,19 +1744,25 @@ async function openProductMovements(code){
 }
 function closeMovementsModal(){q('movementsModal').classList.remove('show')}
 function productStockSummaryText(code,mode='all'){
-  const p=productByCode(code)||products.find(x=>String(x.code)===String(code));
-  const rows=stock.filter(st=>String(st.product_code)===String(code));
+  const clean=String(code||'').split(/\s+/)[0].trim();
+  const p=productByCode(clean)||products.find(x=>String(x.code||'').toLowerCase()===clean.toLowerCase());
+  const productCode=p?.code||clean;
+  const rows=stock.filter(st=>String(st.product_code||'').toLowerCase()===String(productCode||'').toLowerCase());
   const wanted=rows.filter(st=>{const l=locations.find(x=>x.id===st.location_id); if(mode==='branches') return l?.location_type==='branch'||l?.is_sales_location; if(mode==='warehouses') return l?.location_type==='warehouse'; return true;});
-  const lines=wanted.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `${l?.name||st.location_id}: ${money(st.qty)}`;});
-  return `${p?.name||code}
-الكود: ${code}
-سعر الشراء: ${money(productCost(code))} ${APP_CONFIG.currency}
+  let lines=wanted.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `${l?.name||st.location_id}: ${money(st.qty)}`;});
+  if(!lines.length && p){
+    const fallback=[['فرع 11 يونيو',p.stock_11_june],['فرع السراج',p.stock_sarraj],['مخزن جنزور',p.stock_janzour],['الإجمالي',p.total_stock]].filter(x=>Number(x[1]||0)!==0);
+    lines=fallback.map(x=>`${x[0]}: ${money(x[1])}`);
+  }
+  return `${p?.name||productCode}
+الكود: ${productCode}
+سعر الشراء: ${money(productCost(productCode))} ${APP_CONFIG.currency}
 سعر البيع: ${money(p?.retail_price||0)} ${APP_CONFIG.currency}
 
 ${lines.join(String.fromCharCode(10))||'لا يوجد رصيد مخزون مسجل لهذا الصنف.'}`;
 }
-function showProductStockSummary(code,mode='all'){alert(productStockSummaryText(code,mode));}
-function viewProductFromCode(code){selectedProductCode=code; viewSelectedProduct();}
+function showProductStockSummary(code,mode='all'){closeSaleProductPicker(); setTimeout(()=>alert(productStockSummaryText(code,mode)),50);}
+function viewProductFromCode(code){closeSaleProductPicker(); selectedProductCode=code; setTimeout(()=>viewSelectedProduct(),50);}
 
 function renderSuppliers(){
   const term=(q('supplierSearch')?.value||'').trim();
@@ -3137,10 +3144,10 @@ const CTX_BUILDERS={
       {sep:true},
       {label:'إضافة إلى فاتورة بيع',icon:'ti-shopping-cart-plus',action:()=>{if(!p)return; openTab('sales'); addOrIncrementSaleProduct(p,1); toast('تمت إضافة المنتج إلى فاتورة البيع');}}];
   },
-  salePickerBody(tr){const code=tr.querySelector('td .ltr b,td b')?.innerText?.trim() || tr.children[0]?.innerText?.split('\n')[0]?.trim(); if(!code) return []; const p=products.find(x=>String(x.code)===String(code));
+  salePickerBody(tr){const code=(tr.children[0]?.querySelector('b')?.textContent||tr.children[0]?.innerText||'').split(/\s+/)[0].trim(); if(!code) return []; const p=products.find(x=>String(x.code||'').toLowerCase()===String(code).toLowerCase());
     return [{head:p?`${code} — ${p.name||''}`:code},
       {label:'مشاهدة تفاصيل المنتج',icon:'ti-eye',action:()=>viewProductFromCode(code)},
-      {label:'حركات المنتج / التاريخ',icon:'ti-history',action:()=>openProductMovements(code)},
+      {label:'حركات المنتج / التاريخ',icon:'ti-history',action:()=>{closeSaleProductPicker(); setTimeout(()=>openProductMovements(code),50)}},
       {label:'المخزون الحالي',icon:'ti-stack-2',action:()=>showProductStockSummary(code,'all')},
       {label:'الكمية في كل فرع',icon:'ti-building-store',action:()=>showProductStockSummary(code,'branches')},
       {label:'الكمية في كل مخزن',icon:'ti-building-warehouse',action:()=>showProductStockSummary(code,'warehouses')},
