@@ -431,7 +431,7 @@
             <div><label>حد الطلب</label><input id="productReorderPoint" type="number" step="1" value="0"></div>
             <div><label>سعر الشراء</label><input id="productPurchasePrice" type="number" step="1" value="0"></div>
             <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="number" step="1" value="0"></div>
-            <div class="row"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
+            <div class="row"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="duplicateSelectedProduct()">نسخ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
           </form>
           <p class="mini">يمكنك إضافة التصنيف عند إنشاء المنتج. إذا كتبت كود منتج موجود سيتم تعديل بياناته.</p>
         </div>
@@ -472,7 +472,7 @@
                 <b>بحث</b>
                 <input class="grow" id="productBottomSearch" placeholder="بحث سريع داخل المنتجات..." oninput="q('productSearch').value=this.value;renderProducts()">
                 <button class="btn secondary" type="button" onclick="viewSelectedProduct()">مشاهدة</button>
-                <button class="btn secondary" type="button" onclick="editSelectedProduct()">تعديل</button>
+                <button class="btn secondary" type="button" onclick="editSelectedProduct()">تعديل</button><button class="btn secondary" type="button" onclick="duplicateSelectedProduct()">نسخ</button>
                 <button class="btn secondary" type="button" onclick="openSelectedProductMovements()">الحركات</button>
               </div>
             </div>
@@ -540,7 +540,7 @@
             <div class="pos-invoice-head">
               <div class="pos-head-grid">
                 <div><label>زبون موجود</label><select id="saleCustomer" onchange="renderSaleCustomerInfo();updateSaleTotal()"></select></div>
-                <div><label>رقم الفاتورة</label><input id="saleInvoiceNo" class="ltr" readonly tabindex="-1" placeholder="يتم توليده تلقائيًا"></div>
+                <div><label>رقم الفاتورة</label><input id="saleInvoiceNo" class="ltr" readonly tabindex="-1" placeholder="يتم توليده من قاعدة البيانات عند الحفظ"></div>
                 <div><label>فرع البيع</label><select id="saleLocation" required onchange="refreshSaleAvailability();renderSaleStockInfo();renderStatusBar()"></select></div>
                 <div><label>التاريخ</label><input id="saleDate" type="date" required></div>
                 <div class="hidden"><label>طريقة الدفع</label><select id="salePaymentMethod" onchange="updateSaleTotal()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="mixed">مختلط</option><option value="credit">آجل / دين</option></select></div>
@@ -1209,6 +1209,7 @@ let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
 let selectedProductCode=null;
+let productFormMode='create', editingProductCode=null;
 let selectedSaleId=null;
 let activePayInputId="saleCashAmount";
 let saleSaveMode="new";
@@ -1692,18 +1693,53 @@ function addSaleProductFromPicker(code,qtyOverride=null){
 }
 
 function resetProductForm(){
+  productFormMode='create'; editingProductCode=null;
   q('productForm').reset(); q('productPurchasePrice').value=0; q('productRetailPrice').value=0; q('productReorderPoint').value=0;
   q('productSubmitBtn').textContent='حفظ المنتج'; q('productCode').readOnly=false;
 }
 function editProduct(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
+  productFormMode='edit'; editingProductCode=p.code;
   document.querySelector('[data-tab="products"]').click();
   q('productCode').value=p.code||''; q('productName').value=p.name||''; q('productCategory').value=p.category||'';
   q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productColor').value=p.color||''; q('productBarcode').value=p.barcode||''; q('productReorderPoint').value=Number(p.reorder_point||0); q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0);
   const sup=suppliers.find(s=>s.name===p.supplier_name); q('productSupplier').value=sup?.id||'';
   q('productSubmitBtn').textContent='حفظ تعديل المنتج';
-  q('productCode').focus();
+  q('productCode').readOnly=true;
+  q('productName').focus();
 }
+
+
+function nextProductCodeFrom(baseCode){
+  const m=String(baseCode||'').match(/^(.*?)(\d+)$/);
+  if(!m) return String(baseCode||'')+'-COPY';
+  const prefix=m[1], width=m[2].length; let n=Number(m[2])+1;
+  const used=new Set(products.map(p=>String(p.code||'').toLowerCase()));
+  let code='';
+  do{code=prefix+String(n).padStart(width,'0'); n++;}while(used.has(code.toLowerCase()));
+  return code;
+}
+function duplicateProduct(code){
+  const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('اختر منتجًا أولاً','warn'); return;}
+  productFormMode='duplicate'; editingProductCode=null;
+  document.querySelector('[data-tab="products"]').click();
+  q('productCode').readOnly=false;
+  q('productCode').value=nextProductCodeFrom(p.code);
+  q('productName').value=p.name||'';
+  q('productCategory').value=p.category||'';
+  q('productBrand').value=p.brand||'';
+  q('productModel').value=p.model||'';
+  q('productColor').value=p.color||'';
+  q('productBarcode').value=p.barcode||'';
+  q('productReorderPoint').value=Number(p.reorder_point||0);
+  q('productPurchasePrice').value=Number(p.purchase_price||0);
+  q('productRetailPrice').value=Number(p.retail_price||0);
+  const sup=suppliers.find(s=>s.name===p.supplier_name); q('productSupplier').value=sup?.id||'';
+  q('productSubmitBtn').textContent='حفظ المنتج المنسوخ';
+  q('productCode').focus(); q('productCode').select();
+  toast('تم نسخ بيانات المنتج. راجع الكود والباركود ثم احفظ.','success');
+}
+function duplicateSelectedProduct(){const p=getSelectedProduct(); if(p) duplicateProduct(p.code); else toast('اختر منتجًا من الجدول أولاً','warn')}
 
 function movementDocInfo(m){
   const table=m.reference_table||''; const id=m.reference_id||''; let doc=null, no='', seller=(String(m.notes||'').match(/المستخدم:\s*([^|]+)/)?.[1]?.trim()||'غير مسجل'), branch='';
@@ -2397,17 +2433,10 @@ document.addEventListener('keydown',e=>{if(e.key==='F1'||e.key==='?'||e.key==='�
 
 
 
-function makeSaleInvoiceNo(){
-  const nums=sales.map(x=>String(x.invoice_no||'')).filter(x=>/^\d{6}$/.test(x)).map(Number);
-  let n=(nums.length?Math.max(...nums):0)+1;
-  if(n<100000) n=100000;
-  let no=String(n).padStart(6,'0');
-  while(sales.some(x=>String(x.invoice_no||'')===no)){n++; if(n>999999)n=100000; no=String(n).padStart(6,'0');}
-  return no;
-}
+function makeSaleInvoiceNo(){return ''}
 function ensureSaleInvoiceNo(force=false){
   const el=q('saleInvoiceNo'); if(!el) return '';
-  if(force || !el.value) el.value=makeSaleInvoiceNo();
+  if(force || !el.value) el.value='سيولد تلقائيًا';
   return el.value;
 }
 
@@ -2647,7 +2676,7 @@ q('saleForm').addEventListener('submit', async e=>{
   try{
     showLoading(true);
     const customer_id=await ensureSaleCustomer(balance_due);
-    const invoice_no=ensureSaleInvoiceNo(false); const body={invoice_no,sale_date:q('saleDate').value,location_id,customer_id,payment_method:detectSalePaymentMethod(balance_due),subtotal,discount,total,paid_amount:paid,balance_due,status:'posted',notes:q('saleNotes').value.trim()};
+    const invoice_no=editingSaleId ? q('saleInvoiceNo').value.trim() : null; const body={invoice_no,sale_date:q('saleDate').value,location_id,customer_id,payment_method:detectSalePaymentMethod(balance_due),subtotal,discount,total,paid_amount:paid,balance_due,status:'posted',notes:q('saleNotes').value.trim()};
     let saleId=editingSaleId;
     if(editingSaleId){
       await reverseSaleEffects();
@@ -2656,7 +2685,7 @@ q('saleForm').addEventListener('submit', async e=>{
       await api('pos_sale_payments',{method:'DELETE',qs:`?sale_id=eq.${editingSaleId}`}).catch(()=>{});
       await api('pos_finance_movements',{method:'DELETE',qs:`?reference_table=eq.pos_sales&reference_id=eq.${editingSaleId}`}).catch(()=>{});
     }else{
-      const sale=await api('pos_sales',{method:'POST',body}); saleId=sale[0].id;
+      const sale=await api('pos_sales',{method:'POST',body}); saleId=sale[0].id; body.invoice_no=sale[0].invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||'';
     }
     await api('pos_sale_items',{method:'POST',body:items.map(it=>({...it,sale_id:saleId}))});
     const paymentsToSave=payRows.map(r=>({...r,sale_id:saleId,payment_date:body.sale_date}));
@@ -2694,13 +2723,15 @@ q('productForm').addEventListener('submit', async e=>{
       updated_at:new Date().toISOString()
     };
     const exists=await api('pos_products',{qs:`?select=code&code=eq.${encodeURIComponent(code)}&limit=1`});
-    if(exists && exists.length){
+    if(productFormMode==='edit'){
+      if(code!==editingProductCode){toast('لا يمكن تغيير كود منتج موجود من وضع التعديل. استخدم نسخ المنتج لإنشاء كود جديد.','warn'); return;}
       const patch={...body}; delete patch.code;
-      await api('pos_products',{method:'PATCH',qs:`?code=eq.${encodeURIComponent(code)}`,body:patch});
+      await api('pos_products',{method:'PATCH',qs:`?code=eq.${encodeURIComponent(editingProductCode)}`,body:patch});
       toast('تم تعديل المنتج');
     }else{
+      if(exists && exists.length){toast('كود المنتج موجود مسبقًا. اختر كودًا آخر.','warn'); return;}
       await api('pos_products',{method:'POST',body});
-      toast('تم إنشاء المنتج');
+      toast(productFormMode==='duplicate'?'تم إنشاء المنتج المنسوخ':'تم إنشاء المنتج');
     }
     resetProductForm(); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ المنتج: '+err.message+' - إذا ظهر pos_products غير موجود شغل ملف إعداد المنتجات')}
@@ -3148,6 +3179,7 @@ const CTX_BUILDERS={
     return [{head:p?`${code} — ${p.name||''}`:code},
       {label:'مشاهدة المنتج',icon:'ti-eye',action:()=>viewSelectedProduct()},
       {label:'تعديل المنتج',icon:'ti-edit',action:()=>editSelectedProduct()},
+      {label:'نسخ المنتج',icon:'ti-copy',action:()=>duplicateProduct(code)},
       {label:'حركات المنتج',icon:'ti-history',action:()=>openSelectedProductMovements()},
       {sep:true},
       {label:'إضافة إلى فاتورة بيع',icon:'ti-shopping-cart-plus',action:()=>{if(!p)return; openTab('sales'); addOrIncrementSaleProduct(p,1); toast('تمت إضافة المنتج إلى فاتورة البيع');}}];
