@@ -293,6 +293,19 @@
     @media(max-width:1100px){.sales-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#sales .pos-head-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     #saleItemsBody tr.return-line{background:color-mix(in srgb,var(--bad) 8%,var(--card))}
     #saleItemsBody tr.return-line .si-line b,#saleItemsBody tr.return-line .si-qty{color:var(--bad);font-weight:800}
+    /* Cashier mode: keep line items visible and hide internal margin metrics */
+    #sales:not(.supervisor-view) table thead th:nth-child(6),#sales:not(.supervisor-view) table thead th:nth-child(7),
+    #saleItemsBody td.si-margin,#saleItemsBody td.si-margin-pct{display:none!important}
+    #sales .pos-items-card th:nth-child(2),#sales .pos-items-card td:nth-child(2){min-width:360px;width:42%}
+    #saleItemsBody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 45%,transparent);outline-offset:-2px}
+    /* Payment drawer: right-side action drawer, never full-screen overlay */
+    #salePaymentScreen.pos-bottom-bar.payment-open{display:grid;position:fixed;inset:auto 16px 54px auto;width:min(460px,34vw);max-height:calc(100vh - 110px);overflow:auto;z-index:110;grid-template-columns:1fr;box-shadow:0 22px 70px rgba(2,6,23,.28);align-content:start}
+    #salePaymentScreen.payment-open .payment-title,#salePaymentScreen.payment-open .pos-payment-note,#salePaymentScreen.payment-open .pos-mini-keypad{grid-column:1/-1}
+    #salePaymentScreen.payment-open .pos-total-panel,#salePaymentScreen.payment-open .pos-payment-panel,#salePaymentScreen.payment-open .pos-save-panel{grid-template-columns:1fr}
+    #salePaymentScreen.payment-open .quick-pay-buttons{grid-template-columns:1fr 1fr}
+    #paymentBackdrop.show{display:none!important}
+    @media(max-width:1200px){#salePaymentScreen.pos-bottom-bar.payment-open{width:min(420px,46vw)}}
+    @media(max-width:760px){#salePaymentScreen.pos-bottom-bar.payment-open{left:10px;right:10px;bottom:48px;width:auto;max-height:45vh}}
 </style>
 
 <link rel="manifest" href="manifest.webmanifest">
@@ -558,6 +571,7 @@
                 <div class="rail-title">الأصناف</div>
                 <button class="rail-btn" type="button" onclick="openQuickProductModal()"><i class="ti ti-plus"></i><span>إضافة صنف جديد</span></button>
                 <button class="rail-btn" type="button" onclick="editSelectedSaleLinePrice()"><i class="ti ti-edit"></i><span>تعديل سعر الصنف</span></button>
+                <button class="rail-btn" type="button" onclick="toggleSupervisorMargins()"><i class="ti ti-chart-pie"></i><span>الهامش</span></button>
                 <button class="rail-btn" type="button" onclick="toast('طباعة باركود الصنف قريبًا')"><i class="ti ti-barcode"></i><span>طباعة باركود الصنف</span></button>
                 <div class="rail-title">الفاتورة</div>
                 <button class="rail-btn" type="button" onclick="q('saleBarcodeInput').focus()"><i class="ti ti-bolt"></i><span>إضافة سريعة</span></button>
@@ -2147,8 +2161,18 @@ function mergeSaleDuplicateRows(currentTr, productCode){
   }
   return false;
 }
-function handleBarcodeKey(e){if(e.key==='Enter'){e.preventDefault();const p=findProductByCodeOrBarcode(q('saleBarcodeInput').value); if(p){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value=''; q('saleBarcodeInput').focus();}else toast('لم يتم العثور على المنتج أو الباركود');}}
-function handleBarcodeInput(){const v=q('saleBarcodeInput').value.trim(); const p=findProductByCodeOrBarcode(v); if(p && v.length>=4){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value='';}}
+function applyQtyModifier(raw){
+  const m=String(raw||'').trim().match(/^\+(\d+(?:[.,]\d+)?)$/);
+  if(!m) return false;
+  const tr=lastFocusedSaleRow || q('saleItemsBody')?.lastElementChild;
+  if(!tr){toast('لا يوجد سطر لتعديل الكمية','warn');return true;}
+  const inp=tr.querySelector('.si-qty');
+  inp.value=Number(inp.value||0)+moneyVal(m[1]);
+  updateSaleTotal(); updateSaleAvailable(inp); selectSaleItemRow(tr);
+  return true;
+}
+function handleBarcodeKey(e){if(e.key==='Enter'){e.preventDefault();const raw=q('saleBarcodeInput').value.trim(); if(applyQtyModifier(raw)){q('saleBarcodeInput').value=''; q('saleBarcodeInput').focus(); return;} const p=findProductByCodeOrBarcode(raw); if(p){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value=''; q('saleBarcodeInput').focus();}else toast('لم يتم العثور على المنتج أو الباركود');}}
+function handleBarcodeInput(){const v=q('saleBarcodeInput').value.trim(); if(v.startsWith('+')) return; const p=findProductByCodeOrBarcode(v); if(p && v.length>=4){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value='';}}
 
 // Hardware barcode scanner guard: rapid key streams are redirected to the barcode input.
 let scannerBuffer='', scannerLastTs=0;
@@ -2518,6 +2542,41 @@ function openTab(tab){const btn=document.querySelector(`nav button[data-tab="${t
 
 
 q('saleItemsBody')?.addEventListener('focusin',e=>{const tr=e.target.closest('tr'); if(tr) lastFocusedSaleRow=tr;});
+function selectSaleItemRow(tr){
+  if(!tr) return;
+  q('saleItemsBody')?.querySelectorAll('tr').forEach(r=>r.classList.remove('selected-row'));
+  tr.classList.add('selected-row');
+  lastFocusedSaleRow=tr;
+}
+q('saleItemsBody')?.addEventListener('click',e=>{const tr=e.target.closest('tr'); if(tr) selectSaleItemRow(tr);});
+function firstEditableSaleCell(){return q('saleItemsBody')?.querySelector('tr .si-qty, tr .si-code')}
+function focusBarcode(){const el=q('saleBarcodeInput'); if(el){el.focus();el.select?.();}}
+function setupSaleTabFlow(){
+  const ids=['saleCustomer','saleInvoiceNo','salePrintAfterSave','saleNewCustomerName','saleNewCustomerPhone','saleNotes'];
+  ids.forEach(id=>{const el=q(id); if(el) el.tabIndex=-1;});
+  if(q('saleBarcodeInput')) q('saleBarcodeInput').tabIndex=1;
+}
+function toggleSupervisorMargins(){q('sales')?.classList.toggle('supervisor-view');}
+function removeSelectedSaleRow(){
+  const tr=lastFocusedSaleRow;
+  if(!tr || !tr.closest('#saleItemsBody')){toast('اختر سطرًا أولاً','warn');return;}
+  tr.remove(); lastFocusedSaleRow=null; updateSaleTotal(); focusBarcode();
+}
+function focusSelectedQty(){
+  const tr=lastFocusedSaleRow || q('saleItemsBody')?.lastElementChild;
+  const inp=tr?.querySelector('.si-qty');
+  if(inp){selectSaleItemRow(tr); inp.focus(); inp.select();}
+}
+async function instantCashOut(){
+  if(!q('sales')?.classList.contains('active')) return;
+  const items=getSaleItems();
+  if(!items.length){toast('أضف صنفًا أولاً','warn'); focusBarcode(); return;}
+  setFullPayment('cash');
+  saleSaveMode='new';
+  q('salePrintAfterSave').value='yes';
+  q('saleForm').requestSubmit();
+}
+function saleModalOpen(){return !!document.querySelector('#saleProductPickerModal.show,#productViewModal.show,#movementsModal.show,#printPreviewModal.show,#quickProductModal.show,#saleReturnModal.show,#shortcutsModal.show')}
 
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{
   if(q('sales')?.classList.contains('active') && btn.dataset.tab!=='sales' && saleHasContent() && !confirm('يوجد فاتورة بيع غير محفوظة. هل تريد مغادرة الشاشة وفقدانها؟')) return;
@@ -2530,7 +2589,32 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
   if(btn.dataset.tab==='sales'){ if(!editingSaleId && !saleHasContent()){q('saleItemsBody').innerHTML=''; ensureSaleInvoiceNo(false);} setTimeout(()=>q('saleBarcodeInput')?.focus(),50); }
 }));
 window.addEventListener('beforeunload',e=>{ if(saleHasContent()){ e.preventDefault(); e.returnValue=''; } });
-document.addEventListener('keydown',e=>{if(e.key==='F1'||e.key==='?'||e.key==='؟'){e.preventDefault();q('shortcutsModal').classList.toggle('show');} if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else openSaleProductPicker();} if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();} if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();} if(e.key==='F8'){e.preventDefault();focusPay('cash');} if(e.key==='F9'){e.preventDefault();focusPay('bank');} if(e.key==='F10'){e.preventDefault();focusPay('card');} if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();closeQuickProductModal();q('shortcutsModal')?.classList.remove('show');q('calculatorPanel')?.classList.remove('show');}});
+document.addEventListener('keydown',e=>{
+  const salesActive=q('sales')?.classList.contains('active');
+  const tag=(document.activeElement?.tagName||'').toLowerCase();
+  const textFocused=['input','textarea','select'].includes(tag);
+  if(e.key==='F1'||e.key==='?'||e.key==='؟'){e.preventDefault();q('shortcutsModal').classList.toggle('show');return;}
+  if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();closeQuickProductModal();q('shortcutsModal')?.classList.remove('show');q('calculatorPanel')?.classList.remove('show');return;}
+  if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else openSaleProductPicker();return;}
+  if(!salesActive) return;
+  if((e.shiftKey&&e.key==='Enter') || e.code==='NumpadAdd'){e.preventDefault(); instantCashOut(); return;}
+  if((e.key==='/'||e.key==='~') && !saleModalOpen()){e.preventDefault(); focusBarcode(); return;}
+  if(e.key==='Delete' && !textFocused && !saleModalOpen()){e.preventDefault(); removeSelectedSaleRow(); return;}
+  if(e.key==='F2'){e.preventDefault(); focusSelectedQty(); return;}
+  if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();return;}
+  if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();return;}
+  if(e.key==='F8'){e.preventDefault();focusPay('cash');return;}
+  if(e.key==='F9'){e.preventDefault();focusPay('bank');return;}
+  if(e.key==='F10'){e.preventDefault();focusPay('card');return;}
+  if(document.activeElement===q('saleBarcodeInput') && e.key==='Tab'){
+    e.preventDefault();
+    const target=lastFocusedSaleRow?.querySelector('.si-qty') || firstEditableSaleCell();
+    if(target){target.focus(); target.select?.();} else addSaleRowAndFocus();
+    return;
+  }
+  // Broad-spectrum focus: if the cashier types while no field/modal is active, send input to scanner box.
+  if(!textFocused && !saleModalOpen() && e.key.length===1){focusBarcode();}
+});
 
 
 
@@ -3445,8 +3529,8 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setupDecimalInputs(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a19f843f48c4794b',t:'MTc4Mzg1MzczNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
