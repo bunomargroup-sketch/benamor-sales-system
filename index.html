@@ -1963,16 +1963,16 @@ async function deleteStockMovements(referenceTable, referenceId){
   await api('pos_stock_movements',{method:'DELETE',qs:`?reference_table=eq.${referenceTable}&reference_id=eq.${referenceId}`});
 }
 async function adjustStock(location_id, item, qtyChange, movementType, referenceId, notes){
-  const code=encodeURIComponent(item.product_code);
-  const loc=encodeURIComponent(location_id);
-  const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
-  if(found && found.length){
-    const newQty=Number(found[0].qty||0)+Number(qtyChange||0);
-    await api('pos_stock',{method:'PATCH',qs:`?id=eq.${found[0].id}`,body:{qty:newQty,product_name:item.product_name,updated_at:new Date().toISOString()}});
-  }else{
-    await api('pos_stock',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,qty:qtyChange}});
-  }
-  await api('pos_stock_movements',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,movement_type:movementType,qty_change:qtyChange,reference_table:'pos_stock_transfers',reference_id:referenceId,notes}});
+  await rpc('pos_adjust_stock_checked',{
+    p_location_id:location_id,
+    p_product_code:item.product_code,
+    p_product_name:item.product_name,
+    p_qty_change:qtyChange,
+    p_movement_type:movementType,
+    p_reference_table:'pos_stock_transfers',
+    p_reference_id:referenceId,
+    p_notes:notes
+  });
 }
 function renderTransfers(){
   q('transfersBody').innerHTML = transfers.map(t=>{
@@ -2072,15 +2072,16 @@ function printSelectedSale(){const id=getSelectedSaleId(); if(id) printSale(id)}
 function openSelectedSaleReturn(){const id=getSelectedSaleId(); if(id) openSaleReturn(id)}
 function convertSelectedSaleToProforma(){const id=getSelectedSaleId(); if(id) convertSaleToProforma(id)}
 async function adjustStockDoc(location_id, item, qtyChange, movementType, referenceTable, referenceId, notes){
-  const code=encodeURIComponent(item.product_code); const loc=encodeURIComponent(location_id);
-  const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
-  if(found && found.length){
-    const newQty=Number(found[0].qty||0)+Number(qtyChange||0);
-    await api('pos_stock',{method:'PATCH',qs:`?id=eq.${found[0].id}`,body:{qty:newQty,product_name:item.product_name,updated_at:new Date().toISOString()}});
-  }else{
-    await api('pos_stock',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,qty:qtyChange}});
-  }
-  await api('pos_stock_movements',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,movement_type:movementType,qty_change:qtyChange,reference_table:referenceTable,reference_id:referenceId,notes:(notes||'')+(appUser?.identifier?' | المستخدم: '+appUser.identifier:'')}});
+  await rpc('pos_adjust_stock_checked',{
+    p_location_id:location_id,
+    p_product_code:item.product_code,
+    p_product_name:item.product_name,
+    p_qty_change:qtyChange,
+    p_movement_type:movementType,
+    p_reference_table:referenceTable,
+    p_reference_id:referenceId,
+    p_notes:(notes||'')+(appUser?.identifier?' | المستخدم: '+appUser.identifier:'')
+  });
 }
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
@@ -2148,6 +2149,30 @@ function mergeSaleDuplicateRows(currentTr, productCode){
 }
 function handleBarcodeKey(e){if(e.key==='Enter'){e.preventDefault();const p=findProductByCodeOrBarcode(q('saleBarcodeInput').value); if(p){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value=''; q('saleBarcodeInput').focus();}else toast('لم يتم العثور على المنتج أو الباركود');}}
 function handleBarcodeInput(){const v=q('saleBarcodeInput').value.trim(); const p=findProductByCodeOrBarcode(v); if(p && v.length>=4){addOrIncrementSaleProduct(p,1); q('saleBarcodeInput').value='';}}
+
+// Hardware barcode scanner guard: rapid key streams are redirected to the barcode input.
+let scannerBuffer='', scannerLastTs=0;
+document.addEventListener('keydown',e=>{
+  if(!q('sales')?.classList.contains('active')) return;
+  if(e.ctrlKey||e.altKey||e.metaKey) return;
+  const now=performance.now();
+  const rapid=(now-scannerLastTs)<28;
+  scannerLastTs=now;
+  if(!rapid) scannerBuffer='';
+  if(e.key==='Enter'){
+    if(scannerBuffer.length>=5){
+      e.preventDefault();
+      const inp=q('saleBarcodeInput');
+      if(inp){inp.value=scannerBuffer; handleBarcodeKey({key:'Enter',preventDefault(){}});}
+    }
+    scannerBuffer='';
+    return;
+  }
+  if(e.key.length===1){
+    scannerBuffer+=e.key;
+    if(rapid && scannerBuffer.length>=3 && document.activeElement!==q('saleBarcodeInput')) e.preventDefault();
+  }
+},true);
 
 function getSaleItems(){
   return [...q('saleItemsBody').querySelectorAll('tr')].map(tr=>{
@@ -3422,6 +3447,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setupDecimalInputs(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a19eede388a87952',t:'MTc4Mzg0NzU3OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
