@@ -3158,6 +3158,14 @@ q('purchaseForm').addEventListener('submit', async e=>{
     const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=moneyVal(q('purchaseDiscount').value); const total=Math.max(0, subtotal-discount);
     const purchasePaid=moneyVal(q('purchasePaidAmount')?.value); const purchasePayMethod=q('purchasePaymentMethod')?.value||'cash'; validateAccountingForPurchase(total,purchasePaid); const body={supplier_id:q('purchaseSupplier').value,location_id:q('purchaseLocation').value,invoice_no:q('purchaseInvoiceNo').value.trim(),purchase_date:q('purchaseDate').value,subtotal,discount,total,paid_amount:purchasePaid,status:'posted',notes:q('purchaseNotes').value.trim()};
     let purchaseId=editingPurchaseId;
+    if(!editingPurchaseId){
+      const payment={amount:purchasePaid,payment_method:purchasePayMethod,account_id:(q('purchaseFinanceAccount')?.value||defaultFinanceAccountFor(purchasePayMethod))};
+      const idem=(crypto?.randomUUID?.()||('purchase-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+      const saved=await rpc('post_purchase_transaction',{p_purchase:body,p_items:items,p_payment:payment,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
+      purchaseId=saved.id;
+      resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون','success'); await loadAll();
+      return;
+    }
     if(editingPurchaseId){
       await reversePurchaseEffects();
       await api('pos_purchases',{method:'PATCH',qs:`?id=eq.${editingPurchaseId}`,body:{...body,updated_at:new Date().toISOString()}});
@@ -3627,5 +3635,5 @@ function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate
 initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1aa3e0f9c017c52',t:'MTc4Mzk2NjIwNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
