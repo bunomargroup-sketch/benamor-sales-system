@@ -1608,7 +1608,7 @@ function applyPermissions(){
 }
 function renderRoles(){
   if(!q('rolesBody')) return;
-  q('rolesBody').innerHTML=userRoles.map(r=>`<tr><td class="ltr"><b>${r.identifier}</b></td><td>${r.display_name||''}</td><td>${ROLE_LABELS[r.role]||r.role}</td><td>${r.active?'<span class="badge green">نشط</span>':'<span class="badge gray">متوقف</span>'}</td><td>${r.notes||''}</td><td><button class="btn secondary" onclick="editRole('${r.id}')">تعديل</button></td></tr>`).join('') || '<tr><td colspan="6">لا توجد صلاحيات بعد. أول مستخدم يدخل يصبح مدير تلقائيًا.</td></tr>';
+  q('rolesBody').innerHTML=userRoles.map(r=>`<tr><td class="ltr"><b>${esc(r.identifier)}</b></td><td>${esc(r.display_name||'')}</td><td>${esc(ROLE_LABELS[r.role]||r.role)}</td><td>${r.active?'<span class="badge green">نشط</span>':'<span class="badge gray">متوقف</span>'}</td><td>${esc(r.notes||'')}</td><td><button class="btn secondary" onclick="editRole('${String(r.id).replace(/'/g,"\'")}')">تعديل</button></td></tr>`).join('') || '<tr><td colspan="6">لا توجد صلاحيات بعد. أول مستخدم يدخل يصبح مدير تلقائيًا.</td></tr>';
 }
 function editRole(id){
   const r=userRoles.find(x=>x.id===id); if(!r)return;
@@ -1623,7 +1623,7 @@ function renderReorderAlerts(){
 }
 
 function renderLocations(){
-  q('locationsBody').innerHTML = locations.map(l=>`<tr><td><b>${l.name}</b></td><td>${typeLabel(l.location_type)}</td><td>${l.is_sales_location?'<span class="badge green">نعم</span>':'<span class="badge yellow">لا</span>'}</td><td>${l.active?'<span class="badge green">نشط</span>':'<span class="badge gray">غير نشط</span>'}</td><td>${l.notes||''}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد بيانات. شغل ملف SQL.</td></tr>';
+  q('locationsBody').innerHTML = locations.map(l=>`<tr><td><b>${esc(l.name)}</b></td><td>${esc(typeLabel(l.location_type))}</td><td>${l.is_sales_location?'<span class="badge green">نعم</span>':'<span class="badge yellow">لا</span>'}</td><td>${l.active?'<span class="badge green">نشط</span>':'<span class="badge gray">غير نشط</span>'}</td><td>${esc(l.notes||'')}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد بيانات. شغل ملف SQL.</td></tr>';
 }
 
 
@@ -1715,7 +1715,7 @@ function selectProductCategory(cat){
 
 function renderProducts(){
   const filterDefs=[['productCategoryFilter','category','كل التصنيفات'],['productBrandFilter','brand','كل الماركات'],['productColorFilter','color','كل الألوان'],['productSupplierFilter','supplier_name','كل الموردين']];
-  filterDefs.forEach(([id,key,label])=>{const el=q(id); if(el && !el.dataset.ready){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${v}">${v}</option>`).join(''); el.dataset.ready='1';}});
+  filterDefs.forEach(([id,key,label])=>{const el=q(id); if(el && !el.dataset.ready){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''); el.dataset.ready='1';}});
   if(q('productBottomSearch')) q('productBottomSearch').value=q('productSearch')?.value||'';
   const term=(q('productSearch')?.value||'').trim().toLowerCase();
   const cat=q('productCategoryFilter')?.value||'', brand=q('productBrandFilter')?.value||'', color=q('productColorFilter')?.value||'', supplier=q('productSupplierFilter')?.value||'';
@@ -1748,10 +1748,10 @@ function viewSelectedProduct(){
   q('productViewTitle').textContent=p.name||'مشاهدة المنتج';
   q('productViewSub').textContent=p.code||'';
   q('productViewBody').innerHTML=`<div class="grid cards" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-    <div class="card"><h3>الكود</h3><div class="ltr"><b>${p.code||''}</b></div></div>
-    <div class="card"><h3>التصنيف</h3><div>${p.category||''}</div></div>
-    <div class="card"><h3>الماركة</h3><div>${p.brand||''}</div></div>
-    <div class="card"><h3>الموديل</h3><div class="ltr">${p.model||''}</div></div>
+    <div class="card"><h3>الكود</h3><div class="ltr"><b>${esc(p.code||'')}</b></div></div>
+    <div class="card"><h3>التصنيف</h3><div>${esc(p.category||'')}</div></div>
+    <div class="card"><h3>الماركة</h3><div>${esc(p.brand||'')}</div></div>
+    <div class="card"><h3>الموديل</h3><div class="ltr">${esc(p.model||'')}</div></div>
     <div class="card"><h3>اللون</h3><div>${esc(p.color)}</div></div>
     <div class="card"><h3>الباركود</h3><div class="ltr">${esc(p.barcode)}</div></div>
     <div class="card"><h3>حد الطلب</h3><div class="num">${money(p.reorder_point)}</div></div>
@@ -1770,7 +1770,7 @@ function fillPickerSelect(id,key,label){
   const el=q(id); if(!el) return;
   const old=el.value;
   const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort();
-  el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');
+  el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
   if(vals.includes(old)) el.value=old;
 }
 function openSaleProductPicker(){
@@ -1978,7 +1978,7 @@ function viewProductFromCode(code){closeSaleProductPicker(); selectedProductCode
 function renderSuppliers(){
   const term=(q('supplierSearch')?.value||'').trim();
   const rows=suppliers.filter(s=>!term || (s.name||'').includes(term) || (s.phone||'').includes(term));
-  q('suppliersBody').innerHTML = rows.map(s=>`<tr><td><b>${s.name}</b><div class="muted">${s.notes||''}</div></td><td class="ltr">${s.phone||''}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td><td><button class="btn secondary" onclick="openLedger('${s.id}')">كشف الحساب</button></td></tr>`).join('') || '<tr><td colspan="5">لا يوجد موردون بعد.</td></tr>';
+  q('suppliersBody').innerHTML = rows.map(s=>`<tr><td><b>${esc(s.name)}</b><div class="muted">${esc(s.notes||'')}</div></td><td class="ltr">${esc(s.phone||'')}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td><td><button class="btn secondary" onclick="openLedger('${String(s.id).replace(/'/g,"\'")}')">كشف الحساب</button></td></tr>`).join('') || '<tr><td colspan="5">لا يوجد موردون بعد.</td></tr>';
 }
 
 function badgeCustomer(balance){
@@ -1997,43 +1997,43 @@ function renderCustomerLedger(){
   const cid=q('customerLedgerCustomer')?.value||'';
   const rows=customerLedger.filter(l=>l.customer_id===cid).sort((a,b)=> new Date(a.entry_date+'T00:00:00')-new Date(b.entry_date+'T00:00:00') || new Date(a.created_at)-new Date(b.created_at));
   let running=0;
-  const rendered=rows.map(l=>{running += Number(l.debit||0)-Number(l.credit||0); return `<tr><td>${l.entry_date}</td><td>${typeLabel(l.entry_type)}</td><td>${l.description||''}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
+  const rendered=rows.map(l=>{running += Number(l.debit||0)-Number(l.credit||0); return `<tr><td>${esc(l.entry_date)}</td><td>${esc(typeLabel(l.entry_type))}</td><td>${esc(l.description||'')}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
   const bal=rows.reduce((a,l)=>a+Number(l.debit||0)-Number(l.credit||0),0);
   q('customerLedgerBalance').textContent=money(bal); q('customerLedgerStatus').innerHTML=badgeCustomer(bal);
   q('customerLedgerBody').innerHTML = cid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا الزبون.</td></tr>') : '<tr><td colspan="6">اختر الزبون أولاً.</td></tr>';
 }
 
 function fillSupplierSelects(){
-  const options = '<option value="">اختر المورد</option>' + suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const options = '<option value="">اختر المورد</option>' + suppliers.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
   q('ledgerSupplier').innerHTML = options;
   q('paymentSupplier').innerHTML = options;
   q('purchaseSupplier').innerHTML = options;
-  q('productSupplier').innerHTML = '<option value="">بدون مورد</option>' + suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
-  const locOptions = '<option value="">اختر المكان</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  if(q('loginBranch')){const prev=q('loginBranch').value||appUser?.branch_id||''; q('loginBranch').innerHTML='<option value="">اختر الفرع</option>'+locations.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${l.name}</option>`).join(''); if(prev) q('loginBranch').value=prev;}
+  q('productSupplier').innerHTML = '<option value="">بدون مورد</option>' + suppliers.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  const locOptions = '<option value="">اختر المكان</option>' + locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+  if(q('loginBranch')){const prev=q('loginBranch').value||appUser?.branch_id||''; q('loginBranch').innerHTML='<option value="">اختر الفرع</option>'+locations.filter(l=>l.is_sales_location).map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join(''); if(prev) q('loginBranch').value=prev;}
   q('purchaseLocation').innerHTML = locOptions;
   q('transferFrom').innerHTML = locOptions;
   q('transferTo').innerHTML = locOptions;
-  q('stockLocationFilter').innerHTML = '<option value="">كل الفروع والمخازن</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  q('saleLocation').innerHTML = '<option value="">اختر فرع البيع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+  q('stockLocationFilter').innerHTML = '<option value="">كل الفروع والمخازن</option>' + locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+  q('saleLocation').innerHTML = '<option value="">اختر فرع البيع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
   const savedLoc=localStorage.getItem('posLastSaleLocation');
   if(savedLoc && [...q('saleLocation').options].some(o=>o.value===savedLoc)) q('saleLocation').value=savedLoc;
-  q('saleCustomer').innerHTML = '<option value="">زبون نقدي / بدون زبون</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}${Number(c.balance||0)>0?' - دين '+money(c.balance):''}</option>`).join('');
-  if(q('proformaCustomer')) q('proformaCustomer').innerHTML = '<option value="">بدون زبون</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
-  if(q('proformaLocation')) q('proformaLocation').innerHTML = '<option value="">اختر الفرع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  const customerOptions = '<option value="">اختر الزبون</option>' + customers.map(c=>`<option value="${c.id}">${c.name}${c.phone?' - '+c.phone:''}</option>`).join('');
+  q('saleCustomer').innerHTML = '<option value="">زبون نقدي / بدون زبون</option>' + customers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.phone?' - '+esc(c.phone):''}${Number(c.balance||0)>0?' - دين '+money(c.balance):''}</option>`).join('');
+  if(q('proformaCustomer')) q('proformaCustomer').innerHTML = '<option value="">بدون زبون</option>' + customers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.phone?' - '+esc(c.phone):''}</option>`).join('');
+  if(q('proformaLocation')) q('proformaLocation').innerHTML = '<option value="">اختر الفرع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+  const customerOptions = '<option value="">اختر الزبون</option>' + customers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.phone?' - '+esc(c.phone):''}</option>`).join('');
   q('customerPaymentCustomer').innerHTML = customerOptions;
   q('customerLedgerCustomer').innerHTML = customerOptions;
-  q('reportLocation').innerHTML = '<option value="">كل الفروع</option>' + locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+  q('reportLocation').innerHTML = '<option value="">كل الفروع</option>' + locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
   if(q('paymentFinanceAccount')) q('paymentFinanceAccount').innerHTML=financeAccountOptionsFor(q('paymentMethod')?.value||'cash','تلقائي حسب الطريقة');
   if(q('customerPaymentFinanceAccount')) q('customerPaymentFinanceAccount').innerHTML=financeAccountOptionsFor(q('customerPaymentMethod')?.value||'cash','تلقائي حسب الطريقة');
 
-  const accountOpts='<option value="">اختر الحساب</option>'+financeAccounts.map(a=>`<option value="${a.id}">${a.name} - ${money(a.balance)}</option>`).join('');
+  const accountOpts='<option value="">اختر الحساب</option>'+financeAccounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} - ${money(a.balance)}</option>`).join('');
   ['financeTransferFrom','financeTransferTo','expenseAccount','salaryAccount'].forEach(id=>{if(q(id)) q(id).innerHTML=accountOpts});
-  if(q('financeAccountLocation')) q('financeAccountLocation').innerHTML='<option value="">بدون فرع / عام</option>'+locations.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  if(q('expenseCategory')) q('expenseCategory').innerHTML='<option value="">بدون تصنيف</option>'+expenseCategories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  if(q('salaryEmployee')) q('salaryEmployee').innerHTML='<option value="">اختر الموظف</option>'+employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  if(q('saleCashAccount')) q('saleCashAccount').innerHTML='<option value="">خزينة الفرع تلقائيًا</option>'+financeAccounts.filter(a=>a.account_type==='cash').map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if(q('financeAccountLocation')) q('financeAccountLocation').innerHTML='<option value="">بدون فرع / عام</option>'+locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+  if(q('expenseCategory')) q('expenseCategory').innerHTML='<option value="">بدون تصنيف</option>'+expenseCategories.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  if(q('salaryEmployee')) q('salaryEmployee').innerHTML='<option value="">اختر الموظف</option>'+employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('');
+  if(q('saleCashAccount')) q('saleCashAccount').innerHTML='<option value="">خزينة الفرع تلقائيًا</option>'+financeAccounts.filter(a=>a.account_type==='cash').map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
   if(q('saleBankAccount')) q('saleBankAccount').innerHTML=financeAccountOptionsFor('bank_transfer','اختر مصرف التحويل');
   if(q('saleCardAccount')) q('saleCardAccount').innerHTML=financeAccountOptionsFor('card','اختر حساب البطاقة');
   if(q('purchaseFinanceAccount')) q('purchaseFinanceAccount').innerHTML=financeAccountOptionsFor(q('purchasePaymentMethod')?.value||'cash','تلقائي حسب الطريقة');
@@ -2043,13 +2043,13 @@ function renderLedger(){
   const sid=q('ledgerSupplier').value;
   const rows = ledger.filter(l=>l.supplier_id===sid).sort((a,b)=> new Date(a.entry_date+'T00:00:00')-new Date(b.entry_date+'T00:00:00') || new Date(a.created_at)-new Date(b.created_at));
   let running=0;
-  const rendered = rows.map(l=>{running += Number(l.credit||0)-Number(l.debit||0); return `<tr><td>${l.entry_date}</td><td>${typeLabel(l.entry_type)}</td><td>${l.description||''}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
+  const rendered = rows.map(l=>{running += Number(l.credit||0)-Number(l.debit||0); return `<tr><td>${esc(l.entry_date)}</td><td>${esc(typeLabel(l.entry_type))}</td><td>${esc(l.description||'')}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
   const bal = rows.reduce((a,l)=>a+Number(l.credit||0)-Number(l.debit||0),0);
   q('ledgerBalance').textContent=money(bal); q('ledgerStatus').innerHTML=badgeStatus(bal);
   q('ledgerBody').innerHTML = sid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا المورد.</td></tr>') : '<tr><td colspan="6">اختر المورد أولاً.</td></tr>';
 }
 function renderPayments(){
-  q('paymentsBody').innerHTML = payments.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);return `<tr><td>${p.payment_date}</td><td>${s?.name||''}</td><td><b>${money(p.amount)}</b></td><td>${typeLabel(p.payment_method)}</td><td>${p.notes||''}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد دفعات بعد.</td></tr>';
+  q('paymentsBody').innerHTML = payments.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);return `<tr><td>${esc(p.payment_date)}</td><td>${esc(s?.name||'')}</td><td><b>${money(p.amount)}</b></td><td>${esc(typeLabel(p.payment_method))}</td><td>${esc(p.notes||'')}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد دفعات بعد.</td></tr>';
 }
 
 function renderPurchases(){
@@ -2111,7 +2111,7 @@ function addOrIncrementTransferProduct(p, qty=1){
 }
 function addTransferRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"><div class="mini ti-product-note"></div></td><td><input class="ti-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"><div class="mini ti-product-note"></div></td><td><input class="ti-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
   q('transferItemsBody').appendChild(tr); updateTransferAvailable(tr.querySelector('.ti-qty'));
 }
 function fillTransferRow(input){
@@ -2219,7 +2219,7 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
   const isReturn=Number(item.qty||1)<0 || item.line_type==='return'; const qv=Math.abs(Number(item.qty||1))||1;
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><select class="si-kind" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" ${isReturn?'':'selected'}>بيع</option><option value="return" ${isReturn?'selected':''}>مرتجع</option></select></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${item.unit_price||0}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${item.discount_text||item.line_discount||0}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><select class="si-kind" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
   q('saleItemsBody').appendChild(tr); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function updateSaleLineKind(el){
@@ -2567,7 +2567,7 @@ async function printSale(id){
 
 function addProformaRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="pr-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillProformaRow(this)}" onchange="fillProformaRow(this)"><div class="mini pr-note"></div></td><td><input class="pr-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pr-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updateProformaTotal()"></td><td><input class="pr-price" type="text" inputmode="decimal" value="${item.unit_price||0}" oninput="updateProformaTotal()"></td><td class="pr-margin">0.00</td><td class="pr-margin-pct">0%</td><td><input class="pr-discount" value="${item.discount_text||item.line_discount||0}" placeholder="0 أو 10%" oninput="updateProformaTotal()"></td><td class="pr-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateProformaTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="pr-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillProformaRow(this)}" onchange="fillProformaRow(this)"><div class="mini pr-note"></div></td><td><input class="pr-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td><input class="pr-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateProformaTotal()"></td><td><input class="pr-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" oninput="updateProformaTotal()"></td><td class="pr-margin">0.00</td><td class="pr-margin-pct">0%</td><td><input class="pr-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="0 أو 10%" oninput="updateProformaTotal()"></td><td class="pr-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateProformaTotal()">حذف</button></td>`;
   q('proformaItemsBody').appendChild(tr); updateProformaTotal();
 }
 function fillProformaRow(input){
@@ -2626,7 +2626,7 @@ function addPurchaseRow(item={}){
   const p=item.product_code?productByCode(item.product_code):null;
   const oldCost=Number(item.old_cost ?? p?.purchase_price ?? item.unit_cost ?? 0);
   tr.dataset.oldCost=oldCost;
-  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><textarea class="pi-name" readonly tabindex="-1" required placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><textarea class="pi-name" readonly tabindex="-1" required placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
   q('purchaseItemsBody').appendChild(tr); updatePurchaseCostColor(tr); updatePurchaseTotal();
 }
 function updatePurchaseCostColor(tr){
@@ -2754,6 +2754,13 @@ document.addEventListener('keydown',e=>{
 
 
 
+function draftKeyName(type){return `posDraftKey_${type}_${appUser?.identifier||'user'}_${appUser?.branch_id||'branch'}`}
+function getDraftKey(type){
+  const k=draftKeyName(type); let v=localStorage.getItem(k);
+  if(!v){v=(crypto?.randomUUID?.()||(`${type}-`+Date.now()+'-'+Math.random().toString(36).slice(2))); localStorage.setItem(k,v);}
+  return v;
+}
+function clearDraftKey(type){try{localStorage.removeItem(draftKeyName(type))}catch(e){}}
 function makeSaleInvoiceNo(){return ''}
 function ensureSaleInvoiceNo(force=false){
   const el=q('saleInvoiceNo'); if(!el) return '';
@@ -2883,10 +2890,10 @@ function defaultAccountFor(method, location_id){
   if(method==='card') return q('saleCardAccount')?.value || financeAccounts.find(a=>accountSupports(a,'card'))?.id || null;
   return null;
 }
-async function addFinanceMovement(account_id,direction,movement_type,amount,date,reference_table,reference_id,notes,strict=false){
-  if(!account_id || !(Number(amount)>0)){ if(strict) throw new Error('لم يتم اختيار حساب مالي للحركة'); return; }
-  const run=()=>api('pos_finance_movements',{method:'POST',body:{account_id,direction,movement_type,amount:Number(amount),movement_date:date,reference_table,reference_id,notes}});
-  if(strict) await run(); else await run().catch(e=>console.warn('finance movement failed',e));
+async function addFinanceMovement(account_id,direction,movement_type,amount,date,reference_table,reference_id,notes,strict=true){
+  if(!account_id) throw new Error('لم يتم اختيار حساب مالي للحركة');
+  if(!(Number(amount)>0)) throw new Error('مبلغ الحركة المالية غير صحيح');
+  await api('pos_finance_movements',{method:'POST',body:{account_id,direction,movement_type,amount:Number(amount),movement_date:date,reference_table,reference_id,notes}});
 }
 async function recordSaleFinanceMovements(saleId, location_id, saleDate, payRows, saleTotal=0){
   const isRefund=Number(saleTotal||0)<0;
@@ -2943,8 +2950,9 @@ q('saleReturnForm').addEventListener('submit', async e=>{
     const account_id=['cash','bank_transfer','card'].includes(method) ? defaultFinanceAccountFor(method) : null;
     if(['cash','bank_transfer','card'].includes(method) && !account_id){toast('اختر/أنشئ حساب مالي لطريقة الاسترداد أولاً','warn'); window.__busy=false; return;}
     const body={sale_id:returningSaleId,return_date:q('saleReturnDate').value,location_id:returningSale.location_id,customer_id:returningSale.customer_id,refund_method:method,account_id,notes:q('saleReturnNotes').value.trim()||null};
-    const idem=(crypto?.randomUUID?.()||('return-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+    const idem=getDraftKey('saleReturn');
     await rpc('post_sale_return_transaction',{p_return:body,p_items:items,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
+    clearDraftKey('saleReturn');
     closeSaleReturnModal(); toast('تم حفظ فاتورة المرتجع وتحديث المخزون','success'); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ فاتورة المرتجع: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false}
@@ -3051,9 +3059,10 @@ q('saleForm').addEventListener('submit', async e=>{
     let saleId=editingSaleId;
     if(!editingSaleId){
       const paymentsForRpc=payRows.map(r=>({...r,account_id:defaultAccountFor(r.payment_method,location_id),notes:''}));
-      const idem=(crypto?.randomUUID?.()||('sale-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+      const idem=getDraftKey('sale');
       const saved=await rpc('post_sale_transaction',{p_sale:body,p_items:items,p_payments:paymentsForRpc,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
       saleId=saved.id; body.invoice_no=saved.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||'';
+      clearDraftKey('sale');
       const msg='تم حفظ فاتورة البيع وتحديث المخزون';
       const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); resetSaleForm(); await loadAll(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
       return;
@@ -3206,8 +3215,9 @@ q('purchaseForm').addEventListener('submit', async e=>{
     let purchaseId=editingPurchaseId;
     if(!editingPurchaseId){
       const payment={amount:purchasePaid,payment_method:purchasePayMethod,account_id:(q('purchaseFinanceAccount')?.value||defaultFinanceAccountFor(purchasePayMethod))};
-      const idem=(crypto?.randomUUID?.()||('purchase-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+      const idem=getDraftKey('purchase');
       const saved=await rpc('post_purchase_transaction',{p_purchase:body,p_items:items,p_payment:payment,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
+      clearDraftKey('purchase');
       purchaseId=saved.id; if(q('purchaseAutoNo')) q('purchaseAutoNo').value=saved.purchase_no||saved.id?.slice(0,8)||'';
       resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون رقم '+(saved.purchase_no||''),'success'); await loadAll();
       return;
@@ -3293,8 +3303,9 @@ q('transferForm').addEventListener('submit', async e=>{
     const body={from_location_id:from,to_location_id:to,transfer_date:q('transferDate').value,status:'posted',notes:q('transferNotes').value.trim()};
     let transferId=editingTransferId;
     if(!editingTransferId){
-      const idem=(crypto?.randomUUID?.()||('transfer-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+      const idem=getDraftKey('transfer');
       const saved=await rpc('post_stock_transfer_transaction',{p_transfer:body,p_items:items,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
+      clearDraftKey('transfer');
       transferId=saved.id;
       resetTransferForm(); toast('تم حفظ التحويل وتحديث المخزون','success'); await loadAll();
       return;
@@ -3388,16 +3399,16 @@ function renderReports(){
 
   const byBranch={};
   filteredSales.forEach(sl=>{const k=sl.location_id||'none'; if(!byBranch[k]) byBranch[k]={count:0,total:0,paid:0,balance:0}; byBranch[k].count++; byBranch[k].total+=Number(sl.total||0); byBranch[k].paid+=Number(sl.paid_amount||0); byBranch[k].balance+=Number(sl.balance_due||0);});
-  q('repSalesByBranchBody').innerHTML=Object.entries(byBranch).map(([id,r])=>{const l=locations.find(x=>x.id===id); return `<tr><td>${l?.name||'غير محدد'}</td><td>${r.count}</td><td><b>${money(r.total)}</b></td><td>${money(r.paid)}</td><td>${money(r.balance)}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد مبيعات في الفترة المحددة.</td></tr>';
+  q('repSalesByBranchBody').innerHTML=Object.entries(byBranch).map(([id,r])=>{const l=locations.find(x=>x.id===id); return `<tr><td>${esc(l?.name||'غير محدد')}</td><td>${r.count}</td><td><b>${money(r.total)}</b></td><td>${money(r.paid)}</td><td>${money(r.balance)}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد مبيعات في الفترة المحددة.</td></tr>';
 
   const top={};
   filteredItems.forEach(it=>{const k=it.product_code; if(!top[k]) top[k]={code:k,name:it.product_name,qty:0,total:0,profit:0}; top[k].qty+=Number(it.qty||0); top[k].total+=Number(it.line_total||0); top[k].profit+=(Number(it.unit_price||0)-productCost(it.product_code))*Number(it.qty||0);});
-  q('repTopProductsBody').innerHTML=Object.values(top).sort((a,b)=>b.total-a.total).slice(0,30).map(r=>`<tr><td class="ltr"><b>${r.code}</b></td><td>${r.name}</td><td>${money(r.qty)}</td><td>${money(r.total)}</td><td>${money(r.profit)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف مباعة.</td></tr>';
+  q('repTopProductsBody').innerHTML=Object.values(top).sort((a,b)=>b.total-a.total).slice(0,30).map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.total)}</td><td>${money(r.profit)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف مباعة.</td></tr>';
 
   const low=stock.filter(st=>Number(st.qty||0)<=Number(APP_CONFIG.lowStockThreshold||0)).sort((a,b)=>Number(a.qty||0)-Number(b.qty||0)).slice(0,80);
-  q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${l?.name||''}</td><td class="ltr"><b>${st.product_code}</b></td><td>${st.product_name||''}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
+  q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${esc(l?.name||'')}</td><td class="ltr"><b>${esc(st.product_code)}</b></td><td>${esc(st.product_name||'')}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
 
-  q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${s.name}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
+  q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${esc(s.name)}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
   q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${esc(c.name)}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة زبائن.</td></tr>';
   renderReportsDetail();
 }
@@ -3694,5 +3705,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1afcf290dcb3574',t:'MTc4NDAyNDU3Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b028cdf80d5f26',t:'MTc4NDAyODI0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
