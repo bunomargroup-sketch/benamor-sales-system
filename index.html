@@ -1385,30 +1385,50 @@ function friendlyError(err){
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
 function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون',customer_refund:'استرداد للزبون'}[t]||t}
 
-function staffEmail(id){return String(id||'').trim().toLowerCase()+'@bag.com'} async function authSignIn(identifier,code){const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:staffEmail(identifier),password:code})}); const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error_description||data.msg||data.message||'auth failed'); authSession=data; localStorage.setItem('posAuthSession',JSON.stringify(authSession)); return data.user} async function api(table, opts={}){
-  const qs = opts.qs || '';
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method: opts.method||'GET', headers:H, body: opts.body?JSON.stringify(opts.body):undefined });
-  const text = await res.text();
-  let data = text ? JSON.parse(text) : null;
+function staffEmail(id){return String(id||'').trim().toLowerCase()+'@bag.com'}
+function jwtExp(token){try{return JSON.parse(atob(String(token||'').split('.')[1]||''))?.exp||0;}catch(e){return 0}}
+function authExpiredSoon(){const exp=Number(authSession?.expires_at||jwtExp(authSession?.access_token)); return !exp || (Date.now()/1000) > (exp-90);}
+async function refreshAuth(){
+  if(!authSession?.refresh_token) throw new Error('انتهت الجلسة. سجل الدخول مرة أخرى.');
+  const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:authSession.refresh_token})});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error_description||data.msg||data.message||'تعذر تحديث الجلسة');
+  authSession={...authSession,...data};
+  localStorage.setItem('posAuthSession',JSON.stringify(authSession));
+  return authSession;
+}
+async function ensureAuth(){
+  if(!appUser?.id && !authSession?.access_token) return;
+  if(authExpiredSoon()) await refreshAuth();
+}
+async function authSignIn(identifier,code){const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:staffEmail(identifier),password:code})}); const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error_description||data.msg||data.message||'auth failed'); authSession=data; localStorage.setItem('posAuthSession',JSON.stringify(authSession)); return data.user}
+async function fetchWithAuthRetry(url, options={}, parseEmptyAs=null){
+  await ensureAuth();
+  let res=await fetch(url, options);
+  let text=await res.text(); let data=text?JSON.parse(text):parseEmptyAs;
+  const msg=String(data?.message||text||'');
+  if((res.status===401 || /JWT expired|PGRST303/i.test(msg)) && authSession?.refresh_token){
+    await refreshAuth();
+    res=await fetch(url, options);
+    text=await res.text(); data=text?JSON.parse(text):parseEmptyAs;
+  }
   if(!res.ok) throw new Error(data?.message || text || 'Supabase error');
   return data;
+}
+async function api(table, opts={}){
+  const qs = opts.qs || '';
+  return fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method: opts.method||'GET', headers:H, body: opts.body?JSON.stringify(opts.body):undefined }, null);
 }
 
 
 async function rpc(name, body){
-  const res=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:H,body:JSON.stringify(body)});
-  const text=await res.text(); let data=text?JSON.parse(text):null;
-  if(!res.ok) throw new Error(data?.message||text||'RPC error');
-  return data;
+  return fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:H,body:JSON.stringify(body)},null);
 }
 
 async function apiAll(table, qs='', batch=1000){
   let from=0, all=[];
   while(true){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method:'GET', headers:{...H, Range:`${from}-${from+batch-1}`} });
-    const text = await res.text();
-    let data = text ? JSON.parse(text) : [];
-    if(!res.ok) throw new Error(data?.message || text || 'Supabase error');
+    const data = await fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method:'GET', headers:{...H, Range:`${from}-${from+batch-1}`} }, []);
     all = all.concat(data||[]);
     if(!data || data.length < batch) break;
     from += batch;
@@ -3635,5 +3655,5 @@ function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate
 initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1aa3e0f9c017c52',t:'MTc4Mzk2NjIwNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
