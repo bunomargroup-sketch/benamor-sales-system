@@ -188,6 +188,25 @@
       #salePaymentScreen.payment-open .payment-title{align-items:flex-start;gap:8px;flex-wrap:wrap}
     }
 
+
+
+    /* Collapsible main menu groups + stock value summary */
+    nav .nav-group{cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+    nav .nav-group::after{content:"▾";font-size:12px;color:var(--blue);transition:transform .15s ease}
+    nav .nav-group.collapsed::after{transform:rotate(90deg)}
+    nav .nav-group.collapsed + button,
+    nav .nav-group.collapsed + button + button,
+    nav .nav-group.collapsed + button + button + button,
+    nav .nav-group.collapsed + button + button + button + button,
+    nav .nav-group.collapsed + button + button + button + button + button,
+    nav .nav-group.collapsed + button + button + button + button + button + button,
+    nav .nav-group.collapsed + button + button + button + button + button + button + button,
+    nav .nav-group.collapsed + button + button + button + button + button + button + button + button{display:none!important}
+    .stock-summary-grid{grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 0}
+    .stock-summary-grid .card{padding:12px 14px}
+    .stock-summary-grid .num{font-size:22px}
+    @media(max-width:900px){.stock-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 </style>
   <style id="pro-theme">
     /* ================= Professional theme layer ================= */
@@ -880,11 +899,21 @@
             <h2>المخزون الحالي</h2>
             <div class="row">
               <select id="stockLocationFilter" onchange="renderStock()" style="min-width:210px"></select>
-              <input id="stockSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderStock()" style="max-width:260px">
+              <select id="stockCategoryFilter" onchange="renderStock()" style="min-width:160px"><option value="">كل التصنيفات</option></select>
+              <select id="stockBrandFilter" onchange="renderStock()" style="min-width:140px"><option value="">كل الماركات</option></select>
+              <select id="stockSupplierFilter" onchange="renderStock()" style="min-width:160px"><option value="">كل الموردين</option></select>
+              <select id="stockStatusFilter" onchange="renderStock()" style="min-width:150px"><option value="">كل الحالات</option><option value="positive">متوفر</option><option value="zero">صفر</option><option value="negative">سالب</option><option value="low">تحت حد الطلب</option></select>
+              <input id="stockSearch" placeholder="بحث بالكود أو الاسم أو الباركود..." oninput="renderStock()" style="max-width:260px">
               <button class="btn secondary" onclick="loadAll()">تحديث</button>
             </div>
           </div>
-          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>كود المنتج</th><th>اسم المنتج</th><th>الكمية</th><th>آخر تحديث</th></tr></thead><tbody id="stockBody"></tbody></table></div>
+          <div class="grid cards stock-summary-grid">
+            <div class="card"><h3>قيمة المخزون</h3><div class="num" id="stockValueTotal">0.00</div></div>
+            <div class="card"><h3>إجمالي الكمية</h3><div class="num" id="stockQtyTotal">0.00</div></div>
+            <div class="card"><h3>عدد الأصناف</h3><div class="num" id="stockItemsCount">0</div></div>
+            <div class="card"><h3>أصناف تحت الطلب</h3><div class="num" id="stockLowCount">0</div></div>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>كود المنتج</th><th>اسم المنتج</th><th>التصنيف</th><th>المورد</th><th>الكمية</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th><th>آخر تحديث</th></tr></thead><tbody id="stockBody"></tbody></table></div>
         </div>
       </section>
 
@@ -1652,7 +1681,7 @@ function applyPermissions(){
   if(!appUser?.id){updateAuthUI();return;}
   currentRole=getUserRole()||currentRole||{role:'viewer'}; updateAuthUI();
   document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.style.display=canTab(b.dataset.tab)?'block':'none'});
-  tidyNavGroups();
+  tidyNavGroups(); initNavGroups();
   const active=document.querySelector('nav button.active');
   if(active && active.style.display==='none'){
     const first=[...document.querySelectorAll('nav button[data-tab]')].find(b=>b.style.display!=='none'); if(first) first.click();
@@ -2116,12 +2145,67 @@ function renderPurchases(){
     return `<tr><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td><td><button class="btn secondary" onclick="openPurchaseForEdit('${p.id}')">فتح / تعديل</button></td></tr>`;
   }).join('') || '<tr><td colspan="8">لا توجد فواتير شراء بعد.</td></tr>';
 }
+function fillStockFilters(){
+  const fill=(id,key,label)=>{
+    const el=q(id); if(!el || el.dataset.ready==='1') return;
+    const old=el.value;
+    const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ar'));
+    el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if([...el.options].some(o=>o.value===old)) el.value=old;
+    el.dataset.ready='1';
+  };
+  fill('stockCategoryFilter','category','كل التصنيفات');
+  fill('stockBrandFilter','brand','كل الماركات');
+  fill('stockSupplierFilter','supplier_name','كل الموردين');
+}
 function renderStock(){
-  const loc=q('stockLocationFilter')?.value||''; const term=(q('stockSearch')?.value||'').trim().toLowerCase();
-  const rows=stock.filter(r=>{const p=products.find(x=>String(x.code||'').toLowerCase()===String(r.product_code||'').toLowerCase()); const hay=[r.product_code,r.product_name,p?.brand,p?.model,p?.color,p?.supplier_name,p?.category].join(' ').toLowerCase(); return (!loc||r.location_id===loc) && (!term || hay.includes(term));});
-  const stockCols=['location','product_code','product_name','qty','updated_at']; const key=stockCols[stockSortIndex]||'qty';
-  rows.sort((a,b)=>{const va=key==='location'?(locations.find(x=>x.id===a.location_id)?.name||''):a[key]; const vb=key==='location'?(locations.find(x=>x.id===b.location_id)?.name||''):b[key]; const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va||'').localeCompare(String(vb||''),'ar'); return stockSortDir==='asc'?c:-c;});
-  q('stockBody').innerHTML = rows.map(r=>{const l=locations.find(x=>x.id===r.location_id); const qty=Number(r.qty||0); return `<tr><td>${esc(l?.name)}</td><td class="ltr"><b>${esc(r.product_code)}</b></td><td>${esc(r.product_name)}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون حتى الآن. أدخل فاتورة شراء أولاً.</td></tr>';
+  fillStockFilters();
+  const loc=q('stockLocationFilter')?.value||'';
+  const cat=q('stockCategoryFilter')?.value||'';
+  const brand=q('stockBrandFilter')?.value||'';
+  const supplier=q('stockSupplierFilter')?.value||'';
+  const status=q('stockStatusFilter')?.value||'';
+  const term=(q('stockSearch')?.value||'').trim().toLowerCase();
+  const rows=stock.filter(r=>{
+    const p=productByCode(r.product_code);
+    const qty=Number(r.qty||0);
+    const lowLimit=Number(p?.reorder_point||APP_CONFIG.lowStockThreshold||0);
+    const hay=[r.product_code,r.product_name,p?.barcode,p?.brand,p?.model,p?.color,p?.supplier_name,p?.category].join(' ').toLowerCase();
+    if(loc && r.location_id!==loc) return false;
+    if(cat && p?.category!==cat) return false;
+    if(brand && p?.brand!==brand) return false;
+    if(supplier && p?.supplier_name!==supplier) return false;
+    if(status==='positive' && !(qty>0)) return false;
+    if(status==='zero' && qty!==0) return false;
+    if(status==='negative' && !(qty<0)) return false;
+    if(status==='low' && !(qty<=lowLimit)) return false;
+    return !term || smartMatch(term, hay);
+  });
+  const stockCols=['location','product_code','product_name','category','supplier_name','qty','unit_cost','value','updated_at'];
+  const key=stockCols[stockSortIndex]||'qty';
+  rows.sort((a,b)=>{
+    const pa=productByCode(a.product_code), pb=productByCode(b.product_code);
+    const val=(r,p)=>key==='location'?(locations.find(x=>x.id===r.location_id)?.name||''):
+      key==='category'?(p?.category||''):
+      key==='supplier_name'?(p?.supplier_name||''):
+      key==='unit_cost'?productCost(r.product_code):
+      key==='value'?Number(r.qty||0)*productCost(r.product_code):
+      (r[key]??'');
+    const va=val(a,pa), vb=val(b,pb); const na=parseFloat(va), nb=parseFloat(vb);
+    const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va||'').localeCompare(String(vb||''),'ar');
+    return stockSortDir==='asc'?c:-c;
+  });
+  const qtyTotal=rows.reduce((a,r)=>a+Number(r.qty||0),0);
+  const valueTotal=rows.reduce((a,r)=>a+Number(r.qty||0)*productCost(r.product_code),0);
+  const lowCount=rows.filter(r=>{const p=productByCode(r.product_code); return Number(r.qty||0)<=Number(p?.reorder_point||APP_CONFIG.lowStockThreshold||0)}).length;
+  if(q('stockValueTotal')) q('stockValueTotal').textContent=money(valueTotal)+' '+APP_CONFIG.currency;
+  if(q('stockQtyTotal')) q('stockQtyTotal').textContent=money(qtyTotal);
+  if(q('stockItemsCount')) q('stockItemsCount').textContent=rows.length;
+  if(q('stockLowCount')) q('stockLowCount').textContent=lowCount;
+  q('stockBody').innerHTML = rows.map(r=>{
+    const l=locations.find(x=>x.id===r.location_id); const p=productByCode(r.product_code); const qty=Number(r.qty||0); const cost=productCost(r.product_code); const val=qty*cost;
+    return `<tr><td>${esc(l?.name)}</td><td class="ltr"><b>${esc(r.product_code)}</b></td><td>${esc(r.product_name||p?.name||'')}</td><td>${esc(p?.category||'')}</td><td>${esc(p?.supplier_name||'')}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td>${money(cost)}</td><td><b>${money(val)}</b></td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`;
+  }).join('') || '<tr><td colspan="9">لا يوجد مخزون مطابق للفلاتر. أدخل فاتورة شراء أولاً.</td></tr>';
 }
 
 function getStockQty(location_id, product_code){
@@ -3859,6 +3943,24 @@ document.addEventListener('contextmenu',e=>{
 
 
 
+
+function initNavGroups(){
+  const saved=JSON.parse(localStorage.getItem('posCollapsedNavGroups')||'{}');
+  document.querySelectorAll('nav .nav-group').forEach((g,idx)=>{
+    const key=g.textContent.trim()||('group'+idx);
+    g.title='إظهار / إخفاء الأقسام الفرعية';
+    g.classList.toggle('collapsed',!!saved[key]);
+    if(g.dataset.init==='1') return;
+    g.dataset.init='1';
+    g.addEventListener('click',()=>{
+      const st=JSON.parse(localStorage.getItem('posCollapsedNavGroups')||'{}');
+      st[key]=!g.classList.contains('collapsed');
+      g.classList.toggle('collapsed',st[key]);
+      localStorage.setItem('posCollapsedNavGroups',JSON.stringify(st));
+    });
+  });
+}
+
 function toggleNav(){
   document.body.classList.toggle('nav-collapsed');
   try{localStorage.setItem('posNavCollapsed',document.body.classList.contains('nav-collapsed')?'1':'0')}catch(e){}
@@ -3878,8 +3980,8 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b2593cdd4518ec',t:'MTc4NDA1MTIwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b266effe237940',t:'MTc4NDA1MTc2NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
