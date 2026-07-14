@@ -2939,18 +2939,17 @@ q('saleReturnForm').addEventListener('submit', async e=>{
   const items=getReturnItems(); if(!items.length){toast('اختر كمية مرتجع أولاً','warn'); window.__busy=false; return;}
   try{
     showLoading(true);
-    const total=items.reduce((a,x)=>a+Number(x.line_total||0),0); const method=q('saleReturnRefundMethod').value;
-    const ret=await api('pos_sale_returns',{method:'POST',body:{sale_id:returningSaleId,return_date:q('saleReturnDate').value,location_id:returningSale.location_id,customer_id:returningSale.customer_id,total,refund_method:method,notes:q('saleReturnNotes').value.trim()||null}});
-    const returnId=ret[0].id;
-    await api('pos_sale_return_items',{method:'POST',body:items.map(it=>({...it,return_id:returnId}))});
-    for(const it of items){await adjustStockDoc(returningSale.location_id,it,Math.abs(it.qty),'return_customer','pos_sale_returns',returnId,'مرتجع زبون')}
-    if(returningSale.customer_id && (method==='credit_reduction' || Number(returningSale.balance_due||0)>0)){
-      await api('pos_customer_ledger',{method:'POST',body:{customer_id:returningSale.customer_id,entry_date:q('saleReturnDate').value,entry_type:'return',description:'فاتورة مرتجع بيع',debit:0,credit:total,reference_table:'pos_sale_returns',reference_id:returnId}});
-    }
-    closeSaleReturnModal(); toast('تم حفظ فاتورة المرتجع وتحديث المخزون'); await loadAll();
-  }catch(err){console.error(err);toast('خطأ في حفظ فاتورة المرتجع: '+err.message+' - تأكد من تشغيل SQL المرتجعات')}
+    const method=q('saleReturnRefundMethod').value;
+    const account_id=['cash','bank_transfer','card'].includes(method) ? defaultFinanceAccountFor(method) : null;
+    if(['cash','bank_transfer','card'].includes(method) && !account_id){toast('اختر/أنشئ حساب مالي لطريقة الاسترداد أولاً','warn'); window.__busy=false; return;}
+    const body={sale_id:returningSaleId,return_date:q('saleReturnDate').value,location_id:returningSale.location_id,customer_id:returningSale.customer_id,refund_method:method,account_id,notes:q('saleReturnNotes').value.trim()||null};
+    const idem=(crypto?.randomUUID?.()||('return-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+    await rpc('post_sale_return_transaction',{p_return:body,p_items:items,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
+    closeSaleReturnModal(); toast('تم حفظ فاتورة المرتجع وتحديث المخزون','success'); await loadAll();
+  }catch(err){console.error(err);toast('خطأ في حفظ فاتورة المرتجع: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false}
 });
+
 
 
 
@@ -3695,6 +3694,5 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1afc7e39d113574',t:'MTc4NDAyNDI3OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1afcf290dcb3574',t:'MTc4NDAyNDU3Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
