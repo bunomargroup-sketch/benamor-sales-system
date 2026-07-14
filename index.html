@@ -324,6 +324,9 @@
     @media(max-width:1100px){.sales-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#sales .pos-head-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     #saleItemsBody tr.return-line{background:color-mix(in srgb,var(--bad) 8%,var(--card))}
     #saleItemsBody tr.return-line .si-line b,#saleItemsBody tr.return-line .si-qty{color:var(--bad);font-weight:800}
+    .pi-name[readonly]{background:var(--table-head);font-weight:800;cursor:not-allowed}
+    .pi-cost.cost-up{border-color:var(--bad)!important;background:color-mix(in srgb,var(--bad) 12%,var(--input));color:var(--bad);font-weight:900}
+    .pi-cost.cost-down{border-color:var(--good)!important;background:color-mix(in srgb,var(--good) 12%,var(--input));color:var(--good);font-weight:900}
     /* Cashier mode: keep line items visible and hide internal margin metrics */
     #sales:not(.supervisor-view) table thead th:nth-child(6),#sales:not(.supervisor-view) table thead th:nth-child(7),
     #saleItemsBody td.si-margin,#saleItemsBody td.si-margin-pct{display:none!important}
@@ -782,7 +785,7 @@
               <div><label>المورد</label><select id="purchaseSupplier" required></select></div>
               <div><label>مكان دخول البضاعة</label><select id="purchaseLocation" required></select></div>
               <div><label>تاريخ الفاتورة</label><input id="purchaseDate" type="date" required></div>
-              <div><label>رقم فاتورة المورد</label><input id="purchaseInvoiceNo" placeholder="اختياري"></div>
+              <div><label>رقم فاتورة الشراء</label><input id="purchaseAutoNo" class="ltr" readonly tabindex="-1" placeholder="سيولد تلقائيًا"></div><div><label>رقم فاتورة المورد</label><input id="purchaseInvoiceNo" placeholder="اختياري"></div>
               <div><label>المدفوع للمورد</label><input id="purchasePaidAmount" type="text" inputmode="decimal" value="0"></div>
               <div><label>طريقة الدفع</label><select id="purchasePaymentMethod" onchange="selectDefaultPurchasePaymentAccount()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
               <div><label>الحساب المالي</label><select id="purchaseFinanceAccount"></select></div>
@@ -1249,7 +1252,7 @@ loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[];
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), authSession=JSON.parse(localStorage.getItem('posAuthSession')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
@@ -1439,13 +1442,14 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, expenseCategories, expenses, employees, salaryPayments] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, purchaseItems, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, expenseCategories, expenses, employees, salaryPayments] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
       api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
       apiAll('pos_stock','?select=*&order=updated_at.desc'),
       apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc'),
+      apiAll('pos_purchase_items','?select=*&order=created_at.desc').catch(e=>{console.warn('purchase items not setup yet',e); return []}),
       apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
       api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}),
       apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(e=>{console.warn('sales not setup yet',e); return []}),
@@ -2608,8 +2612,20 @@ function addOrIncrementPurchaseProduct(p, qty=1){
 
 function addPurchaseRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><input class="pi-name" value="${item.product_name||''}" required placeholder="اسم المنتج"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" oninput="updatePurchaseTotal()"></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
-  q('purchaseItemsBody').appendChild(tr); updatePurchaseTotal();
+  const p=item.product_code?productByCode(item.product_code):null;
+  const oldCost=Number(item.old_cost ?? p?.purchase_price ?? item.unit_cost ?? 0);
+  tr.dataset.oldCost=oldCost;
+  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${item.product_code||''}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><textarea class="pi-name" readonly tabindex="-1" required placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
+  q('purchaseItemsBody').appendChild(tr); updatePurchaseCostColor(tr); updatePurchaseTotal();
+}
+function updatePurchaseCostColor(tr){
+  if(!tr) return;
+  const inp=tr.querySelector('.pi-cost'); if(!inp) return;
+  const oldCost=Number(tr.dataset.oldCost||0), val=moneyVal(inp.value);
+  inp.classList.toggle('cost-up', oldCost>0 && val>oldCost);
+  inp.classList.toggle('cost-down', oldCost>0 && val<oldCost);
+  const note=tr.querySelector('.pi-cost-note');
+  if(note) note.textContent=oldCost>0 ? (val>oldCost?`أعلى من القديم ${money(oldCost)}`:(val<oldCost?`أقل من القديم ${money(oldCost)}`:`نفس السعر القديم ${money(oldCost)}`)) : '';
 }
 function getPurchaseItems(){
   return [...q('purchaseItemsBody').querySelectorAll('tr')].map(tr=>{
@@ -2624,7 +2640,7 @@ function getPurchaseItems(){
 function updatePurchaseTotal(){
   let subtotal=0;
   [...q('purchaseItemsBody').querySelectorAll('tr')].forEach(tr=>{
-    const qty=Number(tr.querySelector('.pi-qty').value||0); const cost=moneyVal(tr.querySelector('.pi-cost').value); const line=qty*cost; subtotal+=line;
+    const qty=Number(tr.querySelector('.pi-qty').value||0); const cost=moneyVal(tr.querySelector('.pi-cost').value); updatePurchaseCostColor(tr); const line=qty*cost; subtotal+=line;
     tr.querySelector('.pi-line').innerHTML=`<b>${money(line)}</b>`;
   });
   const discount=moneyVal(q('purchaseDiscount').value); q('purchaseTotal').textContent=money(Math.max(0, subtotal-discount));
@@ -3129,7 +3145,7 @@ q('paymentForm').addEventListener('submit', async e=>{
 
 function resetPurchaseForm(){
   editingPurchaseId=null; originalPurchase=null; originalPurchaseItems=[];
-  q('purchaseForm').reset(); q('purchaseItemsBody').innerHTML=''; addPurchaseRow(); setToday();
+  q('purchaseForm').reset(); q('purchaseItemsBody').innerHTML=''; if(q('purchaseAutoNo')) q('purchaseAutoNo').value='سيولد تلقائيًا'; setToday();
   q('purchaseSubmitBtn').textContent='حفظ الفاتورة وزيادة المخزون';
   q('purchaseCancelEditBtn').classList.add('hidden');
 }
@@ -3141,7 +3157,7 @@ async function openPurchaseForEdit(id){
     if(!p){toast('لم يتم العثور على الفاتورة'); return;}
     editingPurchaseId=id; originalPurchase={...p}; originalPurchaseItems=rows.map(x=>({...x}));
     document.querySelector('[data-tab="purchases"]').click();
-    q('purchaseSupplier').value=p.supplier_id||''; q('purchaseLocation').value=p.location_id||''; q('purchaseDate').value=p.purchase_date||'';
+    q('purchaseSupplier').value=p.supplier_id||''; q('purchaseLocation').value=p.location_id||''; q('purchaseDate').value=p.purchase_date||''; if(q('purchaseAutoNo')) q('purchaseAutoNo').value=p.purchase_no||p.id?.slice(0,8)||'';
     q('purchaseInvoiceNo').value=p.invoice_no||''; q('purchaseNotes').value=p.notes||''; q('purchaseDiscount').value=Number(p.discount||0);
     q('purchaseItemsBody').innerHTML='';
     rows.forEach(it=>addPurchaseRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty, unit_cost:it.unit_cost}));
@@ -3182,8 +3198,8 @@ q('purchaseForm').addEventListener('submit', async e=>{
       const payment={amount:purchasePaid,payment_method:purchasePayMethod,account_id:(q('purchaseFinanceAccount')?.value||defaultFinanceAccountFor(purchasePayMethod))};
       const idem=(crypto?.randomUUID?.()||('purchase-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
       const saved=await rpc('post_purchase_transaction',{p_purchase:body,p_items:items,p_payment:payment,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
-      purchaseId=saved.id;
-      resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون','success'); await loadAll();
+      purchaseId=saved.id; if(q('purchaseAutoNo')) q('purchaseAutoNo').value=saved.purchase_no||saved.id?.slice(0,8)||'';
+      resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون رقم '+(saved.purchase_no||''),'success'); await loadAll();
       return;
     }
     if(editingPurchaseId){
@@ -3293,7 +3309,14 @@ function inDateRange(date, from, to){
   return true;
 }
 function productCost(code){
-  const p=products.find(x=>String(x.code||'').toLowerCase()===String(code||'').toLowerCase());
+  const key=String(code||'').toLowerCase();
+  const rows=(purchaseItems||[]).filter(x=>String(x.product_code||'').toLowerCase()===key && Number(x.qty||0)>0);
+  const qty=rows.reduce((a,x)=>a+Number(x.qty||0),0);
+  if(qty>0){
+    const total=rows.reduce((a,x)=>a+Number(x.line_total||0),0);
+    return total/qty;
+  }
+  const p=products.find(x=>String(x.code||'').toLowerCase()===key);
   return Number(p?.purchase_price||0);
 }
 
@@ -3652,8 +3675,8 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addPurchaseRow(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1af617e6c39ca01',t:'MTc4NDAyMDA4NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
