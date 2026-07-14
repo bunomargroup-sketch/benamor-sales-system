@@ -2030,8 +2030,8 @@ function productStockSummaryText(code,mode='all'){
 
 ${lines.join(String.fromCharCode(10))||'لا يوجد رصيد مخزون مسجل لهذا الصنف.'}`;
 }
-function showProductStockSummary(code,mode='all'){closeSaleProductPicker(); setTimeout(()=>alert(productStockSummaryText(code,mode)),50);}
-function viewProductFromCode(code){closeSaleProductPicker(); selectedProductCode=code; setTimeout(()=>viewSelectedProduct(),50);}
+function showProductStockSummary(code,mode='all'){setTimeout(()=>alert(productStockSummaryText(code,mode)),50);}
+function viewProductFromCode(code){selectedProductCode=code; setTimeout(()=>viewSelectedProduct(),50);}
 
 function renderSuppliers(){
   const term=(q('supplierSearch')?.value||'').trim();
@@ -3729,6 +3729,20 @@ function setupTableSorting(){
 const ctxMenu=document.createElement('div'); ctxMenu.className='ctx-menu'; document.body.appendChild(ctxMenu);
 function hideCtxMenu(){ctxMenu.style.display='none';}
 function ctxArg(el,fn){const a=el?.getAttribute('onclick')||''; const m=a.match(new RegExp(fn+"\\('([^']*)'\\)")); return m?m[1]:null;}
+function copyText(txt){
+  txt=String(txt||'').trim(); if(!txt){toast('لا يوجد نص للنسخ','warn');return;}
+  if(navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(()=>toast('تم نسخ النص','success')).catch(()=>prompt('انسخ النص:',txt));
+  else prompt('انسخ النص:',txt);
+}
+function defaultCtxItemsForRow(tr,target){
+  const cell=target?.closest?.('td,th');
+  const items=[];
+  if(cell) items.push({label:'نسخ الخلية',icon:'ti-copy',action:()=>copyText(cell.innerText)});
+  items.push({label:'نسخ السطر',icon:'ti-copy',action:()=>copyText([...tr.children].map(td=>td.innerText.trim()).join(' | '))});
+  const sel=String(window.getSelection?.()||'').trim();
+  if(sel) items.push({label:'نسخ النص المحدد',icon:'ti-copy',action:()=>copyText(sel)});
+  return items;
+}
 function showCtxMenu(x,y,items){
   const head=items.find(i=>i.head); const acts=items.filter(i=>!i.head);
   ctxMenu.innerHTML=(head?`<div class="ctx-head">${esc(head.head)}</div>`:'')+acts.map((it,i)=>it.sep?'<div class="ctx-sep"></div>':`<button type="button" class="ctx-item" data-i="${i}"><i class="ti ${it.icon||'ti-point'}"></i><span>${esc(it.label)}</span></button>`).join('');
@@ -3756,7 +3770,7 @@ const CTX_BUILDERS={
   salePickerBody(tr){const code=(tr.children[0]?.querySelector('b')?.textContent||tr.children[0]?.innerText||'').split(/\s+/)[0].trim(); if(!code) return []; const p=products.find(x=>String(x.code||'').toLowerCase()===String(code).toLowerCase());
     return [{head:p?`${code} — ${p.name||''}`:code},
       {label:'مشاهدة تفاصيل المنتج',icon:'ti-eye',action:()=>viewProductFromCode(code)},
-      {label:'حركات المنتج / التاريخ',icon:'ti-history',action:()=>{closeSaleProductPicker(); setTimeout(()=>openProductMovements(code),50)}},
+      {label:'حركات المنتج / التاريخ',icon:'ti-history',action:()=>{setTimeout(()=>openProductMovements(code),50)}},
       {label:'المخزون الحالي',icon:'ti-stack-2',action:()=>showProductStockSummary(code,'all')},
       {label:'الكمية في كل فرع',icon:'ti-building-store',action:()=>showProductStockSummary(code,'branches')},
       {label:'الكمية في كل مخزن',icon:'ti-building-warehouse',action:()=>showProductStockSummary(code,'warehouses')},
@@ -3800,6 +3814,8 @@ const CTX_BUILDERS={
       {label:'حركات المنتج',icon:'ti-history',action:()=>openProductMovements(code)},
       {label:'تعديل السعر',icon:'ti-edit',action:()=>editSelectedSaleLinePrice()},
       {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.si-qty'); qn.value=Number(qn.value||0)+1; updateSaleTotal(); updateSaleAvailable(qn);}},
+      {label:'تغيير إلى مرتجع',icon:'ti-arrow-back-up',action:()=>{const sel=tr.querySelector('.si-kind'); if(sel && ![...sel.options].some(o=>o.value==='return')) sel.insertAdjacentHTML('beforeend','<option value="return">مرتجع</option>'); if(sel){sel.value='return'; updateSaleLineKind(sel); updateSaleTotal(); toast('تم تحويل السطر إلى مرتجع','success');}}},
+      {label:'تغيير إلى بيع',icon:'ti-shopping-cart',action:()=>{const sel=tr.querySelector('.si-kind'); if(sel){sel.value='sale'; updateSaleLineKind(sel); updateSaleTotal();}}},
       {sep:true},{label:'حذف من الفاتورة',icon:'ti-trash',action:()=>{tr.remove(); updateSaleTotal();}}];
   },
   proformaItemsBody(tr){const code=tr.querySelector('.pr-code')?.value?.split('|')[0]?.trim(); if(!code) return []; const p=products.find(x=>String(x.code)===String(code));
@@ -3830,10 +3846,15 @@ const CTX_BUILDERS={
 };
 document.addEventListener('contextmenu',e=>{
   const tr=e.target.closest('tbody tr'); if(!tr) return;
-  const tbody=tr.closest('tbody'); const builder=tbody&&CTX_BUILDERS[tbody.id]; if(!builder) return;
   if(tr.querySelector('td[colspan]')) return;
-  const items=builder(tr); if(!items||!items.length) return;
-  e.preventDefault(); showCtxMenu(e.clientX,e.clientY,items);
+  const tbody=tr.closest('tbody'); const builder=tbody&&CTX_BUILDERS[tbody.id];
+  const copyItems=defaultCtxItemsForRow(tr,e.target);
+  let items=[];
+  if(builder){try{items=builder(tr)||[]}catch(err){console.warn(err);}}
+  const hasActions=items&&items.length;
+  const finalItems=hasActions?[...items,{sep:true},...copyItems]:copyItems;
+  if(!finalItems.length) return;
+  e.preventDefault(); showCtxMenu(e.clientX,e.clientY,finalItems);
 });
 
 
@@ -3859,6 +3880,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b1b2915d66ca01',t:'MTc4NDA0NDM3Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b2593cdd4518ec',t:'MTc4NDA1MTIwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
 </html>
