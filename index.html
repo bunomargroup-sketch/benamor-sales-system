@@ -130,6 +130,64 @@
     .totalBox{border-width:2px}
     .statusbar{border-top:2px solid color-mix(in srgb,var(--blue) 22%,var(--border))}
 
+
+    /* Phase 2 cashier simplification */
+    #dashboard .quick-board{display:none}
+
+
+
+    /* ===== Phase 2: tablet payment sheet refinement ===== */
+    @media (pointer:coarse), (max-width:900px){
+      #salePaymentScreen.pos-bottom-bar.payment-open{
+        left:8px!important;
+        right:8px!important;
+        bottom:calc(48px + env(safe-area-inset-bottom,0px))!important;
+        width:auto!important;
+        max-height:min(82dvh,720px)!important;
+        border-radius:22px 22px 16px 16px!important;
+        padding:14px!important;
+        gap:12px!important;
+        grid-template-columns:1fr!important;
+        box-shadow:0 -14px 60px rgba(2,6,23,.32)!important;
+      }
+      #salePaymentScreen.payment-open .payment-title{
+        position:sticky;top:0;z-index:2;background:var(--card);padding-bottom:10px;border-bottom:2px solid var(--border);
+      }
+      #salePaymentScreen.payment-open .payment-title .big{font-size:32px;line-height:1.15}
+      #salePaymentScreen.payment-open .pos-total-panel,
+      #salePaymentScreen.payment-open .pos-payment-panel,
+      #salePaymentScreen.payment-open .pos-save-panel{grid-template-columns:1fr!important;gap:10px!important}
+      #salePaymentScreen.payment-open .pos-payment-panel input,
+      #salePaymentScreen.payment-open .pos-payment-panel select,
+      #salePaymentScreen.payment-open .totalBox input{
+        min-height:54px;font-size:22px;border-radius:16px;
+      }
+      #salePaymentScreen.payment-open label{font-size:15px;font-weight:900}
+      #salePaymentScreen.payment-open .btn,
+      #salePaymentScreen.payment-open .quick-pay-buttons button,
+      #salePaymentScreen.payment-open .pos-mini-keypad button{
+        min-height:52px;border-radius:16px;font-size:16px;font-weight:900;
+      }
+      #salePaymentScreen.payment-open .pos-mini-keypad button{min-height:56px;font-size:22px}
+      #salePaymentScreen.payment-open .pos-mini-keypad .enter{font-size:18px;background:var(--good)}
+      #salePaymentScreen.payment-open .quick-pay-buttons{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important}
+      #salePaymentScreen.payment-open .active-pay{
+        border-color:var(--blue)!important;
+        background:color-mix(in srgb,var(--blue) 12%,var(--input))!important;
+        box-shadow:0 0 0 4px color-mix(in srgb,var(--blue) 20%,transparent)!important;
+      }
+      #salePaymentScreen.payment-open .pos-payment-note{
+        padding:10px 12px;border:2px solid var(--border);border-radius:14px;background:var(--table-head);font-size:14px;
+      }
+      .sale-finish-bar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+    }
+
+    @media (max-width:760px){
+      #salePaymentScreen.pos-bottom-bar.payment-open{max-height:72dvh!important}
+      #salePaymentScreen.payment-open .quick-pay-buttons{grid-template-columns:1fr!important}
+      #salePaymentScreen.payment-open .payment-title{align-items:flex-start;gap:8px;flex-wrap:wrap}
+    }
+
 </style>
   <style id="pro-theme">
     /* ================= Professional theme layer ================= */
@@ -636,7 +694,7 @@
 
             <div class="sale-finish-bar">
               <div class="finish-total"><span>إجمالي الفاتورة</span><b id="saleFinishTotal">0.00</b><span class="mini" id="saleFinishBalance">المتبقي: 0.00</span></div>
-              <div class="finish-actions"><button class="btn" id="salePayBtn" type="button" onclick="openSalePaymentScreen()"><i class="ti ti-cash"></i> الدفع</button><button class="btn secondary" type="button" onclick="resetSaleForm()">فاتورة جديدة</button></div>
+              <div class="finish-actions"><button class="btn" id="salePayBtn" type="button" onclick="openSalePaymentScreen()"><i class="ti ti-cash"></i> الدفع</button><button class="btn secondary" type="button" onclick="parkCurrentSale()">تعليق</button><button class="btn secondary" type="button" onclick="resumeParkedSale()">المعلقة</button><button class="btn secondary" type="button" onclick="resetSaleFormWithConfirm()">فاتورة جديدة</button></div>
             </div>
             <div class="pos-bottom-bar" id="salePaymentScreen">
               <div class="payment-title"><h2>شاشة الدفع</h2><div class="big" id="salePaymentScreenTotal">0.00</div><button class="btn secondary" type="button" onclick="closeSalePaymentScreen()">رجوع للفاتورة</button></div>
@@ -2423,9 +2481,10 @@ async function ensureSaleCustomer(balanceDue){
   return customer_id;
 }
 function resetSaleForm(){
+  suppressSaleDraftSave=true;
   editingSaleId=null; originalSale=null; originalSaleItems=[];
   q('saleForm').reset(); if(q('saleLocation') && appUser?.branch_id) q('saleLocation').value=appUser.branch_id; if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0;} q('saleItemsBody').innerHTML=''; setToday(); ensureSaleInvoiceNo(true);
-  q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden'); setActivePayInput(q('saleCashAmount')); renderSaleStockInfo(''); renderSaleCustomerInfo(); updateSaleTotal(); setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
+  q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden'); setActivePayInput(q('saleCashAmount')); renderSaleStockInfo(''); renderSaleCustomerInfo(); updateSaleTotal(); suppressSaleDraftSave=false; setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
 }
 async function openSaleForEdit(id){
   try{
@@ -2707,7 +2766,23 @@ async function instantCashOut(){
   q('salePrintAfterSave').value='yes';
   q('saleForm').requestSubmit();
 }
+function closeTopSaleLayer(){
+  if(q('saleProductPickerModal')?.classList.contains('show')){closeSaleProductPicker();return true;}
+  if(q('productViewModal')?.classList.contains('show')){closeProductViewModal();return true;}
+  if(q('movementsModal')?.classList.contains('show')){closeMovementsModal();return true;}
+  if(q('printPreviewModal')?.classList.contains('show')){closePrintPreview();return true;}
+  if(q('quickProductModal')?.classList.contains('show')){closeQuickProductModal();return true;}
+  if(q('saleReturnModal')?.classList.contains('show')){closeSaleReturnModal();return true;}
+  if(q('shortcutsModal')?.classList.contains('show')){q('shortcutsModal').classList.remove('show');return true;}
+  if(q('calculatorPanel')?.classList.contains('show')){q('calculatorPanel').classList.remove('show');return true;}
+  if(q('salePaymentScreen')?.classList.contains('payment-open')){closeSalePaymentScreen();return true;}
+  return false;
+}
 function saleModalOpen(){return !!document.querySelector('#saleProductPickerModal.show,#productViewModal.show,#movementsModal.show,#printPreviewModal.show,#quickProductModal.show,#saleReturnModal.show,#shortcutsModal.show')}
+
+
+q('saleForm')?.addEventListener('input',saveActiveSaleDraft);
+q('saleForm')?.addEventListener('change',saveActiveSaleDraft);
 
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{
   if(q('sales')?.classList.contains('active') && btn.dataset.tab!=='sales' && saleHasContent() && !confirm('يوجد فاتورة بيع غير محفوظة. هل تريد مغادرة الشاشة وفقدانها؟')) return;
@@ -2725,7 +2800,7 @@ document.addEventListener('keydown',e=>{
   const tag=(document.activeElement?.tagName||'').toLowerCase();
   const textFocused=['input','textarea','select'].includes(tag);
   if(e.key==='F1'||e.key==='?'||e.key==='؟'){e.preventDefault();q('shortcutsModal').classList.toggle('show');return;}
-  if(e.key==='Escape'){closeSaleProductPicker();closeProductViewModal();closeQuickProductModal();q('shortcutsModal')?.classList.remove('show');q('calculatorPanel')?.classList.remove('show');return;}
+  if(e.key==='Escape'){if(closeTopSaleLayer()){e.preventDefault(); focusBarcode();} return;}
   if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else openSaleProductPicker();return;}
   if(!salesActive) return;
   if((e.shiftKey&&e.key==='Enter') || e.code==='NumpadAdd'){e.preventDefault(); instantCashOut(); return;}
@@ -2734,9 +2809,9 @@ document.addEventListener('keydown',e=>{
   if(e.key==='F2'){e.preventDefault(); focusSelectedQty(); return;}
   if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();return;}
   if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();return;}
-  if(e.key==='F8'){e.preventDefault();focusPay('cash');return;}
-  if(e.key==='F9'){e.preventDefault();focusPay('bank');return;}
-  if(e.key==='F10'){e.preventDefault();focusPay('card');return;}
+  if(e.key==='F8'){e.preventDefault(); openSalePaymentScreen(); setFullPayment('cash'); return;}
+  if(e.key==='F9'){e.preventDefault(); openSalePaymentScreen(); setFullPayment('bank'); return;}
+  if(e.key==='F10'){e.preventDefault(); openSalePaymentScreen(); setFullPayment('card'); return;}
   if(document.activeElement===q('saleBarcodeInput') && e.key==='Tab'){
     e.preventDefault();
     const target=lastFocusedSaleRow?.querySelector('.si-qty') || firstEditableSaleCell();
@@ -2768,6 +2843,85 @@ function ensureSaleInvoiceNo(force=false){
   return el.value;
 }
 
+function saleDraftStorageKey(){return `posActiveSaleDraft_${appUser?.identifier||'user'}_${appUser?.branch_id||'branch'}`}
+function parkedSalesKey(){return `posParkedSales_${appUser?.identifier||'user'}_${appUser?.branch_id||'branch'}`}
+let suppressSaleDraftSave=false, saleDraftTimer=null;
+function collectSaleDraft(){
+  return {
+    ts:Date.now(),
+    location_id:q('saleLocation')?.value||appUser?.branch_id||'',
+    sale_date:q('saleDate')?.value||'',
+    customer_id:q('saleCustomer')?.value||'',
+    customer_name:q('saleNewCustomerName')?.value||'',
+    customer_phone:q('saleNewCustomerPhone')?.value||'',
+    notes:q('saleNotes')?.value||'',
+    discount:q('saleDiscount')?.value||'0',
+    print_after:q('salePrintAfterSave')?.value||'yes',
+    cash:q('saleCashAmount')?.value||'0', bank:q('saleBankAmount')?.value||'0', card:q('saleCardAmount')?.value||'0',
+    items:[...q('saleItemsBody').querySelectorAll('tr')].map(tr=>({
+      product_code:tr.querySelector('.si-code')?.value||'',
+      product_name:tr.querySelector('.si-name')?.value||'',
+      qty:tr.querySelector('.si-qty')?.value||'1',
+      unit_price:tr.querySelector('.si-price')?.value||'0',
+      discount_text:tr.querySelector('.si-discount')?.value||''
+    })).filter(x=>x.product_code||x.product_name)
+  };
+}
+function restoreSaleDraft(d){
+  if(!d) return;
+  suppressSaleDraftSave=true;
+  q('saleItemsBody').innerHTML='';
+  if(q('saleLocation')) q('saleLocation').value=d.location_id||appUser?.branch_id||'';
+  if(q('saleDate')) q('saleDate').value=d.sale_date||new Date().toISOString().slice(0,10);
+  if(q('saleCustomer')) q('saleCustomer').value=d.customer_id||'';
+  if(q('saleNewCustomerName')) q('saleNewCustomerName').value=d.customer_name||'';
+  if(q('saleNewCustomerPhone')) q('saleNewCustomerPhone').value=d.customer_phone||'';
+  if(q('saleNotes')) q('saleNotes').value=d.notes||'';
+  if(q('saleDiscount')) q('saleDiscount').value=d.discount||0;
+  if(q('salePrintAfterSave')) q('salePrintAfterSave').value=d.print_after||'yes';
+  (d.items||[]).forEach(it=>addSaleRow(it));
+  if(q('saleCashAmount')){q('saleCashAmount').value=d.cash||0; q('saleBankAmount').value=d.bank||0; q('saleCardAmount').value=d.card||0;}
+  updateSaleTotal(); refreshSaleAvailability();
+  suppressSaleDraftSave=false;
+  saveActiveSaleDraft();
+}
+function saveActiveSaleDraft(){
+  if(suppressSaleDraftSave) return;
+  clearTimeout(saleDraftTimer);
+  saleDraftTimer=setTimeout(()=>{
+    try{const d=collectSaleDraft(); if(d.items.length) localStorage.setItem(saleDraftStorageKey(),JSON.stringify(d)); else localStorage.removeItem(saleDraftStorageKey());}catch(e){console.warn('draft save failed',e)}
+  },180);
+}
+function clearActiveSaleDraft(){try{localStorage.removeItem(saleDraftStorageKey())}catch(e){}}
+function tryRestoreActiveSaleDraft(){
+  try{
+    const raw=localStorage.getItem(saleDraftStorageKey()); if(!raw) return;
+    const d=JSON.parse(raw); if(!d?.items?.length) return;
+    if(confirm('توجد فاتورة بيع غير محفوظة. هل تريد استرجاعها؟')) restoreSaleDraft(d); else clearActiveSaleDraft();
+  }catch(e){console.warn('draft restore failed',e)}
+}
+function resetSaleFormWithConfirm(){
+  if(saleHasContent() && !confirm('يوجد أصناف في الفاتورة. هل تريد تفريغها وبدء فاتورة جديدة؟')) return;
+  clearActiveSaleDraft(); clearDraftKey('sale'); resetSaleForm();
+}
+function parkCurrentSale(){
+  const d=collectSaleDraft();
+  if(!d.items.length){toast('لا توجد فاتورة لتعليقها','warn');return;}
+  const arr=JSON.parse(localStorage.getItem(parkedSalesKey())||'[]');
+  arr.unshift({...d,id:crypto?.randomUUID?.()||String(Date.now())});
+  localStorage.setItem(parkedSalesKey(),JSON.stringify(arr.slice(0,30)));
+  clearActiveSaleDraft(); clearDraftKey('sale'); resetSaleForm(); toast('تم تعليق الفاتورة','success');
+}
+function resumeParkedSale(){
+  const arr=JSON.parse(localStorage.getItem(parkedSalesKey())||'[]');
+  if(!arr.length){toast('لا توجد فواتير معلقة','info');return;}
+  const label=arr.map((d,i)=>`${i+1}) ${new Date(d.ts).toLocaleString('ar-LY')} - ${d.items.length} صنف - ${d.customer_name||'زبون نقدي'}`).join('\n');
+  const n=Number(prompt('اختر رقم الفاتورة المعلقة:\n'+label,'1'));
+  if(!n||!arr[n-1]) return;
+  if(saleHasContent() && !confirm('سيتم استبدال الفاتورة الحالية. متابعة؟')) return;
+  const [d]=arr.splice(n-1,1); localStorage.setItem(parkedSalesKey(),JSON.stringify(arr));
+  restoreSaleDraft(d); openTab('sales'); toast('تم استرجاع الفاتورة المعلقة','success');
+}
 function saleHasContent(){ return q('saleItemsBody') && getSaleItems().length>0; }
 
 function openSalePaymentScreen(){
@@ -3062,9 +3216,9 @@ q('saleForm').addEventListener('submit', async e=>{
       const idem=getDraftKey('sale');
       const saved=await rpc('post_sale_transaction',{p_sale:body,p_items:items,p_payments:paymentsForRpc,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
       saleId=saved.id; body.invoice_no=saved.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||'';
-      clearDraftKey('sale');
+      clearDraftKey('sale'); clearActiveSaleDraft();
       const msg='تم حفظ فاتورة البيع وتحديث المخزون';
-      const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); resetSaleForm(); await loadAll(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
+      const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); clearActiveSaleDraft(); resetSaleForm(); await loadAll(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
       return;
     }
     if(editingSaleId){
@@ -3703,8 +3857,8 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b05699fd51a10c',t:'MTc4NDAzMDEyNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1b1b2915d66ca01',t:'MTc4NDA0NDM3Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
