@@ -1094,9 +1094,9 @@
 
         <div id="rep-dailycash" class="rep-view hidden">
           <div class="panel">
-            <div class="tools"><h2>تقرير حالة الخزينة اليومية</h2><div class="row"><input id="dailyCashDate" type="date" onchange="renderDailyCashReport()"><select id="dailyCashBranch" onchange="renderDailyCashReport()" style="min-width:220px"></select><button class="btn secondary" type="button" onclick="printDailyCashReport()">طباعة التقرير</button><button class="btn secondary" type="button" onclick="prepareDailyCashTransfer()">تحويل المتبقي لخزينة الإدارة</button></div></div>
+            <div class="tools"><h2>تقرير حالة الخزينة اليومية</h2><div class="row"><input id="dailyCashDate" type="date" onchange="renderDailyCashReport()"><select id="dailyCashBranch" onchange="renderDailyCashReport()" style="min-width:220px"></select><button class="btn secondary" type="button" onclick="printDailyCashReport()">طباعة التقرير</button><button class="btn" type="button" onclick="saveDailyCashClosing()">حفظ إغلاق اليوم</button><button class="btn secondary" type="button" onclick="prepareDailyCashTransfer()">تحويل المتبقي لخزينة الإدارة</button></div></div>
             <p class="muted">التقرير ديناميكي ويمكن طباعته في أي وقت. إذا تم تعديل أو إضافة فواتير بعد إذن المدير، سيتغير التقرير حسب البيانات الحالية.</p>
-            <div id="dailyCashReportBody"></div>
+            <div id="dailyCashReportBody"></div><div class="panel" style="box-shadow:none;margin-top:14px"><h2>سجل إغلاقات الخزينة السابقة</h2><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>المسؤول</th><th>عدد الفواتير</th><th>المتبقي كاش</th><th>وقت الحفظ</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="dailyCashClosingsBody"></tbody></table></div></div>
           </div>
         </div>
 
@@ -1347,7 +1347,7 @@ loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[];
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), authSession=JSON.parse(localStorage.getItem('posAuthSession')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
@@ -1537,7 +1537,7 @@ async function apiAll(table, qs='', batch=1000){
 async function loadAll(){
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, purchaseItems, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, expenseCategories, expenses, employees, salaryPayments] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, purchaseItems, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, dailyCashClosings, expenseCategories, expenses, employees, salaryPayments] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
@@ -1560,6 +1560,7 @@ async function loadAll(){
       apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []}),
       apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return []}),
       apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(e=>{console.warn('finance movements not setup yet',e); return []}),
+      apiAll('pos_daily_cash_closings','?select=*&order=closing_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('daily cash closings not setup yet',e); return []}),
       apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
       apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('expenses not setup yet',e); return []}),
       apiAll('pos_employees','?select=*&order=name.asc').catch(e=>{console.warn('employees not setup yet',e); return []}),
@@ -3755,11 +3756,51 @@ function renderDailyCashReport(){
     </div>
     <div class="table-scroll"><table><thead><tr><th>البيان</th><th>كاش</th><th>بطاقة</th><th>تحويل</th><th>الإجمالي</th></tr></thead><tbody>${dailyCashTableRows(d)}</tbody></table></div>
     <div class="panel" style="box-shadow:none;margin-top:14px"><h2>المبلغ المطلوب تسليمه كاش</h2><div class="num ${d.cashRemaining>=0?'stock-positive':'stock-negative'}">${money(d.cashRemaining)} ${esc(APP_CONFIG.currency)}</div><p class="muted">يتم طباعة هذا التقرير في أي وقت. عند تصفية الحساب، يقوم مسؤول الفرع بتحويل المتبقي إلى خزينة الإدارة من شاشة التحويل المالي.</p></div>`;
+  renderDailyCashClosings();
 }
-function dailyCashPrintHtml(){
-  const d=getDailyCashData();
+function dailyCashPrintHtml(savedData=null){
+  const d=savedData||getDailyCashData();
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير الخزينة اليومية</title><style>body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:24px;line-height:1.7}.head{display:flex;justify-content:space-between;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:18px}.title{font-size:24px;font-weight:800;color:#1d4ed8}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:10px;text-align:right}th{background:#e8f0ff}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{border:1px solid #cbd5e1;border-radius:12px;padding:10px}.num{font-size:22px;font-weight:800}.cash{font-size:30px;color:#087f5b;font-weight:900}.sign{display:flex;gap:60px;margin-top:50px}.sign div{flex:1;border-top:1px solid #333;text-align:center;padding-top:8px}@media print{@page{size:A4;margin:12mm}}</style></head><body><div class="head"><div><div class="title">${esc(APP_CONFIG.businessName)}</div><div>تقرير حالة الخزينة اليومية</div></div><div>التاريخ: <b>${esc(d.date)}</b><br>الفرع: <b>${esc(d.branchName)}</b><br>المسؤول: <b>${esc(appUser?.identifier||'')}</b></div></div><div class="cards"><div class="card">عدد الفواتير<div class="num">${d.invoiceCount}</div></div><div class="card">مبيعات كاش<div class="num">${money(d.salesPay.cash)}</div></div><div class="card">مصاريف كاش<div class="num">${money(d.expensesPay.cash)}</div></div><div class="card">المتبقي كاش<div class="cash">${money(d.cashRemaining)} ${esc(APP_CONFIG.currency)}</div></div></div><table><thead><tr><th>البيان</th><th>كاش</th><th>بطاقة</th><th>تحويل</th><th>الإجمالي</th></tr></thead><tbody>${dailyCashTableRows(d)}</tbody></table><h2>المبلغ المسلم كاش: ${money(d.cashRemaining)} ${esc(APP_CONFIG.currency)}</h2><div class="sign"><div>توقيع مسؤول الفرع</div><div>توقيع الإدارة / المحاسب</div></div></body></html>`;
 }
+
+function dailyCashClosingBody(d,notes=''){
+  return {
+    closing_date:d.date, branch_id:d.branch, branch_name:d.branchName,
+    responsible_identifier:appUser?.identifier||'', invoice_count:d.invoiceCount,
+    sales_cash:d.salesPay.cash, sales_card:d.salesPay.card, sales_bank_transfer:d.salesPay.bank_transfer,
+    expenses_cash:d.expensesPay.cash, expenses_card:d.expensesPay.card, expenses_bank_transfer:d.expensesPay.bank_transfer,
+    customer_payments_cash:d.customerPay.cash, customer_payments_card:d.customerPay.card, customer_payments_bank_transfer:d.customerPay.bank_transfer,
+    supplier_payments_cash:d.supplierPay.cash, supplier_payments_card:d.supplierPay.card, supplier_payments_bank_transfer:d.supplierPay.bank_transfer,
+    refunds_cash:d.refundsPay.cash, refunds_card:d.refundsPay.card, refunds_bank_transfer:d.refundsPay.bank_transfer,
+    cash_remaining:d.cashRemaining, notes, created_by:appUser?.identifier||'', updated_at:new Date().toISOString()
+  };
+}
+function renderDailyCashClosings(){
+  const body=q('dailyCashClosingsBody'); if(!body)return;
+  body.innerHTML=(dailyCashClosings||[]).slice(0,80).map(r=>`<tr><td>${esc(r.closing_date)}</td><td>${esc(r.branch_name||locations.find(l=>l.id===r.branch_id)?.name||'')}</td><td>${esc(r.responsible_identifier||r.created_by||'')}</td><td>${Number(r.invoice_count||0)}</td><td><b class="${Number(r.cash_remaining||0)>=0?'stock-positive':'stock-negative'}">${money(r.cash_remaining)}</b></td><td>${esc((r.created_at||'').replace('T',' ').slice(0,19))}</td><td>${esc(r.notes||'')}</td><td><button class="btn secondary" type="button" onclick="printSavedDailyCashClosing('${r.id}')">طباعة</button></td></tr>`).join('')||'<tr><td colspan="8">لا توجد إغلاقات محفوظة.</td></tr>';
+}
+async function saveDailyCashClosing(){
+  const d=getDailyCashData();
+  if(!d.branch){toast('اختر فرعًا محددًا قبل حفظ الإغلاق','warn');return;}
+  const existing=(dailyCashClosings||[]).find(x=>x.branch_id===d.branch && x.closing_date===d.date);
+  if(existing && !(await requestSupervisorApproval('تعديل إغلاق خزينة محفوظ',`${d.branchName} - ${d.date}`))) return;
+  const notes=prompt('ملاحظات الإغلاق اليومية (اختياري):', existing?.notes||''); if(notes===null)return;
+  const body=dailyCashClosingBody(d,notes);
+  try{
+    showLoading(true);
+    if(existing){await api('pos_daily_cash_closings',{method:'PATCH',qs:`?id=eq.${existing.id}`,body}); toast('تم تحديث إغلاق اليوم','success');}
+    else {await api('pos_daily_cash_closings',{method:'POST',body}); toast('تم حفظ إغلاق اليوم','success');}
+    dailyCashClosings=await apiAll('pos_daily_cash_closings','?select=*&order=closing_date.desc,created_at.desc&limit=100');
+    renderDailyCashReport();
+  }catch(e){console.error(e);toast('تعذر حفظ إغلاق الخزينة: '+friendlyError(e),'error')}
+  finally{showLoading(false);window.__busy=false}
+}
+function printSavedDailyCashClosing(id){
+  const r=(dailyCashClosings||[]).find(x=>x.id===id); if(!r)return;
+  const d={date:r.closing_date,branchName:r.branch_name||'',invoiceCount:Number(r.invoice_count||0),cashRemaining:Number(r.cash_remaining||0),salesPay:{cash:Number(r.sales_cash||0),card:Number(r.sales_card||0),bank_transfer:Number(r.sales_bank_transfer||0),total:Number(r.sales_cash||0)+Number(r.sales_card||0)+Number(r.sales_bank_transfer||0)},expensesPay:{cash:Number(r.expenses_cash||0),card:Number(r.expenses_card||0),bank_transfer:Number(r.expenses_bank_transfer||0),total:Number(r.expenses_cash||0)+Number(r.expenses_card||0)+Number(r.expenses_bank_transfer||0)},customerPay:{cash:Number(r.customer_payments_cash||0),card:Number(r.customer_payments_card||0),bank_transfer:Number(r.customer_payments_bank_transfer||0),total:Number(r.customer_payments_cash||0)+Number(r.customer_payments_card||0)+Number(r.customer_payments_bank_transfer||0)},supplierPay:{cash:Number(r.supplier_payments_cash||0),card:Number(r.supplier_payments_card||0),bank_transfer:Number(r.supplier_payments_bank_transfer||0),total:Number(r.supplier_payments_cash||0)+Number(r.supplier_payments_card||0)+Number(r.supplier_payments_bank_transfer||0)},refundsPay:{cash:Number(r.refunds_cash||0),card:Number(r.refunds_card||0),bank_transfer:Number(r.refunds_bank_transfer||0),total:Number(r.refunds_cash||0)+Number(r.refunds_card||0)+Number(r.refunds_bank_transfer||0)}};
+  showInAppPrint(dailyCashPrintHtml(d));
+}
+
 function printDailyCashReport(){showInAppPrint(dailyCashPrintHtml())}
 function prepareDailyCashTransfer(){
   const d=getDailyCashData();
@@ -4104,6 +4145,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1da486dacc52770',t:'MTc4NDQ2OTk0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1f36a422dd94731',t:'MTc4NDczMzQ3Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
