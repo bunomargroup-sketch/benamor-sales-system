@@ -1042,7 +1042,7 @@
         <div class="panel">
           <h2>المصاريف</h2>
           <form class="form" id="expenseForm">
-            <div><label>الفرع</label><select id="expenseLocation" required disabled></select></div><div><label>طريقة الدفع</label><select id="expensePaymentMethod" onchange="selectDefaultExpenseAccount()"><option value="cash">كاش</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div><div><label>الخزينة / الحساب</label><select id="expenseAccount" required></select></div>
+            <div class="hidden"><label>الفرع</label><select id="expenseLocation" required disabled></select></div><div><label>طريقة الدفع</label><select id="expensePaymentMethod" onchange="selectDefaultExpenseAccount()"><option value="cash">كاش</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div><div><label>الخزينة / الحساب</label><select id="expenseAccount" required></select></div>
             <div><label>التصنيف</label><select id="expenseCategory"></select></div>
             <div><label>التاريخ</label><input id="expenseDate" type="date" required></div>
             <div><label>المبلغ</label><input id="expenseAmount" type="text" inputmode="decimal" required></div>
@@ -1189,6 +1189,20 @@
             <button class="btn" type="submit">حفظ الإعدادات</button>
             <button class="btn secondary" type="button" onclick="resetLocalSettings()">استرجاع الافتراضي</button>
           </form>
+        </div>
+        <div class="panel">
+          <h2>إضافات المنتجات</h2>
+          <p class="muted">أضف ألوانًا أو شركات/ماركات أو موديلات تظهر في قوائم إدخال المنتج بدون تعديل الكود.</p>
+          <form class="form" id="productOptionForm">
+            <div><label>النوع</label><select id="productOptionType"><option value="brand">الشركة / الماركة</option><option value="model">الموديل</option><option value="color">اللون</option></select></div>
+            <div><label>القيمة</label><input id="productOptionValue" placeholder="مثال: أسود / Grohe / Model X" required></div>
+            <button class="btn" type="submit">إضافة</button>
+          </form>
+          <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px">
+            <div class="card"><h3>الشركات / الماركات</h3><div id="settingsBrandsList" class="mini"></div></div>
+            <div class="card"><h3>الموديلات</h3><div id="settingsModelsList" class="mini"></div></div>
+            <div class="card"><h3>الألوان</h3><div id="settingsColorsList" class="mini"></div></div>
+          </div>
         </div>
         <div class="panel">
           <h2>تصنيفات المصاريف</h2>
@@ -1589,7 +1603,7 @@ async function loadAll(){
   finally{showLoading(false);window.__busy=false}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();applyPermissions();setTimeout(setupTableSorting,0)}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();renderProductOptionSettings();applyPermissions();setTimeout(setupTableSorting,0)}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -1832,7 +1846,8 @@ function renderProductDatalist(){
     cdl.innerHTML=cats.map(c=>`<option value="${String(c).replace(/"/g,'&quot;')}"></option>`).join('');
   }
   const lists={brandDatalist:'brand',modelDatalist:'model',colorDatalist:'color'};
-  Object.entries(lists).forEach(([id,key])=>{const el=q(id); if(el){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=vals.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join('')}});
+  const extra={brand:APP_CONFIG.customBrands||[],model:APP_CONFIG.customModels||[],color:APP_CONFIG.customColors||[]};
+  Object.entries(lists).forEach(([id,key])=>{const el=q(id); if(el){const vals=[...new Set([...(products.map(p=>p[key]).filter(Boolean)),...(extra[key]||[])])].sort(); el.innerHTML=vals.map(v=>`<option value="${esc(v)}"></option>`).join('')}});
 }
 function findProductByInput(value){
   value=(value||'').trim();
@@ -2578,9 +2593,9 @@ function setFullPayment(type){
   focusPay(type); updateSaleTotal();
 }
 function defaultFinanceAccountFor(method){
-  if(method==='cash') return financeAccounts.find(a=>accountSupports(a,'cash') && a.location_id===appUser?.branch_id)?.id || financeAccounts.find(a=>accountSupports(a,'cash'))?.id || null;
-  if(method==='bank_transfer') return financeAccounts.find(a=>accountSupports(a,'bank_transfer'))?.id || null;
-  if(method==='card') return financeAccounts.find(a=>accountSupports(a,'card'))?.id || null;
+  if(method==='cash') return financeAccounts.find(a=>a.account_type==='cash' && a.location_id===appUser?.branch_id)?.id || financeAccounts.find(a=>a.account_type==='cash')?.id || null;
+  if(method==='bank_transfer') return financeAccounts.find(a=>a.account_type==='bank')?.id || financeAccounts.find(a=>a.account_type==='card')?.id || null;
+  if(method==='card') return financeAccounts.find(a=>a.account_type==='card')?.id || financeAccounts.find(a=>a.account_type==='bank')?.id || null;
   return null;
 }
 
@@ -3181,8 +3196,13 @@ function accountAcceptedMethods(a){
 }
 function accountSupports(a,method){return accountAcceptedMethods(a).includes(method)}
 function financeAccountOptionsFor(method,blank='اختر الحساب'){
-  const rows=financeAccounts.filter(a=>accountSupports(a,method));
-  return `<option value="">${blank}</option>`+rows.map(a=>`<option value="${a.id}">${esc(a.name)} - ${esc(accountTypeLabel(a.account_type))}</option>`).join('');
+  const branch=appUser?.branch_id||'';
+  const rows=financeAccounts.filter(a=>{
+    if(method==='cash') return a.account_type==='cash' && (!branch || a.location_id===branch);
+    if(method==='bank_transfer' || method==='card') return a.account_type==='bank' || a.account_type==='card';
+    return accountSupports(a,method);
+  });
+  return `<option value="">${blank}</option>`+rows.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} - ${esc(accountTypeLabel(a.account_type))}</option>`).join('');
 }
 function toggleFinancePaymentMethods(){
   const box=q('financePaymentMethodsBox'); if(box) box.style.display='none';
@@ -3281,8 +3301,17 @@ q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();i
 q('settingsForm')?.addEventListener('submit',e=>{
   e.preventDefault();
   Object.assign(APP_CONFIG,{businessName:q('settingsBusinessName').value.trim()||APP_CONFIG.businessName,tagline:q('settingsTagline').value.trim()||APP_CONFIG.tagline,currency:q('settingsCurrency').value.trim()||APP_CONFIG.currency,lowStockThreshold:Number(q('settingsLowStock').value||0)});
-  localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold}));
+  localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]}));
   initBranding(); renderAll(); toast('تم حفظ الإعدادات');
+});
+
+q('productOptionForm')?.addEventListener('submit',e=>{
+  e.preventDefault();
+  const type=q('productOptionType').value, value=q('productOptionValue').value.trim();
+  if(!value)return;
+  addProductOption(type,value);
+  q('productOptionValue').value='';
+  toast('تمت إضافة القيمة إلى القوائم');
 });
 
 q('expenseCategoryForm')?.addEventListener('submit',async e=>{
@@ -3499,6 +3528,20 @@ function selectDefaultExpenseAccount(){
 function renderSettingsExpenseCategories(){
   const body=q('settingsExpenseCategoriesBody'); if(!body)return;
   body.innerHTML=(expenseCategories||[]).map(c=>`<tr><td>${esc(c.name)}</td><td>${c.active===false?'<span class="badge gray">متوقف</span>':'<span class="badge green">نشط</span>'}</td></tr>`).join('')||'<tr><td colspan="2">لا توجد تصنيفات بعد.</td></tr>';
+}
+function renderProductOptionSettings(){
+  const render=(id,arr)=>{const el=q(id); if(el) el.innerHTML=(arr&&arr.length)?arr.map(x=>`<span class="badge gray" style="margin:2px">${esc(x)}</span>`).join(''):'لا توجد إضافات';};
+  render('settingsBrandsList',APP_CONFIG.customBrands||[]);
+  render('settingsModelsList',APP_CONFIG.customModels||[]);
+  render('settingsColorsList',APP_CONFIG.customColors||[]);
+}
+function addProductOption(type,value){
+  const key=type==='brand'?'customBrands':(type==='model'?'customModels':'customColors');
+  const arr=APP_CONFIG[key]||[];
+  if(!arr.some(x=>String(x).toLowerCase()===String(value).toLowerCase())) arr.push(value);
+  APP_CONFIG[key]=arr.sort((a,b)=>String(a).localeCompare(String(b),'ar'));
+  localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]}));
+  renderProductDatalist(); renderProductOptionSettings();
 }
 
 
@@ -4224,6 +4267,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a214f6389c77f942',t:'MTc4NTA4NTIzOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a215091ca8ba74da',t:'MTc4NTA4NjAxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
 </body>
 </html>
