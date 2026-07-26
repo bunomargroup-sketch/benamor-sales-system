@@ -405,8 +405,6 @@
     .pi-cost.cost-up{border-color:var(--bad)!important;background:color-mix(in srgb,var(--bad) 12%,var(--input));color:var(--bad);font-weight:900}
     .pi-cost.cost-down{border-color:var(--good)!important;background:color-mix(in srgb,var(--good) 12%,var(--input));color:var(--good);font-weight:900}
     /* Cashier mode: keep line items visible and hide internal margin metrics */
-    #sales:not(.supervisor-view) table thead th:nth-child(6),#sales:not(.supervisor-view) table thead th:nth-child(7),
-    #saleItemsBody td.si-margin,#saleItemsBody td.si-margin-pct{display:none!important}
     #sales .pos-items-card th:nth-child(2),#sales .pos-items-card td:nth-child(2){min-width:360px;width:42%}
     #saleItemsBody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 45%,transparent);outline-offset:-2px}
     /* Payment drawer: right-side action drawer, never full-screen overlay */
@@ -455,6 +453,7 @@
       <button data-tab="payments"><i class="ti ti-cash"></i><span>دفعات الموردين</span></button>
       <button data-tab="finance"><i class="ti ti-building-bank"></i><span>الخزائن والمصارف</span></button>
       <button data-tab="reports"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
+      <button data-tab="reports" data-report-default="dailycash"><i class="ti ti-cash-banknote"></i><span>إغلاق الخزينة اليومي</span></button>
 
       <div class="nav-group">النظام</div>
       <button data-tab="users"><i class="ti ti-shield-lock"></i><span>المستخدمون والصلاحيات</span></button>
@@ -703,7 +702,7 @@
                 </div>
                 <div class="table-scroll sale-lines-scroll">
                   <table>
-                    <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>نوع</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر %</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
+                    <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر %</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
                     <tbody id="saleItemsBody"></tbody>
                   </table>
                 </div>
@@ -1075,6 +1074,7 @@
         <div class="panel" style="padding:10px">
           <div class="seg">
             <button class="seg-btn active" type="button" data-rep="overview" onclick="showReport('overview')"><i class="ti ti-layout-grid"></i> نظرة عامة</button>
+            <button class="seg-btn" type="button" data-rep="dailycash" onclick="showReport('dailycash')"><i class="ti ti-cash-banknote"></i> إغلاق الخزينة اليومي</button>
             <button class="seg-btn" type="button" data-rep="income" onclick="showReport('income')"><i class="ti ti-report-money"></i> قائمة الدخل</button>
             <button class="seg-btn" type="button" data-rep="items" onclick="showReport('items')"><i class="ti ti-box"></i> ربحية الأصناف</button>
             <button class="seg-btn" type="button" data-rep="customers" onclick="showReport('customers')"><i class="ti ti-users"></i> ربحية الزبائن</button>
@@ -2411,7 +2411,7 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
   const isReturn=Number(item.qty||1)<0 || item.line_type==='return'; const qv=Math.abs(Number(item.qty||1))||1;
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><select class="si-kind" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><select class="si-kind hidden" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
   q('saleItemsBody').appendChild(tr); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function updateSaleLineKind(el){
@@ -2595,7 +2595,7 @@ function updateSaleTotal(){
   let subtotal=0;
   [...q('saleItemsBody').querySelectorAll('tr')].forEach(tr=>{
     const qtyRaw=Math.abs(Number(tr.querySelector('.si-qty').value||0)); const sign=tr.querySelector('.si-kind')?.value==='return'?-1:1; const qty=sign*qtyRaw; const price=moneyVal(tr.querySelector('.si-price').value); const code=(tr.querySelector('.si-code')?.value||'').split('|')[0].trim(); const baseAbs=qtyRaw*price; const line=sign*Math.max(0,baseAbs-calcLineDiscount(tr.querySelector('.si-discount')?.value||'',baseAbs)); subtotal+=line; tr.classList.toggle('return-line',sign<0);
-    const mv=marginValue(code,price)*qty, mp=marginPct(code,price); if(tr.querySelector('.si-margin')) tr.querySelector('.si-margin').innerHTML=`<b class="${mv>=0?'stock-positive':'stock-negative'}">${money(mv)}</b>`; if(tr.querySelector('.si-margin-pct')) tr.querySelector('.si-margin-pct').innerHTML=`<span class="${mv>=0?'stock-positive':'stock-negative'}">${money(mp)}%</span>`;
+    const cost=productCost(code), mv=(price-cost)*qty, mp=cost?((price-cost)/cost*100):0; if(tr.querySelector('.si-margin')) tr.querySelector('.si-margin').innerHTML=cost?`<b class="${mv>=0?'stock-positive':'stock-negative'}">${money(mv)}</b>`:'<span class="muted">لا تكلفة</span>'; if(tr.querySelector('.si-margin-pct')) tr.querySelector('.si-margin-pct').innerHTML=cost?`<span class="${mv>=0?'stock-positive':'stock-negative'}">${money(mp)}%</span>`:'<span class="muted">—</span>';
     tr.querySelector('.si-line').innerHTML=`<b>${money(line)}</b>`;
   });
   const discount=moneyVal(q('saleDiscount').value); const total=subtotal-discount;
@@ -2927,6 +2927,7 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
   if(btn.dataset.tab==='sales') document.body.classList.add('nav-collapsed');
   else document.body.classList.toggle('nav-collapsed', (localStorage.getItem('posNavCollapsed')==='1'));
   if(btn.dataset.tab==='sales'){ if(!editingSaleId && !saleHasContent()){q('saleItemsBody').innerHTML=''; ensureSaleInvoiceNo(false);} setTimeout(()=>q('saleBarcodeInput')?.focus(),50); }
+  if(btn.dataset.tab==='reports' && btn.dataset.reportDefault){setTimeout(()=>showReport(btn.dataset.reportDefault),50);}
 }));
 window.addEventListener('beforeunload',e=>{ if(saleHasContent()){ e.preventDefault(); e.returnValue=''; } });
 document.addEventListener('keydown',e=>{
@@ -3274,9 +3275,19 @@ q('roleForm').addEventListener('submit', async e=>{
     const body={identifier,display_name:q('roleDisplayName').value.trim()||null,role:q('roleName').value,location_name:null,active:true,notes:q('roleNotes').value.trim()||null,updated_at:new Date().toISOString()};
     const found=userRoles.find(r=>r.identifier===identifier);
     const newCode=q('roleCode')?.value.trim()||'';
-    if(!found && newCode){await rpc('create_app_user',{p_identifier:identifier,p_code:newCode}).catch(e=>console.warn('create app user skipped/failed',e));}
+    if(!found){
+      if(!newCode) throw new Error('للمستخدم الجديد يجب كتابة كود الدخول أولاً');
+      try{
+        await rpc('create_app_user',{p_identifier:identifier,p_code:newCode});
+      }catch(e){
+        console.error('create app user failed',e);
+        throw new Error('تم منع إنشاء مستخدم الدخول. أنشئ المستخدم في Supabase Auth أولاً: '+identifier+'@bag.com ثم احفظ الصلاحية. التفاصيل: '+friendlyError(e));
+      }
+    }else if(newCode){
+      toast('ملاحظة: تغيير كود مستخدم موجود يتم من Supabase Auth وليس من جدول الصلاحيات','warn');
+    }
     await rpc('upsert_pos_user_role',{p_identifier:identifier,p_display_name:body.display_name,p_role:body.role,p_notes:body.notes,p_active:true});
-    toast(found?'تم تعديل الصلاحية':'تم حفظ الصلاحية وإنشاء المستخدم إن كان الكود جديدًا','success');
+    toast(found?'تم تعديل الصلاحية':'تم حفظ الصلاحية وإنشاء مستخدم الدخول','success');
     e.target.reset(); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ الصلاحية: '+err.message+' - تأكد من تشغيل ملف users SQL')}
   finally{showLoading(false);window.__busy=false}
@@ -3630,15 +3641,19 @@ function inDateRange(date, from, to){
   return true;
 }
 function productCost(code){
-  const key=String(code||'').toLowerCase();
-  const rows=(purchaseItems||[]).filter(x=>String(x.product_code||'').toLowerCase()===key && Number(x.qty||0)>0);
+  const key=String(code||'').split('|')[0].trim().toLowerCase();
+  if(!key) return 0;
+  const rows=(purchaseItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===key && Number(x.qty||0)>0);
   const qty=rows.reduce((a,x)=>a+Number(x.qty||0),0);
   if(qty>0){
     const total=rows.reduce((a,x)=>a+Number(x.line_total||0),0);
-    return total/qty;
+    const avg=total/qty;
+    if(avg>0) return avg;
   }
-  const p=products.find(x=>String(x.code||'').toLowerCase()===key);
-  return Number(p?.purchase_price||0);
+  const hist=(saleItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===key && Number(x.unit_cost_at_sale||0)>0);
+  if(hist.length){return hist.reduce((a,x)=>a+Number(x.unit_cost_at_sale||0),0)/hist.length;}
+  const p=products.find(x=>String(x.code||'').trim().toLowerCase()===key);
+  return Number(p?.purchase_price||p?.cost||0);
 }
 
 function marginValue(code, price){return Number(price||0)-productCost(code)}
@@ -3832,7 +3847,7 @@ function showReport(name){
   document.querySelectorAll('.rep-view').forEach(v=>v.classList.add('hidden'));
   q('rep-'+name)?.classList.remove('hidden');
   document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.rep===name));
-  renderReportsDetail();
+  if(name==='dailycash') renderDailyCashReport(); else renderReportsDetail();
 }
 function reportContext(){
   const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'', loc=q('reportLocation')?.value||'';
@@ -4158,6 +4173,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21480590e0f2770',t:'MTc4NTA4MDQxMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
-</body>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a214a77498493574',t:'MTc4NTA4MjAxMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
