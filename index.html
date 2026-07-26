@@ -1042,7 +1042,7 @@
         <div class="panel">
           <h2>المصاريف</h2>
           <form class="form" id="expenseForm">
-            <div><label>الفرع</label><select id="expenseLocation" required></select></div><div><label>الحساب المدفوع منه</label><select id="expenseAccount" required></select></div>
+            <div><label>الفرع</label><select id="expenseLocation" required disabled></select></div><div><label>طريقة الدفع</label><select id="expensePaymentMethod" onchange="selectDefaultExpenseAccount()"><option value="cash">كاش</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div><div><label>الخزينة / الحساب</label><select id="expenseAccount" required></select></div>
             <div><label>التصنيف</label><select id="expenseCategory"></select></div>
             <div><label>التاريخ</label><input id="expenseDate" type="date" required></div>
             <div><label>المبلغ</label><input id="expenseAmount" type="text" inputmode="decimal" required></div>
@@ -1189,6 +1189,15 @@
             <button class="btn" type="submit">حفظ الإعدادات</button>
             <button class="btn secondary" type="button" onclick="resetLocalSettings()">استرجاع الافتراضي</button>
           </form>
+        </div>
+        <div class="panel">
+          <h2>تصنيفات المصاريف</h2>
+          <p class="muted">أضف تصنيفات المصاريف من هنا بدون تعديل الكود. مثال: وقود، صيانة، ضيافة، نقل.</p>
+          <form class="form" id="expenseCategoryForm">
+            <div><label>اسم التصنيف</label><input id="newExpenseCategoryName" placeholder="مثال: وقود" required></div>
+            <button class="btn" type="submit">إضافة التصنيف</button>
+          </form>
+          <div class="table-scroll"><table><thead><tr><th>التصنيف</th><th>الحالة</th></tr></thead><tbody id="settingsExpenseCategoriesBody"></tbody></table></div>
         </div>
       </section>
 
@@ -1580,7 +1589,7 @@ async function loadAll(){
   finally{showLoading(false);window.__busy=false}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();applyPermissions();setTimeout(setupTableSorting,0)}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();applyPermissions();setTimeout(setupTableSorting,0)}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -2174,10 +2183,11 @@ function fillSupplierSelects(){
   if(q('customerPaymentFinanceAccount')) q('customerPaymentFinanceAccount').innerHTML=financeAccountOptionsFor(q('customerPaymentMethod')?.value||'cash','تلقائي حسب الطريقة');
 
   const accountOpts='<option value="">اختر الحساب</option>'+financeAccounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} - ${money(a.balance)}</option>`).join('');
-  ['financeTransferFrom','financeTransferTo','expenseAccount','salaryAccount'].forEach(id=>{if(q(id)) q(id).innerHTML=accountOpts});
+  ['financeTransferFrom','financeTransferTo','salaryAccount'].forEach(id=>{if(q(id)) q(id).innerHTML=accountOpts});
   if(q('financeAccountLocation')) q('financeAccountLocation').innerHTML='<option value="">بدون فرع / عام</option>'+locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
-  if(q('expenseLocation')){q('expenseLocation').innerHTML='<option value="">اختر الفرع</option>'+locations.filter(l=>l.is_sales_location||l.location_type==='branch').map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join(''); if(appUser?.branch_id) q('expenseLocation').value=appUser.branch_id;}
+  if(q('expenseLocation')){q('expenseLocation').innerHTML='<option value="">اختر الفرع</option>'+locations.filter(l=>l.is_sales_location||l.location_type==='branch').map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join(''); if(appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; q('expenseLocation').disabled=true;}
   if(q('expenseCategory')) q('expenseCategory').innerHTML='<option value="">بدون تصنيف</option>'+expenseCategories.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  selectDefaultExpenseAccount();
   if(q('salaryEmployee')) q('salaryEmployee').innerHTML='<option value="">اختر الموظف</option>'+employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('');
   if(q('saleCashAccount')) q('saleCashAccount').innerHTML='<option value="">خزينة الفرع تلقائيًا</option>'+financeAccounts.filter(a=>a.account_type==='cash').map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
   if(q('saleBankAccount')) q('saleBankAccount').innerHTML=financeAccountOptionsFor('bank_transfer','اختر مصرف التحويل');
@@ -3264,7 +3274,7 @@ q('saleReturnForm').addEventListener('submit', async e=>{
 
 q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:moneyVal(q('financeOpeningBalance').value),notes:q('financeAccountNotes').value.trim()||null}; if(editingFinanceAccountId){await api('pos_finance_accounts',{method:'PATCH',qs:`?id=eq.${editingFinanceAccountId}`,body:{...body,updated_at:new Date().toISOString()}}); toast('تم تعديل الحساب');}else{await api('pos_finance_accounts',{method:'POST',body}); toast('تم حفظ الحساب');} resetFinanceAccountForm(); await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message+' - تأكد من تشغيل SQL طرق الدفع للحسابات')}finally{showLoading(false);window.__busy=false}});
 q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=moneyVal(q('financeTransferAmount').value),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}validateAccountingTransfer(amount);await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await loadAll();}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
-q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null};validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset();setToday();toast('تم حفظ المصروف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const method=q('expensePaymentMethod')?.value||'cash'; if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; if(method==='cash') selectDefaultExpenseAccount(); const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null}; if(!body.location_id)throw new Error('لا يوجد فرع مرتبط بالمستخدم'); if(!body.account_id)throw new Error('اختر الخزينة / الحساب'); validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset(); if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; selectDefaultExpenseAccount(); setToday();toast('تم حفظ المصروف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_employees',{method:'POST',body:{name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:moneyVal(q('employeeMonthlySalary').value)}});e.target.reset();toast('تم حفظ الموظف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:moneyVal(q('salaryAmount').value),notes:q('salaryNotes').value.trim()||null};validateAccountingOutflow('salary',body.amount);const r=await api('pos_salary_payments',{method:'POST',body});await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب موظف');e.target.reset();setToday();toast('تم دفع المرتب');await loadAll();}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
@@ -3273,6 +3283,15 @@ q('settingsForm')?.addEventListener('submit',e=>{
   Object.assign(APP_CONFIG,{businessName:q('settingsBusinessName').value.trim()||APP_CONFIG.businessName,tagline:q('settingsTagline').value.trim()||APP_CONFIG.tagline,currency:q('settingsCurrency').value.trim()||APP_CONFIG.currency,lowStockThreshold:Number(q('settingsLowStock').value||0)});
   localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold}));
   initBranding(); renderAll(); toast('تم حفظ الإعدادات');
+});
+
+q('expenseCategoryForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const name=q('newExpenseCategoryName').value.trim(); if(!name)return;
+  if(window.__busy)return; window.__busy=true;
+  try{showLoading(true); await api('pos_expense_categories',{method:'POST',body:{name,active:true}}); q('newExpenseCategoryName').value=''; toast('تم إضافة تصنيف المصروف'); await loadAll();}
+  catch(err){console.error(err);toast('خطأ في إضافة التصنيف: '+friendlyError(err),'error')}
+  finally{showLoading(false);window.__busy=false}
 });
 
 q('roleForm').addEventListener('submit', async e=>{
@@ -3460,6 +3479,28 @@ q('supplierForm').addEventListener('submit', async e=>{
 function selectDefaultSupplierPaymentAccount(){const m=q('paymentMethod')?.value; if(q('paymentFinanceAccount')) q('paymentFinanceAccount').innerHTML=financeAccountOptionsFor(m,'تلقائي حسب الطريقة'); const id=defaultFinanceAccountFor(m); if(q('paymentFinanceAccount')&&id) q('paymentFinanceAccount').value=id;}
 function selectDefaultPurchasePaymentAccount(){const m=q('purchasePaymentMethod')?.value; if(q('purchaseFinanceAccount')) q('purchaseFinanceAccount').innerHTML=financeAccountOptionsFor(m,'تلقائي حسب الطريقة'); const id=defaultFinanceAccountFor(m); if(q('purchaseFinanceAccount')&&id) q('purchaseFinanceAccount').value=id;}
 function selectDefaultCustomerPaymentAccount(){const m=q('customerPaymentMethod')?.value; if(q('customerPaymentFinanceAccount')) q('customerPaymentFinanceAccount').innerHTML=financeAccountOptionsFor(m,'تلقائي حسب الطريقة'); const id=defaultFinanceAccountFor(m); if(q('customerPaymentFinanceAccount')&&id) q('customerPaymentFinanceAccount').value=id;}
+function expenseAccountsForMethod(method){
+  const branch=q('expenseLocation')?.value||appUser?.branch_id||'';
+  let rows=[];
+  if(method==='cash') rows=financeAccounts.filter(a=>a.account_type==='cash' && (!branch || a.location_id===branch));
+  else rows=financeAccounts.filter(a=>a.account_type==='bank'||a.account_type==='card');
+  return '<option value="">اختر الحساب</option>'+rows.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} - ${esc(accountTypeLabel(a.account_type))} - ${money(a.balance)}</option>`).join('');
+}
+function selectDefaultExpenseAccount(){
+  const method=q('expensePaymentMethod')?.value||'cash';
+  const acc=q('expenseAccount'); if(!acc)return;
+  acc.innerHTML=expenseAccountsForMethod(method);
+  if(method==='cash'){
+    const branch=q('expenseLocation')?.value||appUser?.branch_id||'';
+    const cash=financeAccounts.find(a=>a.account_type==='cash' && (!branch||a.location_id===branch));
+    if(cash) acc.value=cash.id;
+  }
+}
+function renderSettingsExpenseCategories(){
+  const body=q('settingsExpenseCategoriesBody'); if(!body)return;
+  body.innerHTML=(expenseCategories||[]).map(c=>`<tr><td>${esc(c.name)}</td><td>${c.active===false?'<span class="badge gray">متوقف</span>':'<span class="badge green">نشط</span>'}</td></tr>`).join('')||'<tr><td colspan="2">لا توجد تصنيفات بعد.</td></tr>';
+}
+
 
 q('paymentForm').addEventListener('submit', async e=>{
   e.preventDefault();
@@ -4183,6 +4224,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a214cbaa19cf4731',t:'MTc4NTA4MzQ5Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a214f6389c77f942',t:'MTc4NTA4NTIzOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+</body>
 </html>
