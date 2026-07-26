@@ -958,7 +958,7 @@
             <div><label>معرّف المستخدم</label><input id="roleIdentifier" required placeholder="مثال: ahmed" class="ltr"></div>
             <div><label>الاسم الظاهر</label><input id="roleDisplayName" placeholder="اختياري"></div>
             <div><label>كود الدخول الجديد</label><input id="roleCode" class="ltr" placeholder="اختياري عند إنشاء مستخدم"></div>
-            <div><label>الدور</label><select id="roleName"><option value="admin">مدير</option><option value="seller_11">بائع فرع 11 يونيو</option><option value="seller_sarraj">بائع فرع السراج</option><option value="warehouse">مخزن</option><option value="accountant">محاسب</option><option value="viewer">مشاهدة فقط</option></select></div>
+            <div><label>الدور</label><select id="roleName"><option value="admin">مدير</option><option value="seller_11">بائع فرع 11 يونيو</option><option value="seller_sarraj">بائع فرع السراج</option><option value="sales_purchase">بيع وشراء الفرعين</option><option value="warehouse">مخزن</option><option value="accountant">محاسب</option><option value="viewer">مشاهدة فقط</option></select></div>
             <div><label>ملاحظات</label><input id="roleNotes" placeholder="اختياري"></div>
             <button class="btn" type="submit">حفظ الصلاحية</button>
           </form>
@@ -1629,11 +1629,12 @@ function resolveSelectedLoginBranch(selectedValue, selectedText){
     locations.find(l=>String(l.name)===String(selectedText)) || null;
 }
 
-const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
+const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',sales_purchase:'بيع وشراء الفرعين',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
 const ROLE_TABS={
   admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','transfers','finance','reports','users','settings'],
   seller_11:['dashboard','products','sales','salesList','proformas','stock'],
   seller_sarraj:['dashboard','products','sales','salesList','proformas','stock'],
+  sales_purchase:['dashboard','products','suppliers','sales','salesList','proformas','customers','purchases','stock'],
   warehouse:['dashboard','products','stock','transfers','purchases'],
   accountant:['dashboard','suppliers','ledger','payments','customers','finance','reports'],
   viewer:['dashboard','products','stock','reports']
@@ -1714,6 +1715,7 @@ function tidyNavGroups(){
     g.style.display=anyVisible?'':'none';
   });
 }
+function canSelectSaleBranch(){return currentRole?.role==='admin'||currentRole?.role==='sales_purchase'}
 function applyPermissions(){
   if(!appUser?.id){updateAuthUI();return;}
   currentRole=getUserRole()||currentRole||{role:'viewer'}; updateAuthUI();
@@ -1723,12 +1725,23 @@ function applyPermissions(){
   if(active && active.style.display==='none'){
     const first=[...document.querySelectorAll('nav button[data-tab]')].find(b=>b.style.display!=='none'); if(first) first.click();
   }
-  if(appUser?.branch_id && q('saleLocation')){q('saleLocation').value=appUser.branch_id; q('saleLocation').disabled=true;}
+  const saleLoc=q('saleLocation');
+  if(saleLoc){
+    const box=saleLoc.closest('div');
+    const canSelect=canSelectSaleBranch();
+    if(box) box.classList.toggle('hidden',!canSelect);
+    saleLoc.disabled=!canSelect;
+    if(canSelect){
+      if(!saleLoc.value && appUser?.branch_id) saleLoc.value=appUser.branch_id;
+    }else if(appUser?.branch_id){
+      saleLoc.value=appUser.branch_id;
+    }
+  }
   // Branch sellers are locked to their branch in sales screen.
   if(currentRole?.role==='seller_11' || currentRole?.role==='seller_sarraj'){
     const wanted=currentRole.role==='seller_11'?'فرع 11 يونيو':'فرع السراج'; const loc=locations.find(l=>l.name===wanted);
     if(loc && q('saleLocation')){q('saleLocation').value=loc.id; q('saleLocation').disabled=true;}
-  }else if(q('saleLocation') && !appUser?.branch_id) q('saleLocation').disabled=false;
+  }
 }
 function renderRoles(){
   if(!q('rolesBody')) return;
@@ -1899,7 +1912,7 @@ function fillPickerSelect(id,key,label){
 }
 function openSaleProductPicker(){
   productPickerTarget='sale';
-  if(q('saleLocation') && appUser?.branch_id) q('saleLocation').value=appUser.branch_id; if(!q('saleLocation').value){toast('لا يوجد فرع مرتبط بالمستخدم. سجل الدخول واختر الفرع.'); return;}
+  if(q('saleLocation') && appUser?.branch_id && !canSelectSaleBranch()) q('saleLocation').value=appUser.branch_id; if(!q('saleLocation').value){toast('اختر فرع البيع أولاً'); return;}
   fillPickerSelect('salePickerCategory','category','كل التصنيفات');
   fillPickerSelect('salePickerBrand','brand','كل الماركات');
   fillPickerSelect('salePickerColor','color','كل الألوان');
@@ -1961,7 +1974,7 @@ function renderSaleProductPicker(){
   });
   const pickerCols=['code','name','brand','color','supplier_name','available','retail_price','margin_value','margin_pct'];
   const key=pickerCols[pickerSortIndex]||'available';
-  const loc=(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:(productPickerTarget==='transfer'?q('transferFrom')?.value:(appUser?.branch_id||q('saleLocation')?.value))))||'';
+  const loc=(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:(productPickerTarget==='transfer'?q('transferFrom')?.value:(canSelectSaleBranch()?q('saleLocation')?.value:(appUser?.branch_id||q('saleLocation')?.value)))))||'';
   rows.sort((a,b)=>{const av=key==='available'?getStockQty(loc,a.code):(key==='margin_value'?marginValue(a.code,a.retail_price):(key==='margin_pct'?marginPct(a.code,a.retail_price):(a[key]??''))); const bv=key==='available'?getStockQty(loc,b.code):(key==='margin_value'?marginValue(b.code,b.retail_price):(key==='margin_pct'?marginPct(b.code,b.retail_price):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,250);
   if(!shown.length) pickerSelectedIndex=-1; else if(pickerSelectedIndex>=shown.length) pickerSelectedIndex=shown.length-1;
@@ -2604,7 +2617,7 @@ async function ensureSaleCustomer(balanceDue){
 function resetSaleForm(){
   suppressSaleDraftSave=true; saleSupervisorApproved=false;
   editingSaleId=null; originalSale=null; originalSaleItems=[];
-  q('saleForm').reset(); if(q('saleLocation') && appUser?.branch_id) q('saleLocation').value=appUser.branch_id; if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0;} q('saleItemsBody').innerHTML=''; setToday(); ensureSaleInvoiceNo(true);
+  q('saleForm').reset(); if(q('saleLocation') && appUser?.branch_id && !canSelectSaleBranch()) q('saleLocation').value=appUser.branch_id; if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0;} q('saleItemsBody').innerHTML=''; setToday(); ensureSaleInvoiceNo(true);
   q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden'); setActivePayInput(q('saleCashAmount')); renderSaleStockInfo(''); renderSaleCustomerInfo(); updateSaleTotal(); suppressSaleDraftSave=false; setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
 }
 async function openSaleForEdit(id){
@@ -3308,7 +3321,7 @@ q('saleForm').addEventListener('submit', async e=>{
   document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=true);
   const items=getSaleItems();
   if(!items.length){toast('أضف صنف واحد على الأقل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
-  const location_id=appUser?.branch_id || q('saleLocation').value; if(q('saleLocation') && location_id) q('saleLocation').value=location_id; if(!location_id){toast('لا يوجد فرع مرتبط بالمستخدم','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  const location_id=canSelectSaleBranch() ? q('saleLocation').value : (appUser?.branch_id || q('saleLocation').value); if(q('saleLocation') && location_id) q('saleLocation').value=location_id; if(!location_id){toast('اختر فرع البيع','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   updateSaleTotal();
   const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=moneyVal(q('saleDiscount').value); const total=subtotal-discount;
   const payRows=getSalePaymentBreakdown(); const rawPaid=payRows.reduce((a,x)=>a+Number(x.amount||0),0); const isRefundInvoice=total<0; const refundRequired=Math.abs(total);
@@ -4145,6 +4158,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1f36a422dd94731',t:'MTc4NDczMzQ3Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21480590e0f2770',t:'MTc4NTA4MDQxMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+</body>
 </html>
