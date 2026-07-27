@@ -4341,13 +4341,31 @@ const LONG_INPUT_IDS=new Set(['productBrand','productModel','productColor']);
 function optionText(o){return (o?.textContent||'').trim()}
 function longPickerItemsFor(el){
   if(!el) return [];
-  if(el.tagName==='SELECT') return [...el.options].filter(o=>o.value!=='' || optionText(o)).map(o=>({value:o.value,text:optionText(o)||o.value}));
   const id=el.id;
+  const customerIds=new Set(['saleCustomer','proformaCustomer','customerPaymentCustomer','customerLedgerCustomer']);
+  const supplierIds=new Set(['purchaseSupplier','paymentSupplier','ledgerSupplier','productSupplier']);
+  if(customerIds.has(id)){
+    return (customers||[]).map(c=>({
+      value:c.id,
+      text:[c.customer_no,c.name].filter(Boolean).join(' - ') || c.id,
+      sub:[c.phone?('هاتف: '+c.phone):'', Number(c.balance||0)?('الرصيد: '+money(c.balance)+' '+APP_CONFIG.currency):''].filter(Boolean).join(' | '),
+      search:[c.customer_no,c.name,c.phone,c.balance].join(' ')
+    }));
+  }
+  if(supplierIds.has(id)){
+    return (suppliers||[]).map(x=>({
+      value:x.id,
+      text:[x.supplier_no,x.name].filter(Boolean).join(' - ') || x.id,
+      sub:[x.phone?('هاتف: '+x.phone):'', Number(x.balance||0)?('الرصيد: '+money(x.balance)+' '+APP_CONFIG.currency):''].filter(Boolean).join(' | '),
+      search:[x.supplier_no,x.name,x.phone,x.balance].join(' ')
+    }));
+  }
+  if(el.tagName==='SELECT') return [...el.options].filter(o=>o.value!=='' || optionText(o)).map(o=>({value:o.value,text:optionText(o)||o.value,sub:'',search:optionText(o)+' '+o.value}));
   let arr=[];
   if(id==='productBrand') arr=[...new Set([...(products||[]).map(p=>p.brand).filter(Boolean),...(APP_CONFIG.customBrands||[])])];
   else if(id==='productModel') arr=[...new Set([...(products||[]).map(p=>p.model).filter(Boolean),...(APP_CONFIG.customModels||[])])];
   else if(id==='productColor') arr=[...new Set([...(products||[]).map(p=>p.color).filter(Boolean),...(APP_CONFIG.customColors||[])])];
-  return arr.sort((a,b)=>String(a).localeCompare(String(b),'ar')).map(v=>({value:v,text:v}));
+  return arr.sort((a,b)=>String(a).localeCompare(String(b),'ar')).map(v=>({value:v,text:v,sub:'',search:v}));
 }
 function longPickerTitleFor(id){
   return {saleCustomer:'اختيار زبون',purchaseSupplier:'اختيار مورد لفاتورة الشراء',paymentSupplier:'اختيار مورد للدفع',ledgerSupplier:'اختيار مورد لكشف الحساب',productSupplier:'اختيار مورد للمنتج',proformaCustomer:'اختيار زبون للفاتورة المبدئية',customerPaymentCustomer:'اختيار زبون للدفع',customerLedgerCustomer:'اختيار زبون لكشف الحساب',productBrand:'اختيار الشركة / الماركة',productModel:'اختيار الموديل',productColor:'اختيار اللون'}[id]||'اختيار من القائمة';
@@ -4365,11 +4383,11 @@ function openLongPicker(targetId){
 }
 function closeLongPicker(){q('longPickerModal')?.classList.remove('show')}
 function renderLongPicker(){
-  const term=norm(q('longPickerSearch')?.value||'');
-  const rows=longPickerState.items.filter(it=>!term||norm(it.text).includes(term)||norm(it.value).includes(term));
+  const term=normText(q('longPickerSearch')?.value||'');
+  const rows=longPickerState.items.filter(it=>!term||normText(it.search||it.text).includes(term)||normText(it.value).includes(term));
   longPickerState.filtered=rows.slice(0,300);
   if(longPickerState.index>=longPickerState.filtered.length) longPickerState.index=Math.max(0,longPickerState.filtered.length-1);
-  q('longPickerBody').innerHTML=longPickerState.filtered.map((it,i)=>`<tr class="${i===longPickerState.index?'active-row':''}" ondblclick="chooseLongPicker(${i})" onclick="longPickerState.index=${i};renderLongPicker()"><td>${esc(it.text)}</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();chooseLongPicker(${i})">اختيار</button></td></tr>`).join('')||'<tr><td colspan="2">لا توجد نتائج</td></tr>';
+  q('longPickerBody').innerHTML=longPickerState.filtered.map((it,i)=>`<tr class="${i===longPickerState.index?'active-row':''}" ondblclick="chooseLongPicker(${i})" onclick="longPickerState.index=${i};renderLongPicker()"><td><b>${esc(it.text)}</b>${it.sub?`<div class="mini">${esc(it.sub)}</div>`:''}</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();chooseLongPicker(${i})">اختيار</button></td></tr>`).join('')||'<tr><td colspan="2">لا توجد نتائج</td></tr>';
   q('longPickerInfo').textContent=`عرض ${longPickerState.filtered.length} من ${longPickerState.items.length}`;
 }
 function chooseLongPicker(i){
@@ -4412,6 +4430,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21d1553ccaf2770',t:'MTc4NTE3MDM5OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21d569e8f0d3574',t:'MTc4NTE3MzA3Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+</body>
 </html>
