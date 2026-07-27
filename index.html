@@ -706,6 +706,7 @@
                 <div class="rail-title">الفاتورة</div>
                 <button class="rail-btn" type="button" onclick="q('saleBarcodeInput').focus()"><i class="ti ti-bolt"></i><span>إضافة سريعة</span></button>
                 <button class="rail-btn" type="button" onclick="openSaleProductPicker()"><i class="ti ti-search"></i><span>قائمة المنتجات F3</span></button>
+                <button class="rail-btn" type="button" onclick="openPriceCheckerCarts()"><i class="ti ti-basket"></i><span>سلات الباحث</span></button>
                 <div class="rail-title">أخرى</div>
                 <button class="rail-btn" type="button" onclick="applyDiscountCoupon()"><i class="ti ti-ticket"></i><span>كوبون خصم</span></button>
                 <button class="rail-btn" type="button" onclick="toggleCalculator()"><i class="ti ti-calculator"></i><span>الآلة الحاسبة</span></button>
@@ -1354,6 +1355,17 @@
     </div>
   </div>
 
+  <div class="modal" id="priceCheckerCartsModal">
+    <div class="modal-card" style="max-width:860px">
+      <div class="modal-head">
+        <div><h2 style="margin:0">سلات باحث السعر</h2><div class="mini">يعرض السلات المفتوحة للعاملين في نفس الفرع. اختر سلة لتحويلها إلى فاتورة بيع قابلة للتعديل.</div></div>
+        <button class="btn secondary" type="button" onclick="closePriceCheckerCarts()">إغلاق</button>
+      </div>
+      <input id="priceCartSearch" class="searchInput" placeholder="بحث باسم الزبون أو الهاتف أو البائع..." oninput="renderPriceCheckerCarts()">
+      <div class="table-scroll" style="margin-top:10px;max-height:62vh"><table><thead><tr><th>الزبون</th><th>الهاتف</th><th>البائع</th><th>الأصناف</th><th>الإجمالي</th><th>آخر تعديل</th><th>إجراء</th></tr></thead><tbody id="priceCheckerCartsBody"></tbody></table></div>
+    </div>
+  </div>
+
   <div class="modal" id="saleProductPickerModal">
     <div class="modal-card">
       <div class="modal-head">
@@ -1416,6 +1428,7 @@ let editingSaleId=null, originalSale=null, originalSaleItems=[];
 let selectedProductCode=null;
 let productFormMode='create', editingProductCode=null;
 let selectedSaleId=null;
+let priceCheckerCarts=[], sourcePriceCheckerCartId=null;
 let activePayInputId="saleCashAmount";
 let saleSaveMode="new";
 let lastFocusedSaleRow=null;
@@ -1971,6 +1984,43 @@ function fillPickerSelect(id,key,label){
   const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort();
   el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
   if(vals.includes(old)) el.value=old;
+}
+async function openPriceCheckerCarts(){
+  try{
+    showLoading(true);
+    priceCheckerCarts=await rpc('pos_get_branch_pricechecker_carts',{});
+    q('priceCheckerCartsModal').classList.add('show');
+    renderPriceCheckerCarts();
+    setTimeout(()=>q('priceCartSearch')?.focus(),50);
+  }catch(e){console.error(e);toast('تعذر تحميل سلات الباحث: '+friendlyError(e),'error')}
+  finally{showLoading(false);window.__busy=false}
+}
+function closePriceCheckerCarts(){q('priceCheckerCartsModal')?.classList.remove('show')}
+function renderPriceCheckerCarts(){
+  const term=norm(q('priceCartSearch')?.value||'');
+  const rows=(priceCheckerCarts||[]).filter(c=>!term||norm([c.customer_name,c.customer_phone,c.owner_identifier].join(' ')).includes(term));
+  q('priceCheckerCartsBody').innerHTML=rows.map(c=>{const items=Array.isArray(c.items)?c.items:[]; return `<tr><td>${esc(c.customer_name||'زبون نقدي')}</td><td class="ltr">${esc(c.customer_phone||'')}</td><td>${esc(c.owner_identifier||'')}</td><td>${items.length}</td><td><b>${money(c.total)}</b></td><td>${esc((c.updated_at||'').replace('T',' ').slice(0,19))}</td><td><button class="btn secondary" type="button" onclick="loadPriceCheckerCart('${c.id}')">فتح</button></td></tr>`}).join('')||'<tr><td colspan="7">لا توجد سلات مفتوحة.</td></tr>';
+}
+function loadPriceCheckerCart(id){
+  const c=(priceCheckerCarts||[]).find(x=>x.id===id); if(!c)return;
+  if(saleHasContent()&&!confirm('سيتم استبدال الفاتورة الحالية بهذه السلة. متابعة؟'))return;
+  suppressSaleDraftSave=true;
+  sourcePriceCheckerCartId=id;
+  openTab('sales');
+  q('saleItemsBody').innerHTML='';
+  const phone=String(c.customer_phone||'').replace(/[^0-9+]/g,'');
+  const existing=customers.find(x=>String(x.phone||'').replace(/[^0-9+]/g,'')===phone && phone);
+  q('saleCustomer').value=existing?.id||'';
+  q('saleNewCustomerName').value=existing?'':(c.customer_name||'');
+  q('saleNewCustomerPhone').value=existing?'':(c.customer_phone||'');
+  q('saleNotes').value=c.notes||'';
+  q('saleDiscount').value=Number(c.discount_percent||0);
+  const items=Array.isArray(c.items)?c.items:[];
+  items.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:Number(it.quantity||1),unit_price:Number(it.unit_price||0),discount_text:''}));
+  updateSaleTotal(); refreshSaleAvailability(); renderSaleCustomerInfo();
+  suppressSaleDraftSave=false; saveActiveSaleDraft();
+  closePriceCheckerCarts();
+  toast('تم فتح السلة في فاتورة البيع ويمكن تعديلها','success');
 }
 function openSaleProductPicker(){
   productPickerTarget='sale';
@@ -2679,7 +2729,7 @@ async function ensureSaleCustomer(balanceDue){
   return customer_id;
 }
 function resetSaleForm(){
-  suppressSaleDraftSave=true; saleSupervisorApproved=false;
+  suppressSaleDraftSave=true; saleSupervisorApproved=false; sourcePriceCheckerCartId=null;
   editingSaleId=null; originalSale=null; originalSaleItems=[];
   q('saleForm').reset(); if(q('saleLocation') && appUser?.branch_id && !canSelectSaleBranch()) q('saleLocation').value=appUser.branch_id; if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0;} q('saleItemsBody').innerHTML=''; setToday(); ensureSaleInvoiceNo(true);
   q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden'); setActivePayInput(q('saleCashAmount')); renderSaleStockInfo(''); renderSaleCustomerInfo(); updateSaleTotal(); suppressSaleDraftSave=false; setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
@@ -3460,6 +3510,7 @@ q('saleForm').addEventListener('submit', async e=>{
       const idem=getDraftKey('sale');
       const saved=await rpc('post_sale_transaction',{p_sale:body,p_items:items,p_payments:paymentsForRpc,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
       saleId=saved.id; body.invoice_no=saved.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||'';
+      if(sourcePriceCheckerCartId){await rpc('mark_pricechecker_cart_converted',{p_cart_id:sourcePriceCheckerCartId}).catch(console.warn); sourcePriceCheckerCartId=null;}
       clearDraftKey('sale'); clearActiveSaleDraft();
       const msg='تم حفظ فاتورة البيع وتحديث المخزون';
       const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); clearActiveSaleDraft(); resetSaleForm(); await loadAll(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
@@ -4361,6 +4412,6 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21cfbf3fd913574',t:'MTc4NTE2OTM1OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
 </body>
 </html>
