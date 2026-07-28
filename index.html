@@ -2750,9 +2750,35 @@ function updateSaleTotal(){
   q('salePaidAmount').value=money(isRefund?-rawPaid:rawPaid);
   q('saleTotal').textContent=money(total); if(q('saleHeaderTotal')) q('saleHeaderTotal').textContent=money(total); if(q('saleFinishTotal')) q('saleFinishTotal').textContent=money(total); if(q('salePaymentScreenTotal')) q('salePaymentScreenTotal').textContent=isRefund?'استرداد '+money(required):money(total); q('saleBalance').textContent=over>0?('+'+money(over)):money(bal); if(q('saleFinishBalance')) q('saleFinishBalance').textContent=isRefund?('المطلوب رده للزبون: '+money(required)+' '+APP_CONFIG.currency):((over>0?'زيادة: ':'المتبقي: ')+money(over>0?over:bal)+' '+APP_CONFIG.currency); renderSaleCustomerInfo(); if(q('salePaymentDetected')) {q('salePaymentDetected').textContent=isRefund?(over>0?'تنبيه: مبلغ الاسترداد أكبر من المطلوب بمبلغ '+money(over)+' '+APP_CONFIG.currency:'استرداد للزبون: '+money(required)+' '+APP_CONFIG.currency+' — '+(paymentBreakdownText(getSalePaymentBreakdown())||'اختر طريقة الاسترداد')):(over>0?'تنبيه: المدفوع أكبر من إجمالي الفاتورة بمبلغ '+money(over)+' '+APP_CONFIG.currency:'طريقة الدفع: '+typeLabel(detectSalePaymentMethod(bal))+' — '+(paymentBreakdownText(getSalePaymentBreakdown())||'لم يتم إدخال دفع')); q('salePaymentDetected').style.color=(over>0||isRefund)?'var(--bad)':'';}
 }
+function matchExistingCustomerByPhone(phone){
+  const norm=String(phone||'').replace(/[^0-9+]/g,'');
+  if(!norm) return null;
+  return customers.find(c=>String(c.phone||'').replace(/[^0-9+]/g,'')===norm) || null;
+}
 async function ensureSaleCustomer(balanceDue){
   let customer_id=q('saleCustomer').value||null;
   const newName=q('saleNewCustomerName').value.trim(); const newPhone=q('saleNewCustomerPhone').value.trim();
+  if(!customer_id && newPhone){
+    // التعرف على الزبون المسجّل عبر رقم الهاتف بدل إنشاء نسخة مكررة (تفادي رسالة "الرقم مسجّل")
+    let existing=matchExistingCustomerByPhone(newPhone);
+    if(!existing){
+      const variants=[...new Set([newPhone, String(newPhone).replace(/[^0-9]/g,''), '+'+String(newPhone).replace(/[^0-9]/g,'')])].filter(Boolean);
+      for(const v of variants){
+        if(!v) continue;
+        try{
+          const rows=await api('pos_customers',{qs:`?select=id,name,phone&phone=eq.${encodeURIComponent(v)}&limit=1`});
+          if(rows&&rows.length){ existing=rows[0]; if(!customers.find(c=>c.id===existing.id)) customers.push(existing); break; }
+        }catch(e){ console.warn('customer phone lookup failed',e); }
+      }
+    }
+    if(existing){
+      customer_id=existing.id;
+      if(q('saleCustomer')) q('saleCustomer').value=existing.id;
+      q('saleNewCustomerName').value=''; q('saleNewCustomerPhone').value='';
+      try{renderSaleCustomerInfo();}catch(e){}
+      toast(`تم التعرف على الزبون المسجّل: ${existing.name||''} واعتماده في الفاتورة`,'success');
+    }
+  }
   if(!customer_id && newName){
     const created=await api('pos_customers',{method:'POST',body:{name:newName,phone:newPhone||null,active:true}});
     customer_id=created[0].id;
@@ -4462,6 +4488,5 @@ setInterval(renderStatusBar,60000);
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
 initBranding(); fillSettingsForm(); initConnectivity(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2253da1295e74d8',t:'MTc4NTI1NTkzNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
 </body>
 </html>
