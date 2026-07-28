@@ -224,6 +224,13 @@
     #longPickerBody tr{cursor:pointer}
     #longPickerBody tr.active-row{background:var(--accent-soft);outline:2px solid color-mix(in srgb,var(--blue) 45%,transparent);outline-offset:-2px}
 
+
+    /* Weak internet / offline status */
+    #syncState.sync-online::before{background:#34d399;box-shadow:0 0 0 3px rgba(52,211,153,.25)}
+    #syncState.sync-syncing::before{background:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.25)}
+    #syncState.sync-cache::before{background:#fbbf24;box-shadow:0 0 0 3px rgba(251,191,36,.25)}
+    #syncState.sync-offline::before{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25)}
+
 </style>
   <style id="pro-theme">
     /* ================= Professional theme layer ================= */
@@ -1538,7 +1545,8 @@ function setupDecimalInputs(){
     if(String(el.value).trim()!=='') el.value=String(parseDecimal(el.value));
   },true);
 }
-function showLoading(v){q('loading').style.display=v?'block':'none'; q('syncState').textContent=v?'جاري المزامنة...':'متصل مع Supabase'}
+function setSyncState(state,msg){const el=q('syncState'); if(!el)return; el.classList.remove('sync-online','sync-syncing','sync-cache','sync-offline'); el.classList.add('sync-'+state); el.textContent=msg;}
+function showLoading(v){q('loading').style.display=v?'block':'none'; setSyncState(v?'syncing':(navigator.onLine?'online':'offline'), v?'جاري المزامنة...':(navigator.onLine?'متصل مع Supabase':'غير متصل'))}
 function toast(msg,type='info'){
   const t=q('toast'); const colors={success:'var(--good)',error:'var(--bad)',warn:'var(--warn)',info:'var(--blue)'};
   const icons={success:'ti-circle-check',error:'ti-alert-circle',warn:'ti-alert-triangle',info:'ti-info-circle'};
@@ -1608,6 +1616,30 @@ async function apiAll(table, qs='', batch=1000){
   return all;
 }
 
+const ESSENTIAL_CACHE_KEY='posEssentialCacheV1';
+function saveEssentialCache(){
+  try{
+    const data={saved_at:new Date().toISOString(),locations,suppliers,stock,purchases,purchaseItems,products,transfers,sales,saleItems,salePayments,customers,customerLedger,userRoles,financeAccounts,financeMovements,expenseCategories,expenses,dailyCashClosings};
+    localStorage.setItem(ESSENTIAL_CACHE_KEY,JSON.stringify(data));
+  }catch(e){console.warn('essential cache save failed',e)}
+}
+function loadEssentialCache(){
+  try{return JSON.parse(localStorage.getItem(ESSENTIAL_CACHE_KEY)||'null')}catch(e){return null}
+}
+function applyEssentialCache(c){
+  if(!c) return false;
+  locations=c.locations||[]; suppliers=c.suppliers||[]; stock=c.stock||[]; purchases=c.purchases||[]; purchaseItems=c.purchaseItems||[]; products=c.products||[]; transfers=c.transfers||[]; sales=c.sales||[]; saleItems=c.saleItems||[]; salePayments=c.salePayments||[]; customers=c.customers||[]; customerLedger=c.customerLedger||[]; userRoles=c.userRoles||[]; financeAccounts=c.financeAccounts||[]; financeMovements=c.financeMovements||[]; expenseCategories=c.expenseCategories||[]; expenses=c.expenses||[]; dailyCashClosings=c.dailyCashClosings||[];
+  ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter','stockCategoryFilter','stockBrandFilter','stockSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
+  renderAll();
+  setSyncState(navigator.onLine?'cache':'offline',`بيانات محفوظة محليًا ${c.saved_at?('من '+c.saved_at.replace('T',' ').slice(0,16)):''}`);
+  return true;
+}
+function initConnectivity(){
+  window.addEventListener('online',()=>setSyncState('online','عاد الاتصال - يمكنك التحديث'));
+  window.addEventListener('offline',()=>setSyncState('offline','غير متصل - تعمل من البيانات المحفوظة'));
+  setSyncState(navigator.onLine?'online':'offline',navigator.onLine?'متصل مع Supabase':'غير متصل');
+}
+
 async function loadAll(){
   try{
     showLoading(true);
@@ -1641,8 +1673,8 @@ async function loadAll(){
       apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('salary payments not setup yet',e); return []})
     ]);
     ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter','stockCategoryFilter','stockBrandFilter','stockSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
-    renderAll();
-  }catch(e){ console.error(e); toast('خطأ: '+e.message+' - تأكد من تشغيل ملف SQL أولاً'); }
+    renderAll(); saveEssentialCache(); setSyncState('online','متصل - تم تحديث البيانات');
+  }catch(e){ console.error(e); const used=applyEssentialCache(loadEssentialCache()); if(used) toast('الاتصال ضعيف: تم استعمال آخر بيانات محفوظة','warn'); else toast('خطأ: '+e.message+' - لا توجد بيانات محفوظة محليًا'); }
   finally{showLoading(false);window.__busy=false}
 }
 
@@ -4428,8 +4460,8 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initConnectivity(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21d569e8f0d3574',t:'MTc4NTE3MzA3Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2253da1295e74d8',t:'MTc4NTI1NTkzNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
 </body>
 </html>
