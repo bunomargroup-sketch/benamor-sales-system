@@ -1801,7 +1801,7 @@ async function loginPOS(create=false){
     const loc=resolveSelectedLoginBranch(selectedBranch, selectedBranchText);
     if(!loc){throw new Error('تعذر ربط الفرع المختار. حدّث الصفحة وحاول مرة أخرى.');}
     appUser={id:user.id,identifier,branch_id:loc.id,branch_name:loc.name}; localStorage.setItem('posUser',JSON.stringify(appUser));
-    await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); renderStatusBar(); renderCustomers(); toast(create?'تم إنشاء المستخدم والدخول':'تم الدخول','success');
+    await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); renderStatusBar(); toast(create?'تم إنشاء المستخدم والدخول':'تم الدخول','success');
   }catch(err){console.error(err);toast(create?'تعذر إنشاء المستخدم أو المعرّف موجود':'المعرّف أو الكود غير صحيح','error'); setLoginMessage(friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false; q('loginBtn')?.removeAttribute('disabled')}
 }
@@ -4052,95 +4052,36 @@ function fillDailyCashBranches(){
   el.innerHTML='<option value="">كل الفروع</option>'+locations.filter(l=>l.is_sales_location||l.location_type==='branch').map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
   if([...el.options].some(o=>o.value===old)) el.value=old;
 }
-function dailyCashCountedKey(date, branch){ return `posDailyCountedCash_${branch||'all'}_${date||''}`; }
-function dailyCashSellerForSale(saleId){
-  const m=financeMovements.find(x=>x.reference_table==='pos_sales'&&x.reference_id===saleId);
-  const s=(m?.notes||'').match(/المستخدم:\s*([^|,\n]+)/);
-  return s?s[1].trim():'';
-}
-function dailyCashCustomerNameForMovement(m){
-  let cid;
-  if(m.reference_table==='pos_customer_ledger') cid=customerLedger.find(l=>l.id===m.reference_id)?.customer_id;
-  if(!cid && m.reference_table==='pos_sale_returns') cid=saleReturns.find(x=>x.id===m.reference_id)?.customer_id;
-  return cid?(customers.find(c=>c.id===cid)?.name||'زبون'):'';
-}
-function dailyCashSupplierNameForMovement(m){
-  let sid;
-  if(m.reference_table==='pos_supplier_payments'){ sid=ledger.find(l=>l.reference_table==='pos_supplier_payments'&&l.reference_id===m.reference_id)?.supplier_id; if(!sid) sid=payments.find(p=>p.id===m.reference_id)?.supplier_id; }
-  if(!sid && m.reference_table==='pos_purchases') sid=purchases.find(p=>p.id===m.reference_id)?.supplier_id;
-  if(!sid) sid=ledger.find(l=>l.reference_id===m.reference_id)?.supplier_id;
-  return sid?(suppliers.find(s=>s.id===sid)?.name||'مورد'):'';
-}
-const DAILY_METHOD_LABELS={cash:'نقدي',card:'بطاقة',bank_transfer:'تحويل مصرفي',bank:'تحويل مصرفي',credit:'آجل',credit_reduction:'تخفيض دين',none:'بدون',mixed:'مختلط'};
-function getDailyCashData(opts={}){
-  if(!opts.date) fillDailyCashBranches();
-  const date=opts.date || (q('dailyCashDate')?.value || new Date().toISOString().slice(0,10));
-  if(!opts.date && q('dailyCashDate') && !q('dailyCashDate').value) q('dailyCashDate').value=date;
-  const branch=(opts.branch!==undefined)?opts.branch:(q('dailyCashBranch')?.value || '');
+function getDailyCashData(){
+  fillDailyCashBranches();
+  const date=q('dailyCashDate')?.value || new Date().toISOString().slice(0,10);
+  if(q('dailyCashDate') && !q('dailyCashDate').value) q('dailyCashDate').value=date;
+  const branch=q('dailyCashBranch')?.value || '';
+  const salesById={};
+  sales.filter(s=>s.sale_date===date && (!branch||s.location_id===branch)).forEach(s=>salesById[s.id]=s);
   const branchName=branch?(locations.find(l=>l.id===branch)?.name||''):'كل الفروع';
-  const daySalesArr=sales.filter(s=>s.sale_date===date && (!branch||s.location_id===branch));
-  const salesById={}; daySalesArr.forEach(s=>salesById[s.id]=s);
   const salesPay=dailyCashEmpty(), expensesPay=dailyCashEmpty(), customerPay=dailyCashEmpty(), supplierPay=dailyCashEmpty(), refundsPay=dailyCashEmpty();
   Object.values(salesById).forEach(sl=>{
     const rows=salePayments.filter(p=>p.sale_id===sl.id);
     if(rows.length) rows.forEach(p=>dailyCashAdd(salesPay,p.payment_method,p.amount));
     else if(Number(sl.paid_amount||0)>0) dailyCashAdd(salesPay,sl.payment_method,Math.abs(Number(sl.paid_amount||0)));
   });
-  const dayExpenses=expenses.filter(e=>{
-    if(e.expense_date!==date) return false;
-    const a=financeAccounts.find(x=>x.id===e.account_id); const eloc=e.location_id||a?.location_id||'';
-    return !branch || eloc===branch;
-  });
-  dayExpenses.forEach(e=>dailyCashAdd(expensesPay,dailyCashMethodFromAccount(e.account_id),e.amount));
-  const dayCustomerPayMoves=[], daySupplierPayMoves=[];
-  let settlementShortage=0, settlementSurplus=0;
+  expenses.filter(e=>e.expense_date===date).forEach(e=>{const a=financeAccounts.find(x=>x.id===e.account_id); const eloc=e.location_id||a?.location_id||''; if(!branch || eloc===branch) dailyCashAdd(expensesPay,dailyCashMethodFromAccount(e.account_id),e.amount)});
   financeMovements.filter(m=>m.movement_date===date).forEach(m=>{
     const a=financeAccounts.find(x=>x.id===m.account_id); if(branch && a?.location_id!==branch) return;
     const method=dailyCashMethodFromAccount(m.account_id);
-    if(m.movement_type==='customer_payment' && m.direction==='in'){ dailyCashAdd(customerPay,method,m.amount); dayCustomerPayMoves.push({m,method}); }
-    if(m.movement_type==='supplier_payment' && m.direction==='out'){ dailyCashAdd(supplierPay,method,m.amount); daySupplierPayMoves.push({m,method}); }
+    if(m.movement_type==='customer_payment' && m.direction==='in') dailyCashAdd(customerPay,method,m.amount);
+    if(m.movement_type==='supplier_payment' && m.direction==='out') dailyCashAdd(supplierPay,method,m.amount);
     if(m.movement_type==='customer_refund' && m.direction==='out') dailyCashAdd(refundsPay,method,m.amount);
-    if(m.movement_type==='cash_shortage' && m.direction==='out') settlementShortage+=Number(m.amount||0);
-    if(m.movement_type==='cash_surplus' && m.direction==='in') settlementSurplus+=Number(m.amount||0);
   });
-  const dayReturns=saleReturns.filter(r=>r.return_date===date && (!branch||r.location_id===branch));
-  dayReturns.forEach(r=>{
+  saleReturns.filter(r=>r.return_date===date && (!branch||r.location_id===branch)).forEach(r=>{
     // Only count returns not already reflected in finance movements to avoid double counting when movement exists.
     const hasMove=financeMovements.some(m=>m.reference_table==='pos_sale_returns' && m.reference_id===r.id && m.movement_type==='customer_refund');
     if(!hasMove && ['cash','card','bank_transfer'].includes(r.refund_method)) dailyCashAdd(refundsPay,r.refund_method,r.total);
   });
-  const cashRemaining=salesPay.cash + customerPay.cash + settlementSurplus - expensesPay.cash - supplierPay.cash - refundsPay.cash - settlementShortage;
+  const cashRemaining=salesPay.cash + customerPay.cash - expensesPay.cash - supplierPay.cash - refundsPay.cash;
   const invoiceCount=Object.keys(salesById).length;
-  // ---- تفاصيل إضافية للتقرير المفصّل ----
-  const totalSales=daySalesArr.reduce((a,s)=>a+Number(s.total||0),0);
-  const totalDiscounts=daySalesArr.reduce((a,s)=>a+Number(s.discount||0),0);
-  const creditSales=daySalesArr.reduce((a,s)=>a+Math.max(0,Number(s.balance_due||0)),0);
-  const avgInvoice=invoiceCount?totalSales/invoiceCount:0;
-  const salesSummary={invoiceCount,totalSales,cashSales:salesPay.cash,cardSales:salesPay.card,bankSales:salesPay.bank_transfer,creditSales,totalDiscounts,avgInvoice};
-  const invoices=daySalesArr.map(s=>{const c=customers.find(x=>x.id===s.customer_id); return {invoice_no:s.invoice_no||s.id.slice(0,8), time:(s.created_at||'').replace('T',' ').slice(0,19), customer:c?.name||'زبون نقدي', payment_method:s.payment_method, total:Number(s.total||0), paid:Number(s.paid_amount||0), balance_due:Number(s.balance_due||0), seller:dailyCashSellerForSale(s.id)};}).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-  const catMap={};
-  dayExpenses.forEach(e=>{const name=expenseCategories.find(c=>c.id===e.category_id)?.name||'بدون تصنيف'; const method=dailyCashMethodFromAccount(e.account_id); const o=catMap[name]||(catMap[name]={name,cash:0,card:0,bank_transfer:0,total:0}); dailyCashAdd(o,method,e.amount);});
-  const expensesByCategory=Object.values(catMap).sort((a,b)=>b.total-a.total);
-  const refunds=dayReturns.map(r=>{const orig=sales.find(s=>s.id===r.sale_id); const c=customers.find(x=>x.id===r.customer_id); return {time:(r.created_at||'').replace('T',' ').slice(0,19), original_invoice:orig?.invoice_no||'', refund_method:r.refund_method, amount:Number(r.total||0), customer:c?.name||'زبون نقدي'};});
-  const customerPayments=dayCustomerPayMoves.map(({m,method})=>({customer:dailyCashCustomerNameForMovement(m)||'زبون', method, amount:Number(m.amount||0), notes:m.notes||''}));
-  const supplierPayments=daySupplierPayMoves.map(({m,method})=>({supplier:dailyCashSupplierNameForMovement(m)||'مورد', method, amount:Number(m.amount||0), notes:m.notes||''}));
-  const nonCash={cardSales:salesPay.card,bankSales:salesPay.bank_transfer,cardExpenses:expensesPay.card,bankExpenses:expensesPay.bank_transfer,cardRefunds:refundsPay.card,bankRefunds:refundsPay.bank_transfer,cardCustomer:customerPay.card,bankCustomer:customerPay.bank_transfer,cardSupplier:supplierPay.card,bankSupplier:supplierPay.bank_transfer};
-  const saved=(dailyCashClosings||[]).find(x=>x.branch_id===branch && x.closing_date===date)||null;
-  let savedStatus='غير محفوظ بعد';
-  if(saved){ savedStatus=(saved.updated_at&&saved.created_at&&saved.updated_at!==saved.created_at)?'محفوظ — تم التحديث بموافقة المدير':'محفوظ'; }
-  const countedCash=Number(localStorage.getItem(dailyCashCountedKey(date,branch))||0)||0;
-  const difference=countedCash-cashRemaining;
-  return {date,branch,branchName,salesPay,expensesPay,customerPay,supplierPay,refundsPay,cashRemaining,invoiceCount,
-    salesSummary,invoices,expensesByCategory,refunds,customerPayments,supplierPayments,nonCash,saved,savedStatus,countedCash,difference,settlementShortage,settlementSurplus};
-}
-function updateDailyCashDifference(){
-  const inp=q('dailyCashCounted'); if(!inp)return;
-  const counted=moneyVal(inp.value)||0;
-  const expected=Number(inp.dataset.expected||0);
-  const diff=counted-expected;
-  const el=q('dailyCashDifference');
-  if(el){ el.textContent=(diff>0?'+':'')+money(diff)+' '+APP_CONFIG.currency; el.style.color=Math.abs(diff)<0.001?'var(--good)':'var(--bad)'; el.style.fontWeight='800'; }
-  try{ localStorage.setItem(dailyCashCountedKey(inp.dataset.date, inp.dataset.branch), String(counted)); }catch(e){}
+  return {date,branch,branchName,salesPay,expensesPay,customerPay,supplierPay,refundsPay,cashRemaining,invoiceCount};
 }
 function dailyCashTableRows(d){
   const row=(label,b)=>`<tr><td><b>${esc(label)}</b></td><td>${money(b.cash)}</td><td>${money(b.card)}</td><td>${money(b.bank_transfer)}</td><td><b>${money(b.total)}</b></td></tr>`;
@@ -4149,135 +4090,20 @@ function dailyCashTableRows(d){
 function renderDailyCashReport(){
   if(!q('dailyCashReportBody')) return;
   const d=getDailyCashData();
-  const M=DAILY_METHOD_LABELS, cur=APP_CONFIG.currency;
-  const generated=new Date().toLocaleString('ar-LY',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const cashCls=n=>n>=0?'stock-positive':'stock-negative';
-  const nz=v=>Math.abs(Number(v||0))>0.009;
-  const MLM=[['كاش','cash'],['بطاقة','card'],['تحويل','bank_transfer']];
-  const methodLines=(label,b)=>MLM.filter(([_,k])=>nz(b[k])).map(([m,k])=>`<tr><td>${label} — ${m}</td><td>${money(b[k])}</td></tr>`).join('');
-  const sectionCard=(title,bodyHTML)=>`<div class="panel" style="box-shadow:none;padding:14px;margin-top:12px"><h2 style="font-size:16px;margin:0 0 10px">${title}</h2>${bodyHTML}</div>`;
-  const tbl=(head,rows)=>`<div class="table-scroll"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')||`<tr><td colspan="${head.length}">لا توجد بيانات.</td></tr>`}</tbody></table></div>`;
-  // رأس التقرير
-  const header=`<div class="panel" style="padding:14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
-    <div><div style="font-size:18px;font-weight:900;color:var(--blue)">${esc(APP_CONFIG.businessName)}</div><div class="muted">تقرير حالة الخزينة اليومية — إغلاق اليوم</div></div>
-    <div class="mini" style="text-align:left;line-height:1.9">
-      <div>الفرع: <b>${esc(d.branchName)}</b></div>
-      <div>التاريخ: <b>${esc(d.date)}</b></div>
-      <div>المسؤول: <b>${esc(appUser?.identifier||'')}</b></div>
-      <div>وقت التوليد: <b>${esc(generated)}</b></div>
-      <div>الحالة: <b class="${d.saved?'stock-positive':''}">${esc(d.savedStatus)}</b></div>
-    </div></div></div>`;
-  // المداخيل (تُخفى الأصفار)
-  let inRows=methodLines('مبيعات',d.salesPay)+methodLines('دفعات زبائن',d.customerPay);
-  if(nz(d.settlementSurplus)) inRows+=`<tr><td>تسوية زيادة صندوق</td><td>${money(d.settlementSurplus)}</td></tr>`;
-  const totalIn=d.salesPay.total+d.customerPay.total+(nz(d.settlementSurplus)?d.settlementSurplus:0);
-  const inSec=sectionCard('المداخيل (حسب طريقة الدفع)', `<div class="table-scroll"><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${inRows||'<tr><td colspan="2">لا توجد مداخيل.</td></tr>'}<tr style="background:var(--table-head)"><td><b>مجموع المداخيل</b></td><td><b>${money(totalIn)}</b></td></tr></tbody></table></div>`);
-  // المصاريف (تُخفى الأصفار)
-  let outRows=methodLines('مصاريف',d.expensesPay)+methodLines('دفعات موردين',d.supplierPay)+methodLines('مرتجعات/استرداد',d.refundsPay);
-  if(nz(d.settlementShortage)) outRows+=`<tr><td>تسوية عجز صندوق (على المسؤول)</td><td>${money(d.settlementShortage)}</td></tr>`;
-  const totalOut=d.expensesPay.total+d.supplierPay.total+d.refundsPay.total+(nz(d.settlementShortage)?d.settlementShortage:0);
-  const outSec=sectionCard('المصاريف (حسب طريقة الدفع)', `<div class="table-scroll"><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${outRows||'<tr><td colspan="2">لا توجد مصاريف.</td></tr>'}<tr style="background:var(--table-head)"><td><b>مجموع المصاريف</b></td><td><b>${money(totalOut)}</b></td></tr></tbody></table></div>`);
-  // الباقي كاش
-  const baqi=`<div class="panel" style="padding:14px;margin-top:12px;border:2px solid color-mix(in srgb,var(--blue) 30%,var(--border))"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><div><h2 style="font-size:16px;margin:0 0 4px">الباقي كاش (النقد فقط)</h2><div class="muted">البطاقة والتحويل لا يدخلان في الباقي الكاشي — فقط النقد الداخل ناقص النقد الخارج.</div></div><div class="num ${cashCls(d.cashRemaining)}" style="font-size:30px">${money(d.cashRemaining)} ${cur}</div></div></div>`;
-  // التسوية النهائية
-  const settlement=`<div class="panel" style="padding:14px;margin-top:12px"><h2 style="font-size:16px;margin:0 0 10px">التسوية النهائية</h2>
-    <div class="row" style="gap:16px;flex-wrap:wrap;align-items:end">
-      <div><label>الكاش المعدود (اختياري — يُحفظ على هذا الجهاز فقط)</label><input id="dailyCashCounted" type="text" inputmode="decimal" placeholder="0" style="max-width:180px;font-size:18px;font-weight:800" data-expected="${d.cashRemaining}" data-date="${esc(d.date)}" data-branch="${esc(d.branch||'')}" value="${d.countedCash?money(d.countedCash).replace(/,/g,''):''}" oninput="updateDailyCashDifference()"></div>
-      <div><label>الفرق (المعدود − المتوقع)</label><div class="num" id="dailyCashDifference" style="font-size:20px">${(d.difference>0?'+':'')+money(d.difference)} ${cur}</div></div>
+  q('dailyCashReportBody').innerHTML=`
+    <div class="report-kpi">
+      <div class="card"><h3>الفرع</h3><div class="num" style="font-size:20px">${esc(d.branchName)}</div></div>
+      <div class="card"><h3>التاريخ</h3><div class="num" style="font-size:20px">${esc(d.date)}</div></div>
+      <div class="card"><h3>عدد الفواتير</h3><div class="num">${d.invoiceCount}</div></div>
+      <div class="card"><h3>المتبقي كاش</h3><div class="num ${d.cashRemaining>=0?'stock-positive':'stock-negative'}">${money(d.cashRemaining)}</div></div>
     </div>
-    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">${Math.abs(d.difference)>=0.01?`<button class="btn danger" type="button" onclick="settleDailyCashDifference()">تسوية الفرق (${(d.difference>0?'+':'')+money(d.difference)} ${cur})</button><span class="muted">العجز ← دين على المسؤول، الزيادة ← إيراد بالخزينة. يتطلب موافقة المدير.</span>`:`<span class="muted">المعدود يطابق المتوقع — لا حاجة للتسوية.${d.settlementShortage||d.settlementSurplus?' (تمت تسوية فرق هذا اليوم سابقاً)':''}</span>`}</div></div>`;
-  // تفاصيل مختصرة قابلة للطي
-  const ss=d.salesSummary;
-  const salesRows=[`<tr><td>عدد الفواتير</td><td>${ss.invoiceCount}</td></tr>`,`<tr><td>إجمالي المبيعات</td><td><b>${money(ss.totalSales)}</b></td></tr>`,(nz(ss.creditSales)?`<tr><td>مبيعات آجل / غير محصّلة</td><td>${money(ss.creditSales)}</td></tr>`:''),(nz(ss.totalDiscounts)?`<tr><td>إجمالي الخصومات</td><td>${money(ss.totalDiscounts)}</td></tr>`:'')].filter(Boolean);
-  const expCatRows=d.expensesByCategory.filter(c=>nz(c.total)).map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${money(c.total)}</td></tr>`);
-  const invRows=d.invoices.map(i=>`<tr><td class="ltr">${esc(i.invoice_no)}</td><td class="ltr">${esc(i.time)}</td><td>${esc(i.customer)}</td><td>${esc(M[i.payment_method]||i.payment_method)}</td><td><b>${money(i.total)}</b></td><td>${money(i.paid)}</td><td class="${i.balance_due>0?'stock-negative':''}">${money(i.balance_due)}</td><td class="mini">${esc(i.seller||'—')}</td></tr>`);
-  const refRows=d.refunds.map(r=>`<tr><td class="ltr">${esc(r.time)}</td><td class="ltr">${esc(r.original_invoice||'—')}</td><td>${esc(M[r.refund_method]||r.refund_method)}</td><td><b>${money(r.amount)}</b></td><td>${esc(r.customer)}</td></tr>`);
-  const cpRows=d.customerPayments.map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td class="mini">${esc(p.notes||'')}</td></tr>`);
-  const spRows=d.supplierPayments.map(p=>`<tr><td>${esc(p.supplier)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td class="mini">${esc(p.notes||'')}</td></tr>`);
-  const details=(title,bodyHTML)=>`<details style="margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 12px"><summary style="cursor:pointer;font-weight:800;padding:6px 0;color:var(--blue)">${title}</summary><div style="padding-top:6px">${bodyHTML}</div></details>`;
-  const lists=`<div class="panel" style="box-shadow:none;margin-top:12px">
-    ${details('ملخص المبيعات', tbl(['البيان','القيمة '+cur],salesRows))}
-    ${expCatRows.length?details('المصاريف حسب التصنيف', tbl(['التصنيف','الإجمالي'],expCatRows)):''}
-    ${details('قائمة الفواتير ('+d.invoices.length+')', tbl(['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع','المتبقي','البائع'],invRows))}
-    ${details('قائمة المرتجعات ('+d.refunds.length+')', tbl(['وقت المرتج','الفاتورة الأصلية','طريقة الاسترداد','المبلغ','الزبون'],refRows))}
-    ${details('دفعات الزبائن ('+d.customerPayments.length+')', tbl(['الزبون','الطريقة','المبلغ','ملاحظات'],cpRows))}
-    ${details('دفعات الموردين ('+d.supplierPayments.length+')', tbl(['المورد','الطريقة','المبلغ','ملاحظات'],spRows))}
-  </div>`;
-  q('dailyCashReportBody').innerHTML=header+inSec+outSec+baqi+settlement+lists;
-  updateDailyCashDifference();
+    <div class="table-scroll"><table><thead><tr><th>البيان</th><th>كاش</th><th>بطاقة</th><th>تحويل</th><th>الإجمالي</th></tr></thead><tbody>${dailyCashTableRows(d)}</tbody></table></div>
+    <div class="panel" style="box-shadow:none;margin-top:14px"><h2>المبلغ المطلوب تسليمه كاش</h2><div class="num ${d.cashRemaining>=0?'stock-positive':'stock-negative'}">${money(d.cashRemaining)} ${esc(APP_CONFIG.currency)}</div><p class="muted">يتم طباعة هذا التقرير في أي وقت. عند تصفية الحساب، يقوم مسؤول الفرع بتحويل المتبقي إلى خزينة الإدارة من شاشة التحويل المالي.</p></div>`;
   renderDailyCashClosings();
 }
-
-function dailyCashPrintHtml(d, meta={}){
-  const M=DAILY_METHOD_LABELS, cur=APP_CONFIG.currency;
-  const responsible=meta.responsible!==undefined?meta.responsible:(appUser?.identifier||'');
-  const generated=meta.generated||new Date().toLocaleString('ar-LY',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const savedStatus=meta.savedStatus!==undefined?meta.savedStatus:(d.savedStatus||'غير محفوظ بعد');
-  const notes=meta.notes!==undefined?meta.notes:'';
-  const cashCls=n=>n>=0?'pos':'neg';
-  const nz=v=>Math.abs(Number(v||0))>0.009;
-  const MLM=[['كاش','cash'],['بطاقة','card'],['تحويل','bank_transfer']];
-  const methodLines=(label,b)=>MLM.filter(([_,k])=>nz(b[k])).map(([m,k])=>`<tr><td>${label} — ${m}</td><td>${money(b[k])}</td></tr>`).join('');
-  const totalIn=d.salesPay.total+d.customerPay.total+(nz(d.settlementSurplus)?d.settlementSurplus:0);
-  const totalOut=d.expensesPay.total+d.supplierPay.total+d.refundsPay.total+(nz(d.settlementShortage)?d.settlementShortage:0);
-  let inRows=methodLines('مبيعات',d.salesPay)+methodLines('دفعات زبائن',d.customerPay);
-  if(nz(d.settlementSurplus)) inRows+=`<tr><td>تسوية زيادة صندوق</td><td>${money(d.settlementSurplus)}</td></tr>`;
-  if(inRows) inRows+=`<tr class="totalrow"><td>مجموع المداخيل</td><td>${money(totalIn)}</td></tr>`;
-  let outRows=methodLines('مصاريف',d.expensesPay)+methodLines('دفعات موردين',d.supplierPay)+methodLines('مرتجعات/استرداد',d.refundsPay);
-  if(nz(d.settlementShortage)) outRows+=`<tr><td>تسوية عجز صندوق (على المسؤول)</td><td>${money(d.settlementShortage)}</td></tr>`;
-  if(outRows) outRows+=`<tr class="totalrow"><td>مجموع المصاريف</td><td>${money(totalOut)}</td></tr>`;
-  const diff=d.difference!==undefined?d.difference:((d.countedCash||0)-d.cashRemaining);
-  const ss=d.salesSummary||{};
-  const salesRows=[`<tr><td>عدد الفواتير</td><td>${ss.invoiceCount??d.invoiceCount}</td></tr>`,`<tr><td>إجمالي المبيعات</td><td><b>${money(ss.totalSales??0)}</b></td></tr>`,(nz(ss.creditSales)?`<tr><td>مبيعات آجل / غير محصّلة</td><td>${money(ss.creditSales)}</td></tr>`:''),(nz(ss.totalDiscounts)?`<tr><td>إجمالي الخصومات</td><td>${money(ss.totalDiscounts)}</td></tr>`:'')].filter(Boolean);
-  const expCatRows=(d.expensesByCategory||[]).filter(c=>nz(c.total)).map(c=>`<tr><td>${esc(c.name)}</td><td><b>${money(c.total)}</b></td></tr>`);
-  const invRows=(d.invoices||[]).map(i=>`<tr><td>${esc(i.invoice_no)}</td><td>${esc(i.time)}</td><td>${esc(i.customer)}</td><td>${esc(M[i.payment_method]||i.payment_method)}</td><td><b>${money(i.total)}</b></td><td>${money(i.paid)}</td><td>${money(i.balance_due)}</td><td>${esc(i.seller||'—')}</td></tr>`);
-  const refRows=(d.refunds||[]).map(r=>`<tr><td>${esc(r.time)}</td><td>${esc(r.original_invoice||'—')}</td><td>${esc(M[r.refund_method]||r.refund_method)}</td><td><b>${money(r.amount)}</b></td><td>${esc(r.customer)}</td></tr>`);
-  const cpRows=(d.customerPayments||[]).map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td>${esc(p.notes||'')}</td></tr>`);
-  const spRows=(d.supplierPayments||[]).map(p=>`<tr><td>${esc(p.supplier)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td>${esc(p.notes||'')}</td></tr>`);
-  const T=(title,head,rows)=>`<h3>${title}</h3><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')||`<tr><td colspan="${head.length}" class="empty">لا توجد بيانات.</td></tr>`}</tbody></table>`;
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير الخزينة اليومية — ${esc(d.branchName)} ${esc(d.date)}</title>
-<style>
-*{box-sizing:border-box}
-body{font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif;color:#111;margin:22px;line-height:1.6}
-.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:10px}
-.head .title{font-size:24px;font-weight:800;color:#1d4ed8}.head .sub{color:#555;font-size:13px}
-.meta{text-align:left;font-size:13px;line-height:1.9}.meta b{color:#111}
-.badge{display:inline-block;background:#e8f0ff;color:#1d4ed8;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
-h3{font-size:15px;margin:16px 0 6px;border-inline-start:4px solid #1d4ed8;padding-inline-start:8px}
-table{width:100%;border-collapse:collapse;margin-top:4px;font-size:12.5px}
-th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:right}th{background:#e8f0ff;font-weight:700}
-tr.totalrow td{background:#f1f5f9;font-weight:800}
-td.pos{color:#087f5b;font-weight:800}td.neg{color:#dc2626;font-weight:800}
-td.empty{text-align:center;color:#94a3b8;padding:12px}
-.baqi{border:2px solid #1d4ed8;border-radius:14px;padding:12px 14px;margin:12px 0;display:flex;justify-content:space-between;align-items:center;gap:12px}
-.baqi .lbl{font-size:15px;font-weight:800;color:#1d4ed8}.baqi .small{font-size:11px;color:#777;font-weight:400}
-.baqi .amt{font-size:30px;font-weight:900}
-.settle{margin-top:6px}.settle .row{display:flex;gap:24px;flex-wrap:wrap}.settle .row>div{min-width:150px}.settle label{display:block;font-size:12px;color:#64748b;font-weight:700}.settle .big{font-size:20px;font-weight:900}
-.sign{display:flex;gap:60px;margin-top:40px}.sign div{flex:1;border-top:1px solid #333;text-align:center;padding-top:8px;font-size:13px}
-.small{font-size:11px;color:#777}
-@media print{@page{size:A4;margin:10mm}.no-print{display:none}}
-</style></head><body>
-<div class="head"><div><div class="title">${esc(APP_CONFIG.businessName)}</div><div class="sub">تقرير حالة الخزينة اليومية — إغلاق اليوم</div></div>
-<div class="meta">الفرع: <b>${esc(d.branchName)}</b><br>التاريخ: <b>${esc(d.date)}</b><br>المسؤول: <b>${esc(responsible)}</b><br>وقت التوليد: <b>${esc(generated)}</b><br>الحالة: <span class="badge">${esc(savedStatus)}</span></div></div>
-<h3>المداخيل (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${inRows||'<tr><td colspan="2" class="empty">لا توجد مداخيل.</td></tr>'}</tbody></table>
-<h3>المصاريف (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${outRows||'<tr><td colspan="2" class="empty">لا توجد مصاريف.</td></tr>'}</tbody></table>
-<div class="baqi"><div><div class="lbl">الباقي كاش (النقد فقط)</div><div class="small">البطاقة والتحويل لا يدخلان في الباقي الكاشي — فقط النقد الداخل ناقص النقد الخارج.</div></div><div class="amt ${cashCls(d.cashRemaining)}">${money(d.cashRemaining)} ${cur}</div></div>
-<div class="settle"><h3 style="margin:0 0 8px">التسوية النهائية</h3>
-<div class="row">
-<div><label>الكاش المعدود</label><div class="big">${money(d.countedCash||0)} ${cur}</div></div>
-<div><label>الفرق (المعدود − المتوقع)</label><div class="big ${cashCls(diff)}">${(diff>0?'+':'')+money(diff)} ${cur}</div></div>
-</div>
-${notes?`<div class="small" style="margin-top:8px"><b>ملاحظات:</b> ${esc(notes)}</div>`:''}
-<div class="sign"><div>توقيع مسؤول الفرع</div><div>توقيع الإدارة / المحاسب</div></div>
-</div>
-${T('ملخص المبيعات',['البيان','القيمة '+cur],salesRows)}
-${expCatRows.length?T('المصاريف حسب التصنيف',['التصنيف','الإجمالي '+cur],expCatRows):''}
-${T('قائمة الفواتير',['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع','المتبقي','البائع'],invRows)}
-${T('قائمة المرتجعات',['وقت المرتج','الفاتورة الأصلية','طريقة الاسترداد','المبلغ','الزبون'],refRows)}
-${T('دفعات الزبائن',['الزبون','الطريقة','المبلغ','ملاحظات'],cpRows)}
-${T('دفعات الموردين',['المورد','الطريقة','المبلغ','ملاحظات'],spRows)}
-<div class="no-print" style="text-align:center;margin-top:18px"><button onclick="window.print()" style="background:#1d4ed8;color:#fff;border:0;border-radius:10px;padding:10px 22px;font:inherit;font-weight:700;cursor:pointer">طباعة</button></div>
-</body></html>`;
+function dailyCashPrintHtml(savedData=null){
+  const d=savedData||getDailyCashData();
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير الخزينة اليومية</title><style>body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:24px;line-height:1.7}.head{display:flex;justify-content:space-between;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:18px}.title{font-size:24px;font-weight:800;color:#1d4ed8}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:10px;text-align:right}th{background:#e8f0ff}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{border:1px solid #cbd5e1;border-radius:12px;padding:10px}.num{font-size:22px;font-weight:800}.cash{font-size:30px;color:#087f5b;font-weight:900}.sign{display:flex;gap:60px;margin-top:50px}.sign div{flex:1;border-top:1px solid #333;text-align:center;padding-top:8px}@media print{@page{size:A4;margin:12mm}}</style></head><body><div class="head"><div><div class="title">${esc(APP_CONFIG.businessName)}</div><div>تقرير حالة الخزينة اليومية</div></div><div>التاريخ: <b>${esc(d.date)}</b><br>الفرع: <b>${esc(d.branchName)}</b><br>المسؤول: <b>${esc(appUser?.identifier||'')}</b></div></div><div class="cards"><div class="card">عدد الفواتير<div class="num">${d.invoiceCount}</div></div><div class="card">مبيعات كاش<div class="num">${money(d.salesPay.cash)}</div></div><div class="card">مصاريف كاش<div class="num">${money(d.expensesPay.cash)}</div></div><div class="card">المتبقي كاش<div class="cash">${money(d.cashRemaining)} ${esc(APP_CONFIG.currency)}</div></div></div><table><thead><tr><th>البيان</th><th>كاش</th><th>بطاقة</th><th>تحويل</th><th>الإجمالي</th></tr></thead><tbody>${dailyCashTableRows(d)}</tbody></table><h2>المبلغ المسلم كاش: ${money(d.cashRemaining)} ${esc(APP_CONFIG.currency)}</h2><div class="sign"><div>توقيع مسؤول الفرع</div><div>توقيع الإدارة / المحاسب</div></div></body></html>`;
 }
 
 function dailyCashClosingBody(d,notes=''){
@@ -4314,53 +4140,11 @@ async function saveDailyCashClosing(){
 }
 function printSavedDailyCashClosing(id){
   const r=(dailyCashClosings||[]).find(x=>x.id===id); if(!r)return;
-  // التقرير يُعاد حسابه حيّاً من بيانات ذلك اليوم/الفرع حتى يعكس أي تغيير بعد الموافقة.
-  const d=getDailyCashData({date:r.closing_date, branch:r.branch_id});
-  const meta={responsible:r.responsible_identifier||r.created_by||'', savedStatus:(r.updated_at&&r.created_at&&r.updated_at!==r.created_at)?'محفوظ — تم التحديث بموافقة المدير':'محفوظ', notes:r.notes||''};
-  showInAppPrint(dailyCashPrintHtml(d,meta));
+  const d={date:r.closing_date,branchName:r.branch_name||'',invoiceCount:Number(r.invoice_count||0),cashRemaining:Number(r.cash_remaining||0),salesPay:{cash:Number(r.sales_cash||0),card:Number(r.sales_card||0),bank_transfer:Number(r.sales_bank_transfer||0),total:Number(r.sales_cash||0)+Number(r.sales_card||0)+Number(r.sales_bank_transfer||0)},expensesPay:{cash:Number(r.expenses_cash||0),card:Number(r.expenses_card||0),bank_transfer:Number(r.expenses_bank_transfer||0),total:Number(r.expenses_cash||0)+Number(r.expenses_card||0)+Number(r.expenses_bank_transfer||0)},customerPay:{cash:Number(r.customer_payments_cash||0),card:Number(r.customer_payments_card||0),bank_transfer:Number(r.customer_payments_bank_transfer||0),total:Number(r.customer_payments_cash||0)+Number(r.customer_payments_card||0)+Number(r.customer_payments_bank_transfer||0)},supplierPay:{cash:Number(r.supplier_payments_cash||0),card:Number(r.supplier_payments_card||0),bank_transfer:Number(r.supplier_payments_bank_transfer||0),total:Number(r.supplier_payments_cash||0)+Number(r.supplier_payments_card||0)+Number(r.supplier_payments_bank_transfer||0)},refundsPay:{cash:Number(r.refunds_cash||0),card:Number(r.refunds_card||0),bank_transfer:Number(r.refunds_bank_transfer||0),total:Number(r.refunds_cash||0)+Number(r.refunds_card||0)+Number(r.refunds_bank_transfer||0)}};
+  showInAppPrint(dailyCashPrintHtml(d));
 }
 
-async function settleDailyCashDifference(){
-  const d=getDailyCashData();
-  const diff=Number(d.difference||0);
-  if(Math.abs(diff)<0.009){toast('لا يوجد فرق للتسوية — المعدود يطابق المتوقع','warn');return;}
-  if(!d.branch){toast('اختر فرعاً محدداً قبل التسوية','warn');return;}
-  const kind=diff<0?'عجز':'زيادة';
-  const reason=prompt(`سبب التسوية (${kind} ${money(Math.abs(diff))} ${APP_CONFIG.currency}):`,'');
-  if(reason===null) return;
-  if(!reason.trim()){toast('اكتب سبب التسوية','warn');return;}
-  const ok=await requestSupervisorApproval('تسوية فرق الصندوق',`${kind} ${money(Math.abs(diff))} ${APP_CONFIG.currency} - ${d.branchName} - ${d.date}`);
-  if(!ok){toast('لم يتم اعتماد التسوية','warn');return;}
-  if(window.__busy) return; window.__busy=true;
-  try{
-    showLoading(true);
-    const cashAccount=financeAccounts.find(a=>a.account_type==='cash' && a.location_id===d.branch) || financeAccounts.find(a=>a.account_type==='cash');
-    if(!cashAccount){toast('لا توجد خزينة نقدية لهذا الفرع لإنشاء قيد التسوية','warn');return;}
-    if(diff<0){
-      // عجز = دين على المسؤول + إخراج النقد من خزينة الفرع (قيد مزدوج يُغلق التسوية)
-      const amt=Math.abs(diff);
-      const custName=`عجز صندوق — ${appUser?.identifier||'المسؤول'}`;
-      let cust=customers.find(c=>(c.name||'').trim()===custName);
-      if(!cust){const created=await api('pos_customers',{method:'POST',body:{name:custName,active:false,notes:'زبون آلي لتتبع عجز الصندوق على المسؤولين'}}); cust=created[0]; customers.push(cust);}
-      await api('pos_customer_ledger',{method:'POST',body:{customer_id:cust.id,entry_date:d.date,entry_type:'adjustment',description:`عجز صندوق يوم ${d.date} - فرع ${d.branchName} - المسؤول: ${appUser?.identifier||''}${reason.trim()?' - '+reason.trim():''}`,debit:amt,credit:0}});
-      await addFinanceMovement(cashAccount.id,'out','cash_shortage',amt,d.date,'pos_daily_cash_closings',null,`عجز صندوق - ${d.branchName} - ${d.date} - المسؤول: ${appUser?.identifier||''}${reason.trim()?' - '+reason.trim():''}`);
-      toast(`تمت تسوية العجز ${money(amt)} ${APP_CONFIG.currency} كدين على «${custName}»`,'success');
-    }else{
-      // زيادة = إيراد يُدخل إلى الخزينة
-      const amt=diff;
-      await addFinanceMovement(cashAccount.id,'in','cash_surplus',amt,d.date,'pos_daily_cash_closings',null,`زيادة صندوق - ${d.branchName} - ${d.date}${reason.trim()?' - '+reason.trim():''}`);
-      toast(`تمت تسوية الزيادة ${money(amt)} ${APP_CONFIG.currency} كإيراد في الخزينة`,'success');
-    }
-    await loadAll();
-    renderDailyCashReport();
-  }catch(e){console.error(e);toast('تعذرت تسوية الفرق: '+friendlyError(e),'error')}
-  finally{showLoading(false);window.__busy=false}
-}
-function printDailyCashReport(){
-  const d=getDailyCashData();
-  showInAppPrint(dailyCashPrintHtml(d,{responsible:appUser?.identifier||'', savedStatus:d.savedStatus, notes:d.saved?.notes||''}));
-}
-
+function printDailyCashReport(){showInAppPrint(dailyCashPrintHtml())}
 function prepareDailyCashTransfer(){
   const d=getDailyCashData();
   if(!(d.cashRemaining>0)){toast('لا يوجد متبقي كاش للتحويل','warn');return;}
@@ -4785,7 +4569,7 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDate')) q('dailyCashDate').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initConnectivity(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); renderCustomers();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initConnectivity(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});}else{q('loginIdentifier')?.focus();}
 </script>
 </body>
 </html>
