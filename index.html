@@ -177,6 +177,8 @@
         <div class="panel">
           <div class="tools">
             <h2>قاعدة المنتجات</h2>
+            <input id="productSearch" placeholder="🔍 ابحث... مثال: خلاط كروم أقل من 200" oninput="debounceRenderProducts()" style="width:100%;max-width:500px;font-size:17px;font-weight:700;padding:13px 18px;border:2.5px solid var(--blue);border-radius:14px;background:var(--accent-soft);margin-bottom:10px">
+            <div id="smartFilterInfo" style="display:none;margin:4px 0 8px 0"></div>
             <div class="row">
               
               <select id="productCategoryFilter" onchange="renderProducts()" style="min-width:170px"></select>
@@ -202,7 +204,6 @@
             </aside>
             <div class="product-table-wrap" oncontextmenu="if(event.target.closest('thead')){event.preventDefault();showProductColMenu(event)}">
               <div class="table-scroll">
-                <div style="padding:0 0 8px 0"><input id="productSearch" placeholder="🔍 ابحث بالكود أو الاسم أو الماركة..." oninput="debounceRenderProducts()" style="width:100%;font-size:16px;font-weight:600;padding:12px 16px;border:2px solid var(--blue);border-radius:12px;background:var(--accent-soft)"></div>
                 <table>
                   
                   <tbody id="productsBody"></tbody>
@@ -452,6 +453,7 @@
           <form class="form" id="customerForm">
             <div><label>اسم الزبون</label><input id="customerName" required placeholder="اسم الزبون"></div>
             <div><label>الهاتف</label><input id="customerPhone" class="ltr" placeholder="+218..."></div>
+            <div><label>هاتف ثاني</label><input id="customerPhone2" class="ltr" placeholder="اختياري"></div>
             <div><label>العنوان</label><input id="customerAddress" placeholder="اختياري"></div>
             <div><label>الرصيد الافتتاحي</label><input id="customerOpening" type="text" inputmode="decimal" value="0"></div>
             <div><label>نوع الرصيد</label><select id="customerOpeningType"><option value="debit">على الزبون</option><option value="credit">للزبون رصيد عندنا</option></select></div>
