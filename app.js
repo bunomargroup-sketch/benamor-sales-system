@@ -1792,6 +1792,9 @@ function editProduct(code){
   renderProductComponents();
   const sec=q('productComponentsSection'); if(sec)sec.classList.toggle('hidden',!editingProductComponents.length);
   const sup=suppliers.find(s=>s.name===p.supplier_name); q('productSupplier').value=sup?.id||'';
+  /* الملاحظة غير مدرجة في ملخص المنتجات view — نجلبها من جدول pos_products مباشرة */
+  if(q('productNotes')) q('productNotes').value=p.description||'';
+  (async()=>{try{const r=await api('pos_products',{qs:`?select=description&code=eq.${encodeURIComponent(p.code)}&limit=1`}); if(r&&r[0]&&q('productNotes')) q('productNotes').value=r[0].description||'';}catch(e){console.warn('product note fetch failed',e)}})();
   q('productSubmitBtn').textContent='حفظ تعديل المنتج';
   q('productCode').readOnly=true;
   q('productName').focus();
@@ -4725,6 +4728,7 @@ q('productForm').addEventListener('submit', async e=>{
       purchase_price:moneyVal(q('productPurchasePrice').value),
       retail_price:moneyVal(q('productRetailPrice').value),
       wholesale_price:moneyVal(q('productWholesalePrice').value),
+      description:q('productNotes')?.value.trim()||null,
       active:true,
       updated_at:new Date().toISOString()
     };
@@ -4795,6 +4799,41 @@ function renderProductOptionSettings(){
   render('settingsBrandsList',APP_CONFIG.customBrands||[]);
   render('settingsModelsList',APP_CONFIG.customModels||[]);
   render('settingsColorsList',APP_CONFIG.customColors||[]);
+}
+
+/* ═══ إضافات فورية من نافذة المنتج: ماركة/موديل/لون جديد ➕ أو مورد جديد — بلا مغادرة النفذة ═══ */
+function quickAddProductOption(type){
+  const fid={brand:'productBrand',model:'productModel',color:'productColor'}[type];
+  const label=type==='brand'?'الماركة':type==='model'?'الموديل':'اللون';
+  const el=q(fid);
+  let v=(el?.value||'').trim();
+  if(!v) v=(prompt('اسم '+label+' الجديدة:')||'').trim();
+  if(!v){toast('اكتب قيمة '+label+' أولاً','warn');return;}
+  addProductOption(type,v);
+  if(el) el.value=v;
+  toast('اعتُمدت «'+v+'» في قائمة '+label+' — وستقترح في كل النوافذ','success');
+}
+async function quickAddSupplierForProduct(){
+  if(window.__busy)return; window.__busy=true;
+  try{
+    const name=(prompt('اسم المورّد الجديد:')||'').trim(); if(!name)return;
+    const norm=x=>String(x||'').trim().toLowerCase().replace(/\s+/g,' ');
+    const dup=suppliers.find(x=>norm(x.name)===norm(name));
+    let s=null;
+    if(dup){s=dup; toast('المورّد موجود بالفعل — اعتماده: '+dup.name,'warn');}
+    else{
+      const phone=(prompt('هاتف المورّد (اختياري):')||'').trim();
+      showLoading(true);
+      const created=await api('pos_suppliers',{method:'POST',body:{name,phone:phone||null,opening_balance:0}});
+      s=created&&created[0]; if(!s) throw new Error('الخادم لم يرجع صف المورّد المحفوظ');
+      suppliers.unshift(s);
+      try{logAction('supplier_add_quick','pos_suppliers',s.id,'إضافة مورّد سريعة من نافذة المنتج: '+name);}catch(e){}
+      toast('تم حفظ المورّد «'+name+'» واختياره للمنتج ✓','success');
+    }
+    try{fillSupplierSelects();}catch(e){}
+    if(s) q('productSupplier').value=s.id;
+  }catch(e){console.error(e);toast('تعذّر حفظ المورّد: '+friendlyError(e),'error');}
+  finally{showLoading(false);window.__busy=false}
 }
 function addProductOption(type,value){
   const key=type==='brand'?'customBrands':(type==='model'?'customModels':'customColors');

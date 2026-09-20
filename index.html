@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260920-2100">
+<link rel="stylesheet" href="app.css?v=20260920-2145">
 </head>
 <body class="auth-locked">
   <header>
@@ -206,7 +206,7 @@
 
       <!-- نافذة إضافة/تعديل منتج — كل الحقول والمعرفات كما هي -->
       <div class="modal" id="productModal">
-        <div class="modal-card" style="max-width:720px">
+        <div class="modal-card" style="max-width:min(1120px,97vw)">
           <div class="modal-head">
             <div><h2 id="productModalTitle" style="margin:0">إضافة / تعديل منتج</h2><div class="mini">اكتب كوداً موجوداً لتعديل بياناته</div></div>
             <button class="btn secondary" type="button" onclick="closeProductModal()">إغلاق</button>
@@ -215,15 +215,16 @@
             <div><label>كود المنتج</label><input id="productCode" class="ltr" required placeholder="مثال: WS10880"></div>
             <div><label>اسم المنتج</label><input id="productName" required placeholder="اسم الصنف"></div>
             <div><label>التصنيف</label><input id="productCategory" list="categoryDatalist" placeholder="مثال: مقعد معلق"></div>
-            <div><label>المورد</label><select id="productSupplier"></select></div>
-            <div><label>الماركة</label><input id="productBrand" list="brandDatalist" placeholder="اختر أو أضف ماركة"></div>
-            <div><label>الموديل</label><input id="productModel" list="modelDatalist" placeholder="اختر أو أضف موديل"></div>
-            <div><label>اللون</label><input id="productColor" list="colorDatalist" placeholder="مثال: أبيض / أسود / ذهبي"></div>
+            <div><label>المورد</label><div class="row" style="gap:4px;flex-wrap:nowrap"><select id="productSupplier" style="flex:1"></select><button class="btn secondary" type="button" onclick="quickAddSupplierForProduct()" title="إضافة مورد جديد الآن بدون مغادرة النفذة">➕</button></div></div>
+            <div><label>الماركة</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input id="productBrand" list="brandDatalist" placeholder="اختر أو أضف ماركة" style="flex:1"><button class="btn secondary" type="button" onclick="quickAddProductOption('brand')" title="اعتماد الاسم المكتوب كماركة جديدة في القائمة">➕</button></div></div>
+            <div><label>الموديل</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input id="productModel" list="modelDatalist" placeholder="اختر أو أضف موديل" style="flex:1"><button class="btn secondary" type="button" onclick="quickAddProductOption('model')" title="اعتماد الاسم المكتوب كموديل جديد في القائمة">➕</button></div></div>
+            <div><label>اللون</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input id="productColor" list="colorDatalist" placeholder="مثال: أبيض / أسود / ذهبي" style="flex:1"><button class="btn secondary" type="button" onclick="quickAddProductOption('color')" title="اعتماد الاسم المكتوب كلون جديد في القائمة">➕</button></div></div>
             <div><label>الباركود</label><input id="productBarcode" class="ltr" placeholder="اختياري"></div>
             <div><label>حد الطلب</label><input id="productReorderPoint" type="number" step="1" value="0"></div>
             <div><label>سعر الشراء</label><input id="productPurchasePrice" type="text" inputmode="decimal" value="0"></div>
             <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="text" inputmode="decimal" value="0"></div>
             <div><label>سعر الجملة</label><input id="productWholesalePrice" type="text" inputmode="decimal" value="0"></div>
+            <div style="grid-column:1/-1"><label>📝 ملاحظة على المنتج</label><input id="productNotes" placeholder="اختياري — تظهر عند فتح المنتج للتعديل: مثلاً موقع الرفّ، بدائل، بلد المنشأ…"></div>
             <div class="row" style="grid-column:1/-1"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
           </form>
           <p class="mini">يمكنك إضافة التصنيف عند إنشاء المنتج. إذا كتبت كود منتج موجود سيتم تعديل بياناته.</p>
@@ -1290,6 +1291,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260920-2100"></script>
+<script src="app.js?v=20260920-2145"></script>
 </body>
 </html>
