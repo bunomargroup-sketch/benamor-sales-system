@@ -2237,6 +2237,52 @@ function renderSales(){
 }
 function clearSaleFilters(){['saleListSearch','saleFilterFrom','saleFilterTo','saleFilterMonth','saleFilterYear','saleFilterUser'].forEach(id=>{if(q(id))q(id).value=''}); ['saleFilterType','saleFilterCustomer','saleFilterBranch','saleFilterWarehouse','saleFilterPayment'].forEach(id=>{if(q(id))q(id).value=''}); renderSales();}
 function showDueSalesOnly(){if(q('saleFilterPayment'))q('saleFilterPayment').value='due'; renderSales();}
+
+/* ═══ تصدير/طباعة قائمة الفواتير — تحترم كل فلاتر الشاشة (بحث، فترة، شهر، سنة، نوع، مستخدم، زبون، فرع، حالة دفع) ═══ */
+function saleStatusText(st){return st==='paid'?'مدفوعة':st==='partial'?'مدفوعة جزئيًا':'غير مدفوعة'}
+function salesFilterSummaryParts(){
+  const g=id=>(q(id)?.value||'').trim(), parts=[];
+  if(g('saleFilterFrom')||g('saleFilterTo')) parts.push('الفترة: '+(g('saleFilterFrom')||'البداية')+' ← '+(g('saleFilterTo')||'اليوم'));
+  if(g('saleFilterMonth')) parts.push('شهر '+g('saleFilterMonth'));
+  if(g('saleFilterYear')) parts.push('سنة '+g('saleFilterYear'));
+  if(g('saleFilterBranch')){const l=locations.find(x=>x.id===g('saleFilterBranch')); if(l) parts.push('الفرع: '+l.name);}
+  if(g('saleFilterCustomer')){const c=customers.find(x=>x.id===g('saleFilterCustomer')); if(c) parts.push('الزبون: '+c.name);}
+  if(g('saleFilterPayment')) parts.push('حالة الدفع: '+( {paid:'مدفوعة',partial:'مدفوعة جزئيًا',unpaid:'غير مدفوعة',due:'عليها دين'}[g('saleFilterPayment')]||g('saleFilterPayment') ));
+  if(g('saleFilterType')) parts.push('النوع: '+(g('saleFilterType')==='sale'?'بيع عادي':'فواتير بها أصناف مرتجعة'));
+  if(g('saleFilterUser')) parts.push('البائع: '+g('saleFilterUser'));
+  if(g('saleListSearch')) parts.push('بحث: «'+g('saleListSearch')+'»');
+  return parts;
+}
+function exportSalesListCsv(){
+  const rows=sales.filter(saleMatchesFilters);
+  if(!rows.length){toast('لا توجد فواتير مطابقة للفلاتر','warn');return;}
+  const head=['رقم الفاتورة','التاريخ','الفرع','الزبون','الهاتف','الحالة','طريقة الدفع','الإجمالي','المدفوع','الدين','ملاحظات'];
+  const lines=rows.map(sl=>{
+    const l=locations.find(x=>x.id===sl.location_id), c=customers.find(x=>x.id===sl.customer_id);
+    return [sl.invoice_no||String(sl.id).slice(0,8), sl.sale_date, l?.name||'', c?.name||'زبون نقدي', c?.phone||'', saleStatusText(salePaymentStatus(sl)), typeLabel(sl.payment_method||''), Number(sl.total||0), Number(sl.paid_amount||0), Number(sl.balance_due||0), String(sl.notes||'').replace(/\s+/g,' ').trim()];
+  });
+  const csv='\ufeff'+[head,...lines].map(row=>row.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='فواتير-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+  toast('تم تصدير '+rows.length+' فاتورة (Excel/CSV)','success');
+}
+function printSalesList(){
+  const rows=sales.filter(saleMatchesFilters);
+  if(!rows.length){toast('لا توجد فواتير مطابقة للفلاتر','warn');return;}
+  const w=window.open('','_blank'); if(!w){toast('المتصفح منع النافذة — اسمح بالنوافذ المنبثقة','warn');return;}
+  const tot=rows.reduce((a,s)=>a+Number(s.total||0),0), paid=rows.reduce((a,s)=>a+Number(s.paid_amount||0),0), due=rows.reduce((a,s)=>a+Math.max(0,Number(s.balance_due||0)),0);
+  const trs=rows.map((sl,i)=>{
+    const l=locations.find(x=>x.id===sl.location_id), c=customers.find(x=>x.id===sl.customer_id);
+    return `<tr><td>${i+1}</td><td class="code">${esc(sl.invoice_no||String(sl.id).slice(0,8))}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name||'')}</td><td>${esc(c?.name||'زبون نقدي')}${c?.phone?`<div class="ph">${esc(c.phone)}</div>`:''}</td><td>${saleStatusText(salePaymentStatus(sl))}</td><td class="num">${money(sl.total)}</td><td class="num">${money(sl.paid_amount)}</td><td class="num ${Number(sl.balance_due)>0?'neg':''}">${money(sl.balance_due)}</td></tr>`;
+  }).join('');
+  const meta=[...salesFilterSummaryParts(), rows.length+' فاتورة', new Date().toLocaleDateString('ar-LY'), 'بواسطة '+(appUser?.identifier||'')].map(esc).join(' · ');
+  const html=`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>قائمة فواتير البيع</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:0;padding:14px;color:#111}h1{font-size:18px;margin:0 0 2px}.meta{color:#555;font-size:11px;margin-bottom:10px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:4px 6px;text-align:right}th{background:#eee}.num{direction:ltr;text-align:center}.neg{color:#b00020;font-weight:900}.code{direction:ltr;text-align:left;font-weight:700}.ph{color:#666;font-size:9px;direction:ltr}tfoot td{font-weight:800;background:#f6f6f6}@page{size:A4 landscape;margin:8mm}@media print{body{padding:0}}</style></head><body><h1>🧾 ${esc(APP_CONFIG.businessName||'بنعم')} — قائمة فواتير البيع</h1><div class="meta">${meta}</div><table><thead><tr><th>#</th><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>الحالة</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th></tr></thead><tbody>${trs}</tbody><tfoot><tr><td colspan="6">الإجماليات (${rows.length} فاتورة)</td><td class="num">${money(tot)}</td><td class="num">${money(paid)}</td><td class="num">${money(due)}</td></tr></tfoot></table></body></html>`;
+  w.document.write(html); w.document.close();
+  w.onload=()=>{try{w.focus();w.print();}catch(e){}};
+  setTimeout(()=>{try{w.focus();w.print();}catch(e){}},600);
+}
 function selectSaleRow(id){selectedSaleId=id;renderSales()}
 
 /* ═══════════ (٢) قائمة المرتجعات — تبويب فرعي داخل «فواتير البيع» ═══════════
