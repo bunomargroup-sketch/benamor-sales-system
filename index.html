@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260920-2145">
+<link rel="stylesheet" href="app.css?v=20260920-2315">
 </head>
 <body class="auth-locked">
   <header>
@@ -452,9 +452,9 @@
               <div class="row" style="align-items:end"><button class="btn" type="button" onclick="openNoInvoiceReturn()">↩ مرتجع بدون فاتورة</button><button class="btn secondary" type="button" onclick="resetReturnFilters()">مسح الفلاتر</button></div>
             </div>
             <div class="table-scroll"><table>
-              <thead><tr><th>التاريخ</th><th>المرتجع</th><th>الفاتورة الأصلية</th><th>الزبون</th><th>الفرع</th><th>الإجمالي</th><th>طريقة الاسترداد</th><th>الحساب</th><th>السبب</th><th>مَن سجّل</th></tr></thead>
+              <thead><tr><th>التاريخ</th><th>المرتجع</th><th>الفاتورة الأصلية</th><th>الزبون</th><th>الفرع</th><th>الإجمالي</th><th>طريقة الاسترداد</th><th>الحساب</th><th>السبب</th><th>مَن سجّل</th><th>إجراء</th></tr></thead>
               <tbody id="returnsBody"></tbody>
-              <tfoot id="returnsTotalFoot"><tr><td colspan="9" class="mini">—</td></tr></tfoot>
+              <tfoot id="returnsTotalFoot"><tr><td colspan="11" class="mini">—</td></tr></tfoot>
             </table></div>
             <div class="row" style="justify-content:space-between;margin-top:8px"><span class="mini" id="returnsListInfo"></span><span class="mini">نقر يمين على الصف: التفاصيل · طباعة · الانتقال للفاتورة الأصلية</span></div>
           </div>
@@ -1291,6 +1291,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260920-2145"></script>
+<script src="app.js?v=20260920-2315"></script>
 </body>
 </html>

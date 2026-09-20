@@ -1745,7 +1745,7 @@ function renderSaleProductPicker(){
   rows.sort((a,b)=>{const av=key==='available'?(maps.availableMap.get(String(a.code))||0):(key==='margin_value'?(maps.mvMap.get(String(a.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(a.code))||0):(a[key]??''))); const bv=key==='available'?(maps.availableMap.get(String(b.code))||0):(key==='margin_value'?(maps.mvMap.get(String(b.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(b.code))||0):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,250);
   if(!shown.length) pickerSelectedIndex=-1; else if(pickerSelectedIndex>=shown.length) pickerSelectedIndex=shown.length-1;
-q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 #7c3aed"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><b ${isComp?'style="color:#7c3aed"':''}>${esc(p.code||'')}</b><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td>${esc(p.name)}${isComp?' <span style="background:#ede9fe;color:#6d28d9;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800">مركّب</span>':''}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td ${isComp?'style="color:#7c3aed"':''}><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td>${money(p._mv)}</td><td>${money(p._mp)}%</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="10">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
+q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 #7c3aed"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><b ${isComp?'style="color:#7c3aed"':''}>${esc(p.code||'')}</b><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td>${esc(p.name)}${isComp?' <span style="background:#ede9fe;color:#6d28d9;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800">مركّب</span>':''}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td ${isComp?'style="color:#7c3aed"':''}><b>${money(available)}</b></td><td>${money(p.retail_price)}</td><td>${money(p._mv)}</td><td>${money(p._mp)}%</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="11">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
   setupTableSorting();
 }
@@ -2350,8 +2350,8 @@ function renderReturns(){
   });
   rows.sort((a,b)=>String(b.r.return_date||'').localeCompare(String(a.r.return_date||'')));
   if(!rows.length){
-    body.innerHTML='<tr><td colspan="10">لا توجد مرتجعات مطابقة للفلاتر.</td></tr>';
-    if(q('returnsTotalFoot')) q('returnsTotalFoot').innerHTML='<tr><td colspan="10" class="mini">—</td></tr>';
+    body.innerHTML='<tr><td colspan="11">لا توجد مرتجعات مطابقة للفلاتر.</td></tr>';
+    if(q('returnsTotalFoot')) q('returnsTotalFoot').innerHTML='<tr><td colspan="11" class="mini">—</td></tr>';
     if(q('returnsListInfo')) q('returnsListInfo').textContent='';
     return;
   }
@@ -2363,10 +2363,159 @@ function renderReturns(){
     const rec=negativeDoc?recorder:returnRecorder(r.id);
     const safe=String(r.id||'').replace(/'/g,"\'");
     const badge=negativeDoc?' <span class="badge red" title="حركة استرداد أُنشئت بفاتورة سالبة قبل تحصين المنظومة — لا يوجد مستند مرتجع لها">بفاتورة سالبة (بلا مستند)</span>':(r.sale_id?'':' <span class="badge red" title="مرتجع بلا فاتورة أصلية — بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>');
-    return `<tr data-ret="${safe}" data-sale="${String(r.sale_id||'').replace(/'/g,"\\'")}"><td>${esc(r.return_date)}</td><td class="ltr"><b>${esc(String(r.id).slice(0,8))}</b>${badge}</td><td class="ltr">${esc(origInv)}</td><td>${esc(cust?.name||'زبون نقدي')}</td><td>${esc(locMap.get(r.location_id)||'—')}</td><td><b>${money(amount)}</b></td><td>${negativeDoc?'فاتورة سالبة':esc(typeLabel(r.refund_method))}</td><td>${esc(an)}</td><td class="mini">${esc(r.reason||'—')}</td><td>${esc(rec)}</td></tr>`;
+    return `<tr data-ret="${safe}" data-sale="${String(r.sale_id||'').replace(/'/g,"\\'")}"><td>${esc(r.return_date)}</td><td class="ltr"><b>${esc(String(r.id).slice(0,8))}</b>${badge}</td><td class="ltr">${esc(origInv)}</td><td>${esc(cust?.name||'زبون نقدي')}</td><td>${esc(locMap.get(r.location_id)||'—')}</td><td><b>${money(amount)}</b></td><td>${negativeDoc?'فاتورة سالبة':esc(typeLabel(r.refund_method))}</td><td>${esc(an)}</td><td class="mini">${esc(r.reason||'—')}</td><td>${esc(rec)}</td><td>${retActionCell(r,negativeDoc,rec,safe)}</td></tr>`;
   }).join('');
-  if(q('returnsTotalFoot')) q('returnsTotalFoot').innerHTML=`<tr><td colspan="5"><b>إجمالي المرتجعات المعروضة</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="4" class="mini">${rows.length} مرتجعاً</td></tr>`;
+  if(q('returnsTotalFoot')) q('returnsTotalFoot').innerHTML=`<tr><td colspan="5"><b>إجمالي المرتجعات المعروضة</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="5" class="mini">${rows.length} مرتجعاً</td></tr>`;
   if(q('returnsListInfo')) q('returnsListInfo').textContent=`النتائج: ${rows.length}`;
+}
+
+/* ═══ تعديل/حذف المرتجع: المدير كل شيء، الموظف مرتجعه فقط (بلا بطاقة مسجّل = مدير فقط) ═══ */
+function retActionCell(r,negativeDoc,rec,safe){
+  if(negativeDoc || !r.sale_id) return '—';
+  const isAdm=currentRole?.role==='admin';
+  const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
+  let h='';
+  if(isAdm||mine) h+=`<button class="btn secondary" type="button" style="padding:4px 8px" onclick="event.stopPropagation();openEditReturnModal('${safe}')" title="تعديل المرتجع">✏</button>`;
+  if(isAdm) h+=` <button class="btn danger" type="button" style="padding:4px 8px" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')" title="حذف المرتجع نهائياً — للمدير فقط">🗑</button>`;
+  return h||'—';
+}
+function retOtherReturnedQty(saleItemId, excludeRetId){
+  return saleReturnItems.filter(i=>i.sale_item_id===saleItemId && i.return_id!==excludeRetId).reduce((a,i)=>a+Number(i.qty||0),0);
+}
+let _editingReturnId=null;
+function ensureReturnEditModal(){
+  if(q('returnEditModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='returnEditModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(920px,96vw)">
+    <div class="modal-head"><div><h2 style="margin:0">✏️ تعديل المرتجع</h2><div class="mini" id="reSub">—</div></div><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="form" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+      <div><label>التاريخ</label><input id="reDate" type="date"></div>
+      <div><label>طريقة التعويض</label><select id="reMethod"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="credit_reduction">تخفيض دين الزبون</option><option value="none">بدون تعويض نقدي</option></select></div>
+      <div><label>حساب التعويض</label><select id="reAccount"></select></div>
+      <div style="grid-column:1/-1"><label>الملاحظة</label><input id="reNotes" placeholder="يُضاف سطر التعديل (المعدّل/التاريخ/المسجّل الأصلي) تلقائياً"></div>
+    </div>
+    <div class="table-scroll" style="max-height:46vh;overflow:auto;margin-top:8px"><table>
+      <thead><tr><th>الكود</th><th>الصنف</th><th>المعاد الآن</th><th>الحد المتاح</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+      <tbody id="reItemsBody"></tbody></table></div>
+    <div class="row" style="justify-content:space-between;margin-top:10px"><b>الإجمالي: <span class="ltr" id="reTotal">0.00</span></b>
+      <div class="row"><button class="btn" type="button" onclick="submitReturnEdit()">💾 حفظ التعديل</button><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">إلغاء</button></div>
+    </div>
+    <div class="mini" style="margin-top:6px">🔒 الكمية لا تتجاوز (المباع من الفاتورة الأصلية − ما عُيد في مرتجعات أخرى) · السعر لا يتجاوز سعر البيع الأصلي · الخصم الموزَّع يبقى محفوظاً بنسبة الصف · تعديل المال/الدفتر/المخزون يعكس أثر القديم في معاملة واحدة بالخادم.</div>
+  </div>`;
+  document.body.appendChild(d);
+  q('reMethod').addEventListener('change',()=>{
+    const m=q('reMethod').value, need=['cash','bank_transfer','card'].includes(m);
+    q('reAccount').innerHTML=financeAccountOptionsFor(m,'— مطلوب لهذه الطريقة —');
+    q('reAccount').style.display=need?'':'none';
+  });
+}
+function reRecalc(){
+  let t=0;
+  document.querySelectorAll('#reItemsBody tr').forEach(tr=>{
+    const qty=Number(tr.querySelector('.re-qty')?.value||0), price=Number(tr.querySelector('.re-price')?.value||0);
+    const discRate=Number(tr.dataset.discRate||0), orig=Number(tr.dataset.origPrice||0);
+    const lt=Math.max(0,qty*price - Math.min(qty*orig, discRate*qty));
+    tr.querySelector('.re-line').textContent=money(lt);
+    t+=lt;
+  });
+  if(q('reTotal')) q('reTotal').textContent=money(t);
+}
+function openEditReturnModal(id){
+  const r=saleReturns.find(x=>x.id===id); if(!r){toast('مرتجع بفاتورة سالبة تاريخية — لا مستند له ولا يعدّل من هنا','info');return;}
+  const rec=returnRecorder(id);
+  const isAdm=currentRole?.role==='admin';
+  const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
+  if(!isAdm && !mine){toast('التعديل للمدير أو للموظف الذي سجّل هذا المرتجع فقط','warn');return;}
+  const orig=sales.find(x=>x.id===r.sale_id); const cust=customers.find(c=>c.id===r.customer_id);
+  const items=saleReturnItems.filter(i=>i.return_id===id);
+  if(!items.length){toast('لا توجد أسطر لهذا المرتجع','warn');return;}
+  _editingReturnId=id;
+  ensureReturnEditModal();
+  q('reSub').textContent=`مرتجع ${String(id).slice(0,8)} — على فاتورة ${orig?.invoice_no||'—'} — ${cust?.name||'زبون نقدي'} — سجّله: ${rec}`;
+  q('reDate').value=String(r.return_date||'').slice(0,10);
+  q('reMethod').value=r.refund_method||'cash';
+  q('reMethod').dispatchEvent(new Event('change'));
+  const mv=(returnAccountName(id).mv)||null;
+  if(mv&&mv.account_id) q('reAccount').value=mv.account_id;
+  if(!q('reAccount').value){const a=defaultFinanceAccountFor(q('reMethod').value,r.location_id); if(a) q('reAccount').value=a;}
+  q('reNotes').value=String(r.notes||'').split(' — تعديل بواسطة')[0];
+  q('reItemsBody').innerHTML=items.map(it=>{
+    const si=saleItems.find(x=>x.id===it.sale_item_id);
+    if(!si) return `<tr><td colspan="6">سطر مرتبط ببند فاتورة حُذف — هذا المرتجع يعالجه المدير فقط (إلغاء كامل)</td></tr>`;
+    const sold=Number(si.qty||0), oth=retOtherReturnedQty(it.sale_item_id,id);
+    const max=Math.max(0, sold-oth);
+    const discRate=sold?Number(si.line_discount||0)/sold:0;
+    return `<tr data-sale-item="${it.sale_item_id}" data-orig-price="${Number(si.unit_price||0)}" data-disc-rate="${discRate}">
+      <td class="ltr"><b>${esc(it.product_code)}</b></td><td>${esc(it.product_name)}</td>
+      <td><input class="re-qty ltr" type="number" step="0.5" min="0.5" max="${max}" value="${Number(it.qty||0)}" style="max-width:90px;text-align:center" oninput="reRecalc()"></td>
+      <td class="mini">${money(max)}</td>
+      <td><input class="re-price ltr" type="number" step="0.01" min="0" max="${Number(si.unit_price||0)}" value="${Number(it.unit_price||0)}" style="max-width:90px;text-align:center" oninput="reRecalc()"></td>
+      <td class="re-line ltr">${money(it.line_total)}</td></tr>`;
+  }).join('');
+  reRecalc();
+  q('returnEditModal').classList.add('show');
+}
+async function submitReturnEdit(){
+  const id=_editingReturnId; if(!id) return;
+  if(window.__busy)return;
+  const method=q('reMethod').value, account=q('reAccount').value||null;
+  if(['cash','bank_transfer','card'].includes(method) && !account){toast('اختر حساب التعويض لهذه الطريقة','warn');return;}
+  let payload=[], err=null;
+  document.querySelectorAll('#reItemsBody tr').forEach(tr=>{
+    if(err||!tr.dataset.saleItem) return;
+    const qty=Number(tr.querySelector('.re-qty').value||0), price=Number(tr.querySelector('.re-price').value||0);
+    const max=Number(tr.querySelector('.re-qty').max||0), orig=Number(tr.dataset.origPrice||0);
+    if(!(qty>0))err='كل سطر يجب أن تكون كميته موجبة';
+    else if(qty>max)err='الكمية تتجاوز المتاح في سطر ما';
+    else if(!(price>=0)||price>orig+1e-6)err='السعر يجب أن يكون بين 0 وسعر البيع الأصلي';
+    if(!err) payload.push({sale_item_id:tr.dataset.saleItem, qty, unit_price:price});
+  });
+  if(err){toast(err,'warn');return;}
+  if(!payload.length){toast('لا توجد أسطر للحفظ','warn');return;}
+  const notes=q('reNotes').value.trim();
+  window.__busy=true;
+  try{
+    showLoading(true);
+    await rpc('update_sale_return',{p_return_id:id,p_return:{return_date:q('reDate').value||null,refund_method:method,account_id:account,notes},p_items:payload,p_user_identifier:appUser?.identifier||null});
+    await logAction('return_edit','pos_sale_returns',id,`تعديل مرتجع ${String(id).slice(0,8)} — ${payload.length} سطر — ${method}`);
+    await loadAll();
+    q('returnEditModal').classList.remove('show');
+    toast('تم تعديل المرتجع (انعكس أثر القديم وثبّت الجديد على نفس رقم المستند)','success');
+  }catch(e){
+    console.error(e);
+    const m=String(e?.message||'');
+    let t='تعذّر التعديل: '+friendlyError(e);
+    if(m.includes('RETURN_EDIT_NOT_ALLOWED'))t='مسموح للمدير أو للموظف الذي سجّل هذا المرتجع فقط';
+    else if(m.includes('RETURN_QTY_EXCEEDS_SOLD_QTY'))t='الكمية تتجاوز المتبقي في أحد أصناف الفاتورة الأصلية';
+    else if(m.includes('RETURN_PRICE_MUST_BE_BETWEEN_0_AND_SOLD_PRICE'))t='السعر يجب أن يكون ≤ سعر البيع الأصلي';
+    else if(m.includes('INSUFFICIENT')||m.includes('STOCK'))t+=' — لو بيعت الكمية المعادة بعد المرتجع فالعكس يتطلب تصحيح المخزون أولاً';
+    else if(m.includes('does not exist'))t+=' — شغّل ملف 0060_return_edit_delete.sql في Supabase أولاً';
+    toast(t,'error');
+  }finally{showLoading(false);window.__busy=false;}
+}
+async function deleteReturnAdmin(id){
+  if(currentRole?.role!=='admin'){toast('حذف المرتجع للمدير فقط','warn');return;}
+  const r=saleReturns.find(x=>x.id===id); if(!r){toast('لم يوجد مستند المرتجع','warn');return;}
+  const orig=sales.find(x=>x.id===r.sale_id);
+  const short=String(id).slice(0,8);
+  if(!confirm(`حذف نهائي للمرتجع ${short} على فاتورة ${orig?.invoice_no||'—'} بقيمة ${money(r.total)}؟\nستتم: خصم كمياته من المخزون، عكس أثره على الدين/المال، وإزالة المستند نهائياً.`))return;
+  const typed=prompt(`للتأكيد اكتب: ${short}`); if(typed===null) return;
+  if(String(typed).trim()!==short){toast('الرمز غير مطابق — لم يتم الحذف','warn');return;}
+  if(window.__busy)return; window.__busy=true;
+  try{
+    showLoading(true);
+    await rpc('admin_delete_sale_return',{p_return_id:id,p_user_identifier:appUser?.identifier||null});
+    await logAction('return_delete','pos_sale_returns',id,`حذف مرتجع ${short} — ${money(r.total)} ${APP_CONFIG.currency}`);
+    await loadAll();
+    toast('تم حذف المرتجع وعكس أثره بالكامل','success');
+  }catch(e){
+    console.error(e);
+    const m=String(e?.message||'');
+    let t='تعذّر الحذف: '+friendlyError(e);
+    if(m.includes('ONLY_ADMIN'))t='هذه العملية للمدير فقط';
+    if(m.includes('does not exist'))t+=' — شغّل ملف 0060_return_edit_delete.sql في Supabase أولاً';
+    toast(t,'error');
+  }finally{showLoading(false);window.__busy=false;}
 }
 function openReturnDetails(id){
   const r=saleReturns.find(x=>x.id===id); if(!r){toast('حركة استرداد تاريخية بلا مستند مرتجع — راجع الفاتورة الأصلية','info');return;}
@@ -2633,7 +2782,7 @@ function renderSuggestionList(){
     const minQty=Number(q('sgFilterMinQty')?.value||0)||0;
     const minValue=Number(String(q('sgFilterMinValue')?.value||'').replace(/[^0-9.\-]/g,''))||0;
     if(!(cat||sup||minQty||minValue)){
-      body.innerHTML='<tr><td colspan="10">اختر فلترًا واحدًا على الأقل (تصنيف، مورّد، أدنى كمية عند المصدر، أو أدنى قيمة للسطر) — بدون فلاتر ستكون النتائج بلا معنى.</td></tr>';
+      body.innerHTML='<tr><td colspan="11">اختر فلترًا واحدًا على الأقل (تصنيف، مورّد، أدنى كمية عند المصدر، أو أدنى قيمة للسطر) — بدون فلاتر ستكون النتائج بلا معنى.</td></tr>';
       if(q('sgCFoot')) q('sgCFoot').innerHTML='';
       if(q('sgTiming')) q('sgTiming').textContent='';
       return;
@@ -2652,8 +2801,8 @@ function renderSuggestionList(){
       }
     }
     rows.sort((a,b)=>b.lineValue-a.lineValue); /* الافتراضي: الكمية المقترحة × سعر البيع تنازليًا */
-    body.innerHTML=rows.slice(0,400).map(x=>`<tr>${cbCell(x)}<td class="ltr"><b>${esc(x.code)}</b><div class="mini">${esc(x.name)}</div></td><td>${esc(x.category||'—')}</td><td>${esc(locName(x.dest))}</td><td>${money(x.destQty)}</td><td><b>${esc(locName(x.from))}</b></td><td>${money(x.fromQty)}</td><td><b>${money(x.qty)}</b></td><td><b>${money(x.lineValue)}</b></td><td>${dismissBtn(x)}</td></tr>`).join('')||'<tr><td colspan="10">لا نتائج بهذه الفلاتر.</td></tr>';
-    if(q('sgCFoot')) q('sgCFoot').innerHTML=rows.length?`<tr><td colspan="10" class="mini"><b>${rows.length} نتيجة</b>${rows.length>400?' — تُعرض أول 400':''}</td></tr>`:'';
+    body.innerHTML=rows.slice(0,400).map(x=>`<tr>${cbCell(x)}<td class="ltr"><b>${esc(x.code)}</b><div class="mini">${esc(x.name)}</div></td><td>${esc(x.category||'—')}</td><td>${esc(locName(x.dest))}</td><td>${money(x.destQty)}</td><td><b>${esc(locName(x.from))}</b></td><td>${money(x.fromQty)}</td><td><b>${money(x.qty)}</b></td><td><b>${money(x.lineValue)}</b></td><td>${dismissBtn(x)}</td></tr>`).join('')||'<tr><td colspan="11">لا نتائج بهذه الفلاتر.</td></tr>';
+    if(q('sgCFoot')) q('sgCFoot').innerHTML=rows.length?`<tr><td colspan="11" class="mini"><b>${rows.length} نتيجة</b>${rows.length>400?' — تُعرض أول 400':''}</td></tr>`:'';
   }
   sgUpdateSelectedInfo();
   if(q('sgTiming')){
@@ -5140,11 +5289,14 @@ function renderReports(){
   const salesTotal=filteredSales.reduce((a,s)=>a+Number(s.total||0),0);
   const paidTotal=filteredSales.reduce((a,s)=>a+Number(s.paid_amount||0),0);
   const balanceTotal=filteredSales.reduce((a,s)=>a+Number(s.balance_due||0),0);
-  const profit=filteredItems.reduce((a,it)=>a+(Number(it.unit_price||0)-productCost(it.product_code))*Number(it.qty||0),0);
+  const fRets=saleReturns.filter(r=>inDateRange(r.return_date,from,to) && (!loc || r.location_id===loc));
+  const returnsTotal=fRets.reduce((a,r)=>a+Number(r.total||0),0);
+  /* بطاقة الربح كانت تشرّط على أصناف البيع فقط وتترك المرتجعات الموثّقة خارجها —
+     الآن تحسب بنفس محرك aggregateItemProfit (كما جداول الربح المفصلة) */
+  const profit=aggregateItemProfit(filteredItems, saleReturnItems.filter(it=>fRets.some(r=>r.id===it.return_id))).reduce((a,r)=>a+Number(r.profit||0),0);
   const customerDebt=customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0);
   const supplierDebt=suppliers.reduce((a,s)=>a+Math.max(0,Number(s.balance||0)),0);
   const stockValue=stock.reduce((a,st)=>a+Number(st.qty||0)*productCost(st.product_code),0);
-  const returnsTotal=saleReturns.filter(r=>inDateRange(r.return_date,from,to) && (!loc || r.location_id===loc)).reduce((a,r)=>a+Number(r.total||0),0);
   q('repSalesTotal').textContent=money(salesTotal-returnsTotal); if(q('repReturnsTotal')) q('repReturnsTotal').textContent=money(returnsTotal); q('repSalesCount').textContent=filteredSales.length; q('repProfit').textContent=money(profit);
   q('repCustomerDebt').textContent=money(customerDebt); q('repSupplierDebt').textContent=money(supplierDebt); q('repStockValue').textContent=money(stockValue);
 
