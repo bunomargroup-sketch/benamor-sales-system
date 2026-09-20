@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260920-1845">
+<link rel="stylesheet" href="app.css?v=20260920-2100">
 </head>
 <body class="auth-locked">
   <header>
@@ -310,7 +310,7 @@
               <div><label>زبون موجود</label><select id="saleCustomer" onchange="renderSaleCustomerInfo();updateSaleTotal()"></select></div>
               <div><label>أو اسم زبون جديد</label><input id="saleNewCustomerName" placeholder="مطلوب إذا يوجد دين"></div>
               <div><label>هاتف الزبون</label><input id="saleNewCustomerPhone" class="ltr" placeholder="اختياري"></div>
-              <div class="row" style="align-items:end"><button type="button" class="btn secondary" onclick="toggleSaleCustomerPanel(false)">✖ إخفاء اللوحة</button><span class="mini">Enter في البحث لا يرسل الفاتورة — اختر من القائمة</span></div>
+              <div class="row" style="align-items:end"><button type="button" class="btn" onclick="saveSaleNewCustomerNow()" title="حفظ الزبون بالاسم + الهاتف في قائمة الزبائن فوراً — ولو الفاتورة لم تُكمل بعد">💾 حفظ الزبون الجديد</button><button type="button" class="btn secondary" onclick="toggleSaleCustomerPanel(false)">✖ إخفاء اللوحة</button><span class="mini">Enter في البحث لا يرسل الفاتورة — اختر من القائمة</span></div>
               <label class="hidden"><input id="saleWholesaleToggle" type="checkbox" style="width:auto" title="عند التفعيل تُستعمل أسعار الجملة"> 🔖 سعر الجملة</label>
             </div>
             <!-- لوحة تفاصيل الفاتورة — تنفتح من الشريحة المتقطّعة وتُحفظ حالتها لكل مستخدم -->
@@ -1290,6 +1290,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260920-1845"></script>
+<script src="app.js?v=20260920-2100"></script>
 </body>
 </html>

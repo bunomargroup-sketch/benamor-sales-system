@@ -771,9 +771,9 @@ async function loadAll(){
       apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(e=>{console.warn('finance movements not setup yet',e); return []}),
       apiAll('pos_daily_cash_closings','?select=*&order=closing_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('daily cash closings not setup yet',e); return []}),
       apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
-      apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('expenses not setup yet',e); return []}),
+      apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc').catch(e=>{console.warn('expenses not setup yet',e); return []}),
       apiAll('pos_employees','?select=*&order=name.asc').catch(e=>{console.warn('employees not setup yet',e); return []}),
-      apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('salary payments not setup yet',e); return []}),
+      apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc').catch(e=>{console.warn('salary payments not setup yet',e); return []}),
       apiAll('pos_composite_items','?select=*&order=created_at.asc').catch(e=>{console.warn('composite items not setup yet',e); return []})
     ]);
     ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter','stockCategoryFilter','stockBrandFilter','stockSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
@@ -3207,6 +3207,50 @@ function matchExistingCustomerByPhone(phone){
   const norm=normalizePhoneLY(phone);
   if(!norm) return null;
   return customers.find(c=>normalizePhoneLY(c.phone)===norm && norm) || customers.find(c=>normalizePhoneLY(c.phone2)===norm && norm) || null;
+}
+/* ═══ زر «حفظ الزبون الجديد» من لوحة الزبون في شاشة البيع — يحفظ فوراً ولو الفاتورة لم تُكمل ═══
+   نفس انضباط ensureSaleCustomer: منع التكرار برقم الهاتف أولاً (محلي + الخادم)،
+   ثم الحفظ واعتماد الصف في الفاتورة الحالية والقوائم. */
+async function saveSaleNewCustomerNow(){
+  if(window.__busy) return; window.__busy=true;
+  try{
+    const name=(q('saleNewCustomerName')?.value||'').trim(), phone=(q('saleNewCustomerPhone')?.value||'').trim();
+    if(!name){ toast('اكتب اسم الزبون الجديد أولاً','warn'); return; }
+    let existing=null;
+    if(phone) existing=matchExistingCustomerByPhone(phone);
+    if(!existing && phone){
+      const variants=[...new Set([phone, String(phone).replace(/[^0-9]/g,''), '+'+String(phone).replace(/[^0-9]/g,'')])].filter(Boolean);
+      for(const v of variants){
+        if(!v) continue;
+        try{
+          const rows=await api('pos_customers',{qs:`?select=id,name,phone&phone=eq.${encodeURIComponent(v)}&limit=1`});
+          if(rows&&rows.length){ existing=rows[0]; if(!customers.find(c=>c.id===existing.id)) customers.push(existing); break; }
+        }catch(e){ console.warn('customer phone lookup failed',e); }
+      }
+    }
+    if(existing){
+      q('saleCustomer').value=existing.id;
+      q('saleNewCustomerName').value=''; q('saleNewCustomerPhone').value='';
+      try{renderSaleCustomerInfo();}catch(e){}
+      try{updateSaleTotal();}catch(e){}
+      toast('الرقم مسجّل مسبقاً — اعتمدت الزبون الحالي: '+(existing.name||''),'warn');
+      return;
+    }
+    showLoading(true);
+    const created=await api('pos_customers',{method:'POST',body:{name,phone:phone||null,active:true}});
+    const c=created&&created[0];
+    if(!c) throw new Error('الخادم لم يرجع صف الزبون المحفوظ');
+    customers.unshift(c);
+    try{ rebuildSaleCustomerOptions(); }catch(e){}
+    q('saleCustomer').value=c.id;
+    q('saleNewCustomerName').value=''; q('saleNewCustomerPhone').value='';
+    try{ renderSaleCustomerInfo(); }catch(e){}
+    try{ updateSaleTotal(); }catch(e){}
+    try{ fillSaleListFilterOptions(); }catch(e){}
+    try{ logAction('customer_add_quick','pos_customers',c.id,'إضافة زبون سريعة من شاشة البيع: '+name+(phone?' — '+phone:'')); }catch(e){}
+    toast('تم حفظ الزبون «'+name+'» في قائمة الزبائن واعتماده في الفاتورة ✓','success');
+  }catch(e){ console.error(e); toast('تعذّر حفظ الزبون: '+friendlyError(e),'error'); }
+  finally{ showLoading(false); window.__busy=false; }
 }
 async function ensureSaleCustomer(balanceDue){
   let customer_id=q('saleCustomer').value||null;
