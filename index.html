@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260920-2315">
+<link rel="stylesheet" href="app.css?v=20260920-2330">
 </head>
 <body class="auth-locked">
   <header>
@@ -431,6 +431,7 @@
             <div class="row" style="align-items:end"><button class="btn secondary" type="button" onclick="clearSaleFilters()">مسح الفلاتر</button><button class="btn secondary" type="button" onclick="showDueSalesOnly()">فواتير عليها دين</button><button class="btn secondary" type="button" onclick="exportSalesListCsv()">📊 تصدير Excel</button><button class="btn secondary" type="button" onclick="printSalesList()">🖨 طباعة القائمة / PDF</button></div>
           </div>
           <div class="row sticky-actions" style="margin:10px 0">
+            <button class="btn secondary" type="button" onclick="viewSelectedSale()" title="عرض الفاتورة للقراءة فقط (أو بالضغط مرتين على سطرها)">👁 مشاهدة</button>
             <button class="btn secondary" type="button" onclick="openSelectedSaleForEdit()">فتح / تعديل</button>
             <button class="btn secondary" type="button" onclick="printSelectedSale()">طباعة</button>
             <button class="btn secondary" type="button" onclick="openSelectedSaleReturn()">مرتجع</button>
@@ -1291,6 +1292,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260920-2315"></script>
+<script src="app.js?v=20260920-2330"></script>
 </body>
 </html>

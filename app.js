@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260920-1400';
+const APP_BUILD='b20260920-2330';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1848,7 +1848,7 @@ function movementDocInfo(m){
 }
 function openMovementDocument(table,id){
   if(!table||!id){toast('لا يوجد مستند مرتبط بهذه الحركة','warn');return;}
-  if(table==='pos_sales') return openSaleForEdit(id);
+  if(table==='pos_sales') return viewSaleInvoice(id);
   if(table==='pos_purchases') return openPurchaseForEdit(id);
   if(table==='pos_stock_transfers') return openTransferForEdit(id);
   if(table==='pos_sale_returns') return toast('هذه الحركة مرتبطة بفاتورة مرتجع. افتح فاتورة البيع الأصلية من فواتير البيع.','info');
@@ -2232,7 +2232,8 @@ function renderSales(){
     const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); const safe=String(sl.id).replace(/'/g,"\'"); const st=salePaymentStatus(sl);
     const badge=st==='paid'?'<span class="badge green">مدفوعة</span>':(st==='partial'?'<span class="badge yellow">مدفوعة جزئيًا</span>':'<span class="badge red">غير مدفوعة</span>');
     const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
-    return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')"><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b>${sl.offline_pending?' <span class="badge yellow">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}<div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}"><b>${money(sl.balance_due)}</b></td><td>${canCollect?`<button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
+    const canEditRole=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role) && !sl.offline_pending;
+    return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b>${sl.offline_pending?' <span class="badge yellow">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}<div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}"><b>${money(sl.balance_due)}</b></td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="مشاهدة الفاتورة للقراءة فقط (أو اضغط مرتين على السطر)" onclick="event.stopPropagation();viewSaleInvoice('${safe}')">👁</button>${canEditRole?` <button class="btn secondary" type="button" style="padding:4px 8px" title="فتح الفاتورة للتعديل" onclick="event.stopPropagation();openSaleForEdit('${safe}')">✏</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
   }).join('') || '<tr><td colspan="9">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
   const sl=selectedSaleId?sales.find(x=>x.id===selectedSaleId):null;
@@ -2286,7 +2287,16 @@ function printSalesList(){
   w.onload=()=>{try{w.focus();w.print();}catch(e){}};
   setTimeout(()=>{try{w.focus();w.print();}catch(e){}},600);
 }
-function selectSaleRow(id){selectedSaleId=id;renderSales()}
+/* الضغط المزدوج على سطر الفاتورة = مشاهدة (يُحسب يدوياً لأن التحديد يعيد رسم الصف فيقطع حدث dblclick) */
+let __lastSaleRowClick={id:null,t:0};
+function selectSaleRow(id){
+  const now=Date.now();
+  if(__lastSaleRowClick.id===id && now-__lastSaleRowClick.t<420){
+    __lastSaleRowClick={id:null,t:0}; viewSaleInvoice(id); return;
+  }
+  __lastSaleRowClick={id,t:now};
+  selectedSaleId=id;renderSales();
+}
 
 /* ═══════════ (٢) قائمة المرتجعات — تبويب فرعي داخل «فواتير البيع» ═══════════
    تدمج مصدرين: pos_sale_returns (المستندات) + حركات customer_refund المرجعة
@@ -2978,7 +2988,7 @@ q('salesBody')?.addEventListener('contextmenu',e=>{
   const items=[{head:'فاتورة '+(sl.invoice_no||String(id).slice(0,8))}];
   if(Number(sl.balance_due)>0 && !sl.offline_pending) items.push({label:'💵 تسجيل دفعة (متبقٍ '+money(sl.balance_due)+')',icon:'ti-cash',action:()=>openInvoicePayment(id)});
   items.push({label:'🖨️ طباعة',icon:'ti-printer',action:()=>printSale(id)});
-  items.push({label:'👁️ عرض التفاصيل',icon:'ti-eye',action:()=>{selectSaleRow(id);toast('حددت الفاتورة — بياناتها في شريط المعلومات أسفل القائمة');}});
+  items.push({label:'👁️ مشاهدة الفاتورة',icon:'ti-eye',action:()=>viewSaleInvoice(id)});
   if(['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role)) items.push({sep:true},{label:'✏️ تعديل',icon:'ti-edit',action:()=>openSaleForEdit(id)});
   showCtxMenu(e.clientX,e.clientY,items);
 });
@@ -3512,7 +3522,10 @@ function closePrintPreview(){
   printPreviewPrinting=false;
 }
 
-async function printSale(id){
+/* (2+) مشاهدة ≠ تعديل ≠ طباعة: كلها تعرض نفس مستند الفاتورة من دالة واحدة */
+async function viewSaleInvoice(id){ return showSaleInvoiceDoc(id,'view'); }
+async function printSale(id){ return showSaleInvoiceDoc(id,'print'); }
+async function showSaleInvoiceDoc(id,mode){
   try{
     const localSl=sales.find(x=>x.id===id);
     const offlinePrint=!navigator.onLine || localSl?.offline_pending; /* الطباعة تعمل دون إنترنت من البيانات المحلية */
@@ -3597,7 +3610,7 @@ table.items{width:100%;border-collapse:collapse;margin:0 0 18px}
 }
 @page{size:A4;margin:0}
 </style></head><body>
-<div class="bar"><button class="pbtn" onclick="window.print()">طباعة</button><button class="pbtn ghost" onclick="window.close()">إغلاق</button></div>
+${mode==='view'?'':'<div class="bar"><button class="pbtn" onclick="window.print()">طباعة</button><button class="pbtn ghost" onclick="window.close()">إغلاق</button></div>'}
 <div class="sheet">
   <div class="hd">
     <div class="brand"><h1>${esc(APP_CONFIG.businessName)}</h1><div class="sub">${esc(APP_CONFIG.tagline)}</div></div>
@@ -3641,9 +3654,35 @@ table.items{width:100%;border-collapse:collapse;margin:0 0 18px}
   </div>
   <div class="ft"><div class="thx">شكرًا لتعاملكم معنا — ${esc(APP_CONFIG.businessName)}</div><div class="site">benamorgroup.store</div></div>
 </div></body></html>`;
-    showInAppPrint(html);
-  }catch(err){console.error(err);toast('خطأ في طباعة الفاتورة: '+err.message)}
+    if(mode==='print') showInAppPrint(html);
+    else openSaleViewModal(sl,html);
+  }catch(err){console.error(err);toast('خطأ في فتح الفاتورة: '+err.message)}
 }
+/* ═══ مشاهدة الفاتورة قراءةً فقط — نفس مستند الطباعة، بلا طباعة تلقائية وبلا تعديل ═══ */
+let viewSaleCtxId=null;
+function ensureSaleViewModal(){
+  if(q('saleViewModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='saleViewModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(860px,96vw);height:min(90vh,940px);display:flex;flex-direction:column">
+    <div class="modal-head" style="flex-shrink:0"><div><h2 style="margin:0">👁️ مشاهدة فاتورة — <span class="ltr" id="svTitle">—</span></h2><div class="mini">عرض للقراءة فقط — التعديل له زرّه الخاص حسب الصلاحية</div></div>
+      <div class="row" style="gap:6px"><button class="btn secondary" type="button" onclick="printViewedSale()" title="طباعة نفس المستند">🖨️ طباعة</button><button class="btn secondary" type="button" id="svEditBtn" style="display:none" onclick="editViewedSale()" title="فتح الفاتورة للتعديل حسب صلاحيتك">✏️ تعديل</button><button class="btn secondary" type="button" onclick="q('saleViewModal').classList.remove('show')">إغلاق</button></div></div>
+    <iframe id="saleViewFrame" title="معاينة الفاتورة" style="flex:1;width:100%;border:0;border-radius:10px;background:#e2e8f0"></iframe>
+  </div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click',e=>{if(e.target===d)d.classList.remove('show');});
+}
+function openSaleViewModal(sl,html){
+  ensureSaleViewModal();
+  viewSaleCtxId=sl.id;
+  q('svTitle').textContent=String(sl.invoice_no||String(sl.id).slice(0,8))+' · '+String(sl.sale_date||'');
+  const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role) && !sl.offline_pending;
+  q('svEditBtn').style.display=canEdit?'':'none';
+  q('saleViewFrame').srcdoc=html;
+  q('saleViewModal').classList.add('show');
+}
+function printViewedSale(){const id=viewSaleCtxId; if(!id)return; q('saleViewModal').classList.remove('show'); printSale(id);}
+function editViewedSale(){const id=viewSaleCtxId; if(!id)return; q('saleViewModal').classList.remove('show'); openSaleForEdit(id);}
+function viewSelectedSale(){const id=getSelectedSaleId(); if(id) viewSaleInvoice(id)}
 async function printTransfer(id){
   try{
     const t=transfers.find(x=>x.id===id) || (await api('pos_stock_transfers',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
@@ -5892,7 +5931,6 @@ function defaultCtxItemsForRow(tr,target){
   const cell=target?.closest?.('td,th');
   const items=[];
   if(cell) items.push({label:'نسخ الخلية',icon:'ti-copy',action:()=>copyText(cell.innerText)});
-  items.push({label:'نسخ السطر',icon:'ti-copy',action:()=>copyText([...tr.children].map(td=>td.innerText.trim()).join(' | '))});
   const sel=String(window.getSelection?.()||'').trim();
   if(sel) items.push({label:'نسخ النص المحدد',icon:'ti-copy',action:()=>copyText(sel)});
   return items;
@@ -5936,6 +5974,7 @@ const CTX_BUILDERS={
   salesBody(tr){const id=ctxArg(tr,'selectSaleRow'); if(!id) return []; selectSaleRow(id);
     const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role);
     const items=[{head:'فاتورة بيع'},
+      {label:'مشاهدة الفاتورة',icon:'ti-eye',action:()=>viewSaleInvoice(id)},
       ...(canEdit?[{label:'فتح / تعديل',icon:'ti-edit',action:()=>openSaleForEdit(id)}]:[]),
       {label:'طباعة الفاتورة',icon:'ti-printer',action:()=>printSale(id)},
       {label:'مرتجع',icon:'ti-arrow-back-up',action:()=>openSaleReturn(id)},
