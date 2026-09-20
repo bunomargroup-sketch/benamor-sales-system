@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260920-1200';
+const APP_BUILD='b20260920-1400';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -44,6 +44,11 @@ function pLabel(code,fallback){
   if(_lblSrc!==products){_lblSrc=products;_pMap=new Map((products||[]).map(pp=>[String(pp.code),[pp.name,pp.brand,pp.model].filter(Boolean).join(' — ')]));}
   const v=_pMap.get(String(code==null?'':code));
   return v||fallback||'';
+}
+function fillProductNote(tr,sel,code){
+  const p=productByCode(code); if(!p||!tr) return;
+  const note=tr.querySelector(sel);
+  if(note) note.textContent=[[p.brand,p.model].filter(Boolean).join(' / '),p.supplier_name].filter(Boolean).join(' - ');
 }
 function cfgText(v){return esc(v)}
 function initBranding(){document.title=APP_CONFIG.businessName+' - '+APP_CONFIG.tagline;
@@ -1847,20 +1852,68 @@ function openMovementDocument(table,id){
   toast('نوع المستند غير معروف','warn');
 }
 
+let __movCode='',__movRows=[],__movLevels=[];
+function computeMovementLevels(rows,code){
+  // الرصيد بمحاذاة كل حركة يُستنتج رجوعاً من الكمية الحالية في ذلك الفرع
+  // (الرصيد الحالي = مجموع كل الحركات بعد الترحيل، فالمستويات دقيقة بالكامل)
+  const acc=new Map();
+  stock.filter(st=>String(st.product_code)===String(code)).forEach(st=>acc.set(String(st.location_id),Number(st.qty||0)));
+  const lvls=new Array(rows.length);
+  for(let i=0;i<rows.length;i++){
+    const lid=String(rows[i].location_id||'');
+    const a=acc.has(lid)?acc.get(lid):0;
+    lvls[i]=a;
+    acc.set(lid,a-Number(rows[i].qty_change||0));
+  }
+  return lvls;
+}
+function renderMovementsModalRows(){
+  const fb=q('movFilterBranch')?(q('movFilterBranch').value||''):'';
+  const ft=q('movFilterType')?(q('movFilterType').value||''):'';
+  const list=__movRows.map((m,i)=>({m,lvl:__movLevels[i]})).filter(x=>(!fb||String(x.m.location_id||'')===fb)&&(!ft||String(x.m.movement_type||'')===ft));
+  q('movementsBody').innerHTML = list.map(({m,lvl})=>{
+    const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
+    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><b>${esc(info.no)}</b></td><td>${esc(info.seller)}</td><td>${esc(info.branch)}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}"><b>${money(qty)}</b></td><td><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
+  }).join('') || '<tr><td colspan="8">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
+}
 async function openProductMovements(code){
   try{
     showLoading(true);
     const p=products.find(x=>String(x.code)===String(code));
+    __movCode=code;
     q('movementsTitle').textContent='حركات الصنف: '+code;
     q('movementsSub').textContent=p ? pLabel(p.code,p.name||'') : '';
     const rows=await api('pos_stock_movements',{qs:`?select=*&product_code=eq.${encodeURIComponent(code)}&order=movement_date.desc&limit=300`});
-    q('movementsBody').innerHTML = rows.map(m=>{
-      const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
-      return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,19))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><b>${esc(info.no)}</b></td><td>${esc(info.seller)}</td><td>${esc(info.branch)}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}"><b>${money(qty)}</b></td><td>${esc(m.notes)}</td></tr>`;
-    }).join('') || '<tr><td colspan="7">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
+    __movRows=rows;
+    __movLevels=computeMovementLevels(rows,code);
+    const lb=q('movFilterBranch'), lt=q('movFilterType');
+    if(lb){const branches=[...new Set(rows.map(m=>m.location_id).filter(Boolean))]; lb.innerHTML='<option value="">كل الفروع</option>'+branches.map(lid=>{const l=locations.find(x=>x.id===lid); return `<option value="${lid}">${esc(l?l.name:lid)}</option>`}).join('');}
+    if(lt){const types=[...new Set(rows.map(m=>m.movement_type).filter(Boolean))]; lt.innerHTML='<option value="">كل الأنواع</option>'+types.map(t=>`<option value="${t}">${esc(typeLabel(t))}</option>`).join('');}
+    renderMovementsModalRows();
     q('movementsModal').classList.add('show');
   }catch(err){console.error(err);toast('خطأ في تحميل حركات الصنف: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
+/* قائمة الزر الأيمن في جدول الحركات: رؤية المصدر / نسخ الخلية / نسخ رقم الفاتورة */
+let __ctxCell='';
+function openMoveCtx(e,table,id){
+  e.preventDefault();
+  const td=e.target.closest('td'); __ctxCell=td?(td.textContent||'').trim():'';
+  const m=q('cellCtxMenu'); if(!m) return false;
+  m.dataset.table=table||''; m.dataset.id=id||'';
+  m.style.display='block';
+  const mw=m.offsetWidth||190, mh=m.offsetHeight||120;
+  m.style.left=Math.min(e.clientX,window.innerWidth-mw-8)+'px';
+  m.style.top=Math.min(e.clientY,window.innerHeight-mh-8)+'px';
+  return false;
+}
+function cellCtxAction(act){
+  const m=q('cellCtxMenu'); if(!m) return;
+  const t=m.dataset.table, id=m.dataset.id; m.style.display='none';
+  if(act==='src') openMovementDocument(t,id);
+  else if(act==='copy'){ try{navigator.clipboard.writeText(__ctxCell).then(()=>toast('نُسخ: '+__ctxCell),()=>toast('تعذّر النسخ','warn'));}catch(e){toast('تعذّر النسخ','warn');} }
+}
+document.addEventListener('click',ev=>{const m=q('cellCtxMenu'); if(m&&!ev.target.closest('#cellCtxMenu')) m.style.display='none';});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){const m=q('cellCtxMenu'); if(m) m.style.display='none';}});
 function closeMovementsModal(){q('movementsModal').classList.remove('show')}
 function productStockSummaryText(code,mode='all'){
   const clean=String(code||'').split(/\s+/)[0].trim();
@@ -2096,7 +2149,7 @@ function addOrIncrementTransferProduct(p, qty=1){
 function addTransferRow(item={}){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"><div class="mini ti-product-note"></div></td><td><input class="ti-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
-  q('transferItemsBody').appendChild(tr); updateTransferAvailable(tr.querySelector('.ti-qty'));
+  q('transferItemsBody').appendChild(tr); fillProductNote(tr,'.ti-product-note',item.product_code); updateTransferAvailable(tr.querySelector('.ti-qty'));
 }
 function fillTransferRow(input){
   const p=findProductByInput(input.value);
@@ -2752,7 +2805,7 @@ function addSaleRow(item={}){
   const tr=document.createElement('tr');
   const isReturn=Number(item.qty||1)<0 || item.line_type==='return'; const qv=Math.abs(Number(item.qty||1))||1;
   tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><select class="si-kind hidden" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
-  q('saleItemsBody').appendChild(tr); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
+  q('saleItemsBody').appendChild(tr); fillProductNote(tr,'.si-product-note',item.product_code); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function updateSaleLineKind(el){
   const tr=el.closest('tr');
@@ -3483,7 +3536,7 @@ async function deleteSale(id){
 function addProformaRow(item={}){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="pr-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillProformaRow(this)}" onchange="fillProformaRow(this)"><div class="mini pr-note"></div></td><td><input class="pr-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td><input class="pr-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateProformaTotal()"></td><td><input class="pr-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" oninput="updateProformaTotal()"></td><td class="pr-margin">0.00</td><td class="pr-margin-pct">0%</td><td><input class="pr-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="0 أو 10%" oninput="updateProformaTotal()"></td><td class="pr-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateProformaTotal()">حذف</button></td>`;
-  q('proformaItemsBody').appendChild(tr); updateProformaTotal();
+  q('proformaItemsBody').appendChild(tr); fillProductNote(tr,'.pr-note',item.product_code); updateProformaTotal();
 }
 function fillProformaRow(input){
   const p=findProductByInput(input.value); if(!p) return;
@@ -3542,7 +3595,7 @@ function addPurchaseRow(item={}){
   const oldCost=Number(item.old_cost ?? p?.purchase_price ?? item.unit_cost ?? 0);
   tr.dataset.oldCost=oldCost;
   tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><textarea class="pi-name" readonly tabindex="-1" required placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
-  q('purchaseItemsBody').appendChild(tr); updatePurchaseCostColor(tr); updatePurchaseTotal();
+  q('purchaseItemsBody').appendChild(tr); fillProductNote(tr,'.pi-product-note',item.product_code); updatePurchaseCostColor(tr); updatePurchaseTotal();
 }
 function updatePurchaseCostColor(tr){
   if(!tr) return;
@@ -5831,7 +5884,7 @@ function renderStockCount(){
     if(cat){const p=products.find(x=>x.code===s.product_code);return p&&p.category===cat;}
     return true;
   });
-  q('stockCountBody').innerHTML=items.map(s=>{const sc=String(s.product_code||'').replace(/'/g,'');const counted=stockCountData[sc];const diff=(counted!==undefined&&counted!=='')?(Number(counted)-Number(s.qty||0)):null;return `<tr><td class="ltr"><b>${esc(s.product_code)}</b></td><td>${esc(s.product_name)}</td><td>${money(s.qty)}</td><td><input type="number" step="any" value="${counted??''}" placeholder="${money(s.qty)}" style="max-width:100px;text-align:center" oninput="stockCountData['${sc}']=this.value;renderStockCountDiff(this,'${sc}',${Number(s.qty||0)})"></td><td id="scd_${sc}" class="${diff!==null&&diff>0?'stock-positive':diff<0?'stock-negative':''}">${diff!==null?money(diff):''}</td></tr>`}).join('')||'<tr><td colspan="5">لا توجد أصناف.</td></tr>';
+  q('stockCountBody').innerHTML=items.map(s=>{const sc=String(s.product_code||'').replace(/'/g,'');const counted=stockCountData[sc];const diff=(counted!==undefined&&counted!=='')?(Number(counted)-Number(s.qty||0)):null;return `<tr><td class="ltr"><b>${esc(s.product_code)}</b></td><td>${esc(pLabel(s.product_code,s.product_name))}</td><td>${money(s.qty)}</td><td><input type="number" step="any" value="${counted??''}" placeholder="${money(s.qty)}" style="max-width:100px;text-align:center" oninput="stockCountData['${sc}']=this.value;renderStockCountDiff(this,'${sc}',${Number(s.qty||0)})"></td><td id="scd_${sc}" class="${diff!==null&&diff>0?'stock-positive':diff<0?'stock-negative':''}">${diff!==null?money(diff):''}</td></tr>`}).join('')||'<tr><td colspan="5">لا توجد أصناف.</td></tr>';
 }
 function renderStockCountDiff(inp,code,sysQty){const el=q('scd_'+code);if(!el)return;if(inp.value===''){el.textContent='';el.className='';return;}const d=Number(inp.value)-Number(sysQty);el.textContent=money(d);el.className=d>0?'stock-positive':d<0?'stock-negative':'';}
 async function saveStockCount(){

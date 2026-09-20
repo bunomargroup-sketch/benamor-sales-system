@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260920-1200">
+<link rel="stylesheet" href="app.css?v=20260920-1400">
 </head>
 <body class="auth-locked">
   <header>
@@ -1278,13 +1278,18 @@
         <div><h2 id="movementsTitle" style="margin:0">حركات الصنف</h2><div class="mini" id="movementsSub"></div></div>
         <button class="btn secondary" onclick="closeMovementsModal()">إغلاق</button>
       </div>
-      <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>رقم الفاتورة</th><th>البائع</th><th>الفرع</th><th>الكمية</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0"><select id="movFilterBranch" onchange="renderMovementsModalRows()"></select><select id="movFilterType" onchange="renderMovementsModalRows()"></select><span class="mini">الرصيد = مستوى مخزون ذلك الفرع بعد الحركة مباشرة · زر يمين على السطر = قائمة سريعة</span></div><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>رقم الفاتورة</th><th>البائع</th><th>الفرع</th><th>الكمية</th><th>الرصيد</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
     </div>
   </div>
 
 
 
 
-<script src="app.js?v=20260920-1200"></script>
+<div id="cellCtxMenu" style="display:none;position:fixed;z-index:99999;min-width:180px;background:#fff;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);overflow:hidden;font-size:14px">
+  <button type="button" onclick="cellCtxAction('src')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">👁️ رؤية المصدر</button>
+  <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
+</div>
+
+<script src="app.js?v=20260920-1400"></script>
 </body>
 </html>
