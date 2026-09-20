@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260916-1614';
+const APP_BUILD='b20260920-1200';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -38,6 +38,13 @@ let returningSaleId=null, returningSale=null, returningSaleItems=[];
 
 function q(id){return document.getElementById(id)}
 function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+// قاعدة عامة: أي اسم منتج في القوائم يظهر «الاسم — الشركة — المواديل»
+let _lblSrc=null,_pMap=null;
+function pLabel(code,fallback){
+  if(_lblSrc!==products){_lblSrc=products;_pMap=new Map((products||[]).map(pp=>[String(pp.code),[pp.name,pp.brand,pp.model].filter(Boolean).join(' — ')]));}
+  const v=_pMap.get(String(code==null?'':code));
+  return v||fallback||'';
+}
 function cfgText(v){return esc(v)}
 function initBranding(){document.title=APP_CONFIG.businessName+' - '+APP_CONFIG.tagline;
   if(q('settingsBuild')) q('settingsBuild').textContent=APP_BUILD; if(q('brandTitle'))q('brandTitle').textContent=APP_CONFIG.businessName; if(q('brandTagline'))q('brandTagline').textContent=APP_CONFIG.tagline; if(q('loginTitle'))q('loginTitle').textContent='دخول '+APP_CONFIG.businessName; try{console.log('نسخة نظام بن عمر: '+APP_BUILD); const card=document.querySelector('#loginScreen .modal-card'); if(card&&!q('appBuildTag')){const t=document.createElement('div'); t.id='appBuildTag'; t.style.cssText='text-align:center;font-size:11px;color:#94a3b8;margin-top:10px'; t.textContent='نسخة التشغيل: '+APP_BUILD; card.appendChild(t);}}catch(e){}}
@@ -795,7 +802,7 @@ function renderDashboard(){
 function renderDashboardLists(){
   const scScope=sellerBranchScope();
   if(q('dashLastSalesBody')) q('dashLastSalesBody').innerHTML=(scScope?sales.filter(sl=>sl.location_id===scScope):sales).slice(0,5).map(sl=>{const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); return `<tr><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b></td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}</td><td><b>${money(sl.total)}</b></td><td>${money(sl.balance_due)}</td></tr>`}).join('')||'<tr><td colspan="5">لا توجد فواتير بيع بعد.</td></tr>';
-  if(q('dashMovementsBody')) q('dashMovementsBody').innerHTML=stockMovements.slice(0,8).map(m=>{const l=locations.find(x=>x.id===m.location_id); return `<tr><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,19))}</td><td>${esc(typeLabel(m.movement_type))}</td><td>${esc(m.product_name||m.product_code)}</td><td>${esc(l?.name)}</td><td class="${Number(m.qty_change)>0?'stock-positive':'stock-negative'}"><b>${money(m.qty_change)}</b></td></tr>`}).join('')||'<tr><td colspan="5">لا توجد حركات مخزون بعد.</td></tr>';
+  if(q('dashMovementsBody')) q('dashMovementsBody').innerHTML=stockMovements.slice(0,8).map(m=>{const l=locations.find(x=>x.id===m.location_id); return `<tr><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,19))}</td><td>${esc(typeLabel(m.movement_type))}</td><td>${esc(pLabel(m.product_code,m.product_name||m.product_code))}</td><td>${esc(l?.name)}</td><td class="${Number(m.qty_change)>0?'stock-positive':'stock-negative'}"><b>${money(m.qty_change)}</b></td></tr>`}).join('')||'<tr><td colspan="5">لا توجد حركات مخزون بعد.</td></tr>';
 }
 
 
@@ -1004,7 +1011,7 @@ async function changeUserCredentials(oldId){
 function renderReorderAlerts(){
   const rows=products.filter(p=>Number(p.reorder_point||0)>0 && Number(p.total_stock||0)<=Number(p.reorder_point||0));
   if(q('reorderCount')) q('reorderCount').textContent=rows.length;
-  if(q('reorderBody')) q('reorderBody').innerHTML=rows.slice(0,80).map(p=>`<tr><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(p.name)}</td><td><b>${money(p.total_stock)}</b></td><td>${money(p.reorder_point)}</td><td>${esc(p.supplier_name)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف تحت حد الطلب.</td></tr>';
+  if(q('reorderBody')) q('reorderBody').innerHTML=rows.slice(0,80).map(p=>`<tr><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(p.total_stock)}</b></td><td>${money(p.reorder_point)}</td><td>${esc(p.supplier_name)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف تحت حد الطلب.</td></tr>';
 }
 
 /* (د) إصلاح جذري: إعادة بناء خيارات زبون البيع كانت تُسقط الاختيار الحالي بصمت
@@ -1224,7 +1231,7 @@ function applyProductColVisibility(shown, smartParsed=null){
   const heads=PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>`<th>${c.label}</th>`).join('');
   const cells=(p,isComp,vS)=>{
     const safe=String(p.code||'').replace(/'/g,"\\'");
-    const nm=isComp?esc(p.name)+' <span style="background:#ede9fe;color:#6d28d9;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800">مركّب</span>':esc(p.name);
+    const nm=isComp?esc(pLabel(p.code,p.name))+' <span style="background:#ede9fe;color:#6d28d9;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800">مركّب</span>':esc(pLabel(p.code,p.name));
     const all={
       code:`<td class="ltr"><b>${esc(p.code)}</b></td>`,
       name:`<td>${nm}</td>`,
@@ -1583,7 +1590,7 @@ function editSelectedProduct(){ openProductModal();const p=getSelectedProduct();
 function openSelectedProductMovements(){const p=getSelectedProduct(); if(p) openProductMovements(p.code)}
 function viewSelectedProduct(){
   const p=getSelectedProduct(); if(!p) return;
-  q('productViewTitle').textContent=p.name||'مشاهدة المنتج';
+  q('productViewTitle').textContent=pLabel(p.code,p.name)||'مشاهدة المنتج';
   q('productViewSub').textContent=p.code||'';
   q('productViewBody').innerHTML=`<div class="grid cards" style="grid-template-columns:repeat(2,minmax(0,1fr))">
     <div class="card"><h3>الكود</h3><div class="ltr"><b>${esc(p.code||'')}</b></div></div>
@@ -1845,7 +1852,7 @@ async function openProductMovements(code){
     showLoading(true);
     const p=products.find(x=>String(x.code)===String(code));
     q('movementsTitle').textContent='حركات الصنف: '+code;
-    q('movementsSub').textContent=p ? (p.name||'') : '';
+    q('movementsSub').textContent=p ? pLabel(p.code,p.name||'') : '';
     const rows=await api('pos_stock_movements',{qs:`?select=*&product_code=eq.${encodeURIComponent(code)}&order=movement_date.desc&limit=300`});
     q('movementsBody').innerHTML = rows.map(m=>{
       const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
@@ -2033,7 +2040,7 @@ function renderStock(){
   const shownStock=rows.slice(0,100); /* حد العرض — مثل شاشة المنتجات؛ البحث والفلاتر تضيّق النتائج */
   q('stockBody').innerHTML = shownStock.map(r=>{
     const l=locations.find(x=>x.id===r.location_id); const p=productByCode(r.product_code); const qty=Number(r.qty||0); const cost=productCost(r.product_code); const val=qty*cost;
-    return `<tr><td>${esc(l?.name)}</td><td class="ltr"><b>${esc(r.product_code)}</b></td><td>${esc(r.product_name||p?.name||'')}</td><td>${esc(p?.category||'')}</td><td>${esc(p?.supplier_name||'')}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td>${money(cost)}</td><td><b>${money(val)}</b></td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`;
+    return `<tr><td>${esc(l?.name)}</td><td class="ltr"><b>${esc(r.product_code)}</b></td><td>${esc(pLabel(r.product_code,r.product_name||p?.name||''))}</td><td>${esc(p?.category||'')}</td><td>${esc(p?.supplier_name||'')}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td>${money(cost)}</td><td><b>${money(val)}</b></td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`;
   }).join('') + (rows.length>100?`<tr><td colspan="9" class="muted">عرض 100 من ${rows.length} صف — استخدم البحث أو الفلاتر لتضييق النتائج.</td></tr>`:'') || '<tr><td colspan="9">لا يوجد مخزون مطابق للفلاتر. أدخل فاتورة شراء أولاً.</td></tr>';
 }
 
@@ -2272,7 +2279,7 @@ async function printReturn(id){
     const items=saleReturnItems.filter(i=>i.return_id===id);
     const orig=sales.find(x=>x.id===r.sale_id); const cust=customers.find(c=>x.id===r.customer_id); const loc=locations.find(x=>x.id===r.location_id);
     const {name}=returnAccountName(id);
-    const rows=items.map((it,i)=>`<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(it.product_name)}</td><td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_price)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`).join('');
+    const rows=items.map((it,i)=>`<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(pLabel(it.product_code,it.product_name))}</td><td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_price)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`).join('');
     const dp=String(r.return_date||'').split('-'); const dateDisp=(dp.length===3)?(dp[2]+'-'+dp[1]+'-'+dp[0]):String(r.return_date||'');
     const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة مرتجع ${esc(String(id).slice(0,8))}</title><style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
@@ -2343,7 +2350,7 @@ function requiredCountRows(){
     .map(s=>{
       const p=prodMap.get(String(s.product_code||'').toLowerCase());
       const l=locMap.get(s.location_id);
-      return {code:String(s.product_code||''), name:(p&&p.name)||s.product_name||'', loc:(l&&l.name)||'—', qty:Number(s.qty||0), lastMove:s.updated_at||'', category:(p&&p.category)||'—'};
+      return {code:String(s.product_code||''), name:pLabel(s.product_code,(p&&p.name)||s.product_name||''), loc:(l&&l.name)||'—', qty:Number(s.qty||0), lastMove:s.updated_at||'', category:(p&&p.category)||'—'};
     })
     .sort((a,b)=>(a.qty-b.qty)||String(a.code).localeCompare(String(b.code)));
 }
@@ -2863,7 +2870,7 @@ function renderQuickSearch(){
     const avail=getStockQty(loc,p.code);
     return `<div class="qs-row${i===quickSearchIndex?' qs-active':''}" data-qs="${i}">`+
       `<b class="ltr qs-code">${esc(p.code)}</b>`+
-      `<span class="qs-name">${esc(p.name)}</span>`+
+      `<span class="qs-name">${esc(pLabel(p.code,p.name))}</span>`+
       `<span class="qs-brand">${esc(p.brand||'')}</span>`+
       `<span class="qs-qty" style="color:${avail>0?'#4ade80':(avail<0?'#f87171':'#94a3b8')}">متوفر ${money(avail)}</span>`+
       `<b class="qs-price">${money(p.retail_price)} ${esc(APP_CONFIG.currency)}</b></div>`;
@@ -3022,7 +3029,7 @@ function renderSaleStockInfo(productCode){
   if(!q('saleStockInfo')) return;
   const sstrip=q('saleStockInfoStrip'); if(sstrip) sstrip.classList.toggle('hidden',!p); /* السطر السياقي: يظهر فقط عند اختيار صنف */
   if(!p){q('saleStockInfo').innerHTML='اختر منتجًا لعرض المخزون في الفروع';return;}
-  q('saleStockInfo').innerHTML=`<div><b>${esc(p.code)} - ${esc(p.name)}</b></div><div class="stock-chips">${locations.map(l=>`<span class="stock-chip">${esc(l.name)}: ${money(getStockQty(l.id,p.code))}</span>`).join('')}</div>`;
+  q('saleStockInfo').innerHTML=`<div><b>${esc(p.code)} - ${esc(pLabel(p.code,p.name))}</b></div><div class="stock-chips">${locations.map(l=>`<span class="stock-chip">${esc(l.name)}: ${money(getStockQty(l.id,p.code))}</span>`).join('')}</div>`;
   maybeRecordStockRequest(p); /* بعد الرسم — صامتة وغير محجوبة */
 }
 /* ═══ (المهمة ٢) «طُلب ولم يوجد»: أثمن إشارة في المنظومة — كانت تُعرض ثم تُرمى ═══
@@ -3222,7 +3229,7 @@ async function printSale(id){
     const subtotal=items.reduce((a,it)=>a+Number(it.line_total||0),0);
     const paid=Number(sl.paid_amount||0), balance=Number(sl.balance_due||0);
     const badge=balance>0?'<span class="badge due">آجل / متبقٍ</span>':'<span class="badge paid">مدفوعة بالكامل</span>'; const offlineBadge=sl.offline_pending?'<div style="margin-top:8px"><span style="display:inline-block;border-radius:6px;padding:4px 11px;font-size:12.5px;font-weight:700;background:#fffbeb;color:#b45309;border:1px solid #fde68a">نسخة محلية — يُرقَّم عند المزامنة</span></div>':''; const dp=String(sl.sale_date||'').split('-'); const dateDisp=(dp.length===3)?(dp[2]+'-'+dp[1]+'-'+dp[0]):String(sl.sale_date||'');
-    const rows=items.map((it,i)=>{const comps=compositeItems.filter(ci=>ci.composite_code===it.product_code); return `<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(it.product_name)}${comps.length?('<div class="sub2 ltr">'+comps.map(ci=>esc(ci.component_code)+'×'+Number(ci.qty||1)).join(' · ')+'</div>'):''}</td><td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_price)}</td><td class="n">${money(it.line_discount||0)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`;}).join('');
+    const rows=items.map((it,i)=>{const comps=compositeItems.filter(ci=>ci.composite_code===it.product_code); return `<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(pLabel(it.product_code,it.product_name))}${comps.length?('<div class="sub2 ltr">'+comps.map(ci=>esc(ci.component_code)+'×'+Number(ci.qty||1)).join(' · ')+'</div>'):''}</td><td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_price)}</td><td class="n">${money(it.line_discount||0)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`;}).join('');
     const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة بيع ${esc(sl.invoice_no||sl.id.slice(0,8))}</title><style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
 *{box-sizing:border-box}
@@ -3351,7 +3358,7 @@ async function printTransfer(id){
     const inv=t.transfer_no||String(t.id).slice(0,8);
     const dp=String(t.transfer_date||'').split('-'); const dateDisp=(dp.length===3)?(dp[2]+'-'+dp[1]+'-'+dp[0]):String(t.transfer_date||'');
     const totalQty=(items||[]).reduce((a,x)=>a+Number(x.qty||0),0);
-    const rows=(items||[]).map((it,i)=>`<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(it.product_name)}</td><td class="n"><b>${money(it.qty)}</b></td></tr>`).join('');
+    const rows=(items||[]).map((it,i)=>`<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(pLabel(it.product_code,it.product_name))}</td><td class="n"><b>${money(it.qty)}</b></td></tr>`).join('');
     const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>إشعار تحويل ${esc(inv)}</title><style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
 *{box-sizing:border-box}
@@ -3933,7 +3940,7 @@ function addNoInvoiceReturnProduct(p,qty=1){
 }
 function renderNoInvoiceReturnItems(){
   const b=q('noInvoiceReturnItemsBody'); if(!b)return;
-  b.innerHTML=noInvoiceReturnItems.map((it,i)=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td><input class="nir-qty" data-i="${i}" type="number" step="1" min="1" value="${it.qty}" oninput="noInvoiceQty(this)"></td><td><input class="nir-price ltr" data-i="${i}" type="text" inputmode="decimal" value="${it.unit_price}" oninput="noInvoicePrice(this)"></td><td><b>${money(Number(it.qty||0)*Number(it.unit_price||0))}</b></td><td><button type="button" class="btn danger" onclick="noInvoiceRemove(${i})">حذف</button></td></tr>`).join('')||'<tr><td colspan="6">لم تُضف أصناف — استخدم «اختيار صنف»</td></tr>';
+  b.innerHTML=noInvoiceReturnItems.map((it,i)=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(pLabel(it.product_code,it.product_name))}</td><td><input class="nir-qty" data-i="${i}" type="number" step="1" min="1" value="${it.qty}" oninput="noInvoiceQty(this)"></td><td><input class="nir-price ltr" data-i="${i}" type="text" inputmode="decimal" value="${it.unit_price}" oninput="noInvoicePrice(this)"></td><td><b>${money(Number(it.qty||0)*Number(it.unit_price||0))}</b></td><td><button type="button" class="btn danger" onclick="noInvoiceRemove(${i})">حذف</button></td></tr>`).join('')||'<tr><td colspan="6">لم تُضف أصناف — استخدم «اختيار صنف»</td></tr>';
   updateNoInvoiceReturnTotal();
 }
 function noInvoiceQty(inp){const it=noInvoiceReturnItems[Number(inp.dataset.i)]; if(!it)return; it.qty=Math.max(1,Number(inp.value||1)); renderNoInvoiceReturnItems();}
@@ -3954,7 +3961,7 @@ async function openSaleReturn(id){
     q('returnInvoiceInfo').innerHTML=`<div class="cell"><div class="lbl">الزبون</div><div class="val">${esc(rc?.name||'زبون نقدي')}</div></div><div class="cell"><div class="lbl">الفرع</div><div class="val">${esc(rl?.name||'')}</div></div><div class="cell"><div class="lbl">الفاتورة الأصلية</div><div class="val ltr">${esc(returningSale.invoice_no||returningSale.id.slice(0,8))}</div></div><div class="cell"><div class="lbl">الإجمالي الأصلي</div><div class="val">${money(returningSale.total)} ${APP_CONFIG.currency}</div></div>`;
     q('saleReturnDate').value=new Date().toISOString().slice(0,10);
     q('saleReturnRefundMethod').value=Number(returningSale.balance_due||0)>0?'credit_reduction':'cash';
-    q('saleReturnItemsBody').innerHTML=returningSaleItems.map(it=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td><input class="ri-qty" data-item-id="${it.id}" type="number" step="1" min="0" max="${Number(it.qty||0)}" value="0" oninput="updateSaleReturnTotal()"></td></tr>`).join('');
+    q('saleReturnItemsBody').innerHTML=returningSaleItems.map(it=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(pLabel(it.product_code,it.product_name))}</td><td>${money(it.qty)}</td><td>${money(it.unit_price)}</td><td>${money(it.line_discount||0)}</td><td><input class="ri-qty" data-item-id="${it.id}" type="number" step="1" min="0" max="${Number(it.qty||0)}" value="0" oninput="updateSaleReturnTotal()"></td></tr>`).join('');
     updateSaleReturnTotal(); refreshSaleReturnAccountOptions(); q('saleReturnModal').classList.add('show');
   }catch(err){console.error(err);toast('خطأ في فتح المرتجع: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
@@ -4968,7 +4975,7 @@ function renderReports(){
   q('repTopProductsBody').innerHTML=Object.values(top).sort((a,b)=>b.total-a.total).slice(0,30).map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.total)}</td><td>${money(r.profit)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف مباعة.</td></tr>';
 
   const low=stock.filter(st=>Number(st.qty||0)<=Number(APP_CONFIG.lowStockThreshold||0)).sort((a,b)=>Number(a.qty||0)-Number(b.qty||0)).slice(0,80);
-  q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${esc(l?.name||'')}</td><td class="ltr"><b>${esc(st.product_code)}</b></td><td>${esc(st.product_name||'')}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
+  q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${esc(l?.name||'')}</td><td class="ltr"><b>${esc(st.product_code)}</b></td><td>${esc(pLabel(st.product_code,st.product_name||''))}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
 
   q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${esc(s.name)}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
   q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${esc(c.name)}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة زبائن.</td></tr>';
@@ -5923,7 +5930,7 @@ function renderComposites(){
     const cost=comps.reduce((a,ci)=>{const cp=products.find(x=>x.code===ci.component_code);return a+(Number(cp?.purchase_price||0)*Number(ci.qty||1));},0);
     const vStock=getCompositeVirtualStock(code);
     const safe=String(code||'').replace(/'/g,"\\'");
-    return `<tr><td class="ltr"><b>${esc(code)}</b></td><td>${esc(p.name)}</td><td><b>${money(p.retail_price)}</b></td><td>${money(cost)}</td><td><b>${vStock!==null?vStock:'—'}</b></td><td class="mini">${comps.map(ci=>`${esc(ci.component_name||ci.component_code)}×${Number(ci.qty||1)}`).join('، ')}</td><td><button class="btn secondary" type="button" onclick="editProduct('${safe}')">تعديل المكوّنات</button></td></tr>`;
+    return `<tr><td class="ltr"><b>${esc(code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(p.retail_price)}</b></td><td>${money(cost)}</td><td><b>${vStock!==null?vStock:'—'}</b></td><td class="mini">${comps.map(ci=>`${esc(ci.component_name||ci.component_code)}×${Number(ci.qty||1)}`).join('، ')}</td><td><button class="btn secondary" type="button" onclick="editProduct('${safe}')">تعديل المكوّنات</button></td></tr>`;
   }).join('')||'<tr><td colspan="7">لا توجد منتجات مركبة. اضغط بزر الفأرة الأيمن على منتج واختر «تحويل إلى منتج مركّب».</td></tr>';
 }
 
