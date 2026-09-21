@@ -601,3 +601,7 @@
     @media(max-width:1100px){#stock.active > .panel{height:auto;min-height:0;overflow:visible}}
     .row-highlight{animation:rowHL 1.6s ease}
     @keyframes rowHL{0%{background:rgba(37,99,235,.35)}100%{background:transparent}}
+
+    /* صندوق فلاتر الفواتير: خلية الأزرار بعرض الشبكة كاملاً — لا تمديد عمودي للصف ولا فراغ أبيض */
+    .sales-filter-grid>.sales-filter-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border)}
+    @media(max-width:1100px){.sales-filter-grid>.sales-filter-actions{grid-column:1/-1}}

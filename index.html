@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0220">
+<link rel="stylesheet" href="app.css?v=20260921-0230">
 </head>
 <body class="auth-locked">
   <header>
@@ -425,18 +425,18 @@
             <div><label>الفرع</label><select id="saleFilterBranch" onchange="renderSales()"><option value="">كل الفروع</option></select></div>
             <div><label>المخزن</label><select id="saleFilterWarehouse" onchange="renderSales()"><option value="">غير مطبق للبيع</option></select></div>
             <div><label>حالة الدفع</label><select id="saleFilterPayment" onchange="renderSales()"><option value="">كل الحالات</option><option value="paid">مدفوعة بالكامل</option><option value="partial">مدفوعة جزئيًا / عليها باقي</option><option value="unpaid">غير مدفوعة</option><option value="due">كل الفواتير التي عليها دين</option></select></div>
-            <div class="row" style="align-items:end"><button class="btn secondary" type="button" onclick="clearSaleFilters()">مسح الفلاتر</button><button class="btn secondary" type="button" onclick="showDueSalesOnly()">فواتير عليها دين</button><button class="btn secondary" type="button" onclick="exportSalesListCsv()">📊 تصدير Excel</button><button class="btn secondary" type="button" onclick="printSalesList()">🖨 طباعة القائمة / PDF</button></div>
+            <div class="row sales-filter-actions"><button class="btn secondary" type="button" onclick="clearSaleFilters()">مسح الفلاتر</button><button class="btn secondary" type="button" onclick="showDueSalesOnly()">فواتير عليها دين</button><button class="btn secondary" type="button" onclick="exportSalesListCsv()">📊 تصدير Excel</button><button class="btn secondary" type="button" onclick="printSalesList()">🖨 طباعة القائمة / PDF</button></div>
           </div>
           <div class="row sticky-actions" style="margin:10px 0">
             <button class="btn secondary" type="button" onclick="viewSelectedSale()" title="عرض الفاتورة للقراءة فقط (أو بالضغط مرتين على سطرها)">👁 مشاهدة</button>
             <button class="btn secondary" type="button" onclick="openSelectedSaleForEdit()">فتح / تعديل</button>
             <button class="btn secondary" type="button" onclick="printSelectedSale()">طباعة</button>
             <button class="btn secondary" type="button" onclick="openSelectedSaleReturn()">مرتجع</button>
+            <button class="btn secondary" type="button" onclick="openNoInvoiceReturn()" title="بضاعة بيعت قبل دخول المنظومة تعود اليوم — رجوع مستقل غير مرتبط بفاتورة">↩ مرتجع بدون فاتورة</button>
             <button class="btn secondary" type="button" onclick="convertSelectedSaleToProforma()">تحويل لمبدئية</button>
             <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
           </div>
-          <div class="row" style="margin:0 0 8px"><button class="btn secondary" type="button" onclick="openNoInvoiceReturn()">↩ مرتجع بدون فاتورة</button><span class="mini">بضاعة بيعت قبل دخول المنظومة تعود اليوم</span></div>
           <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
           <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
           </div>
@@ -1291,6 +1291,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0220"></script>
+<script src="app.js?v=20260921-0230"></script>
 </body>
 </html>
