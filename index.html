@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260920-2355">
+<link rel="stylesheet" href="app.css?v=20260921-0020">
 </head>
 <body class="auth-locked">
   <header>
@@ -286,7 +286,7 @@
 
       <section id="sales" class="section hide-margins">
         <div class="panel cashier-panel">
-          <div id="saleEditAlert" class="edit-alert hidden">أنت الآن تعدل فاتورة بيع قديمة — تأكد من حفظ التعديل أو إلغائه.</div>
+          <div id="saleEditAlert" class="edit-alert hidden">أنت الآن تعدّل فاتورة بيع قديمة — تأكد من حفظ التعديل أو إلغائه. <button class="btn secondary" type="button" style="padding:4px 10px;margin-inline-start:10px" onclick="resetSaleForm()">✖ إلغاء التعديل</button></div>
           <form id="saleForm" class="pos-sales-shell" novalidate>
             <!-- [2] شريط الفاتورة المدمج -->
             <div class="sale-topbar">
@@ -1292,6 +1292,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260920-2355"></script>
+<script src="app.js?v=20260921-0020"></script>
 </body>
 </html>

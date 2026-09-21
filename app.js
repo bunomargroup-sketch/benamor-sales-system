@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260920-2355';
+const APP_BUILD='b20260921-0020';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -6356,12 +6356,16 @@ function ensureCompositeEditModal(){
   if(q('compositeEditModal')) return;
   const d=document.createElement('div'); d.className='modal'; d.id='compositeEditModal';
   d.innerHTML=`<div class="modal-card" style="max-width:min(780px,96vw)">
-    <div class="modal-head"><div><h2 style="margin:0">🧩 تعديل منتج مركّب — <span class="ltr" id="ceTitle">—</span></h2><div class="mini" id="ceSub">عدّل المكوّنات والكمية ثم احفظ — يطبَّق فوراً على توافر البيع والكميات</div></div><button class="btn secondary" type="button" onclick="q('compositeEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="modal-head"><div><h2 style="margin:0">🧩 تعديل منتج مركّب — <span class="ltr" id="ceTitle">—</span></h2><div class="mini" id="ceSub">الاسم والماركة والموديل واللون والأسعار والمكوّنات — وإزالة كل المكوّنات تحوّله إلى منتج عادي</div></div><button class="btn secondary" type="button" onclick="q('compositeEditModal').classList.remove('show')">إغلاق</button></div>
     <div class="form" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:10px">
+      <div style="grid-column:1/-1"><label>اسم المنتج</label><input id="ceName" placeholder="الاسم كما يظهر في القوائم والفواتير"></div>
+      <div><label>الماركة</label><input id="ceBrand"></div>
+      <div><label>الموديل</label><input id="ceModel" class="ltr"></div>
+      <div><label>اللون</label><input id="ceColor"></div>
       <div><label>سعر البيع</label><input id="ceRetail" type="number" step="0.01" min="0" class="ltr" style="text-align:center"></div>
       <div><label>سعر الجملة</label><input id="ceWholesale" type="number" step="0.01" min="0" class="ltr" style="text-align:center"></div>
       <div><label>تكلفة المرجع (شراء)</label><input id="cePurchase" type="number" step="0.01" min="0" class="ltr" style="text-align:center"></div>
-      <div class="mini" style="align-self:end">تكلفة فارغة أو بصفر = تُحسب من المكوّنات تلقائياً.</div>
+      <div class="mini" style="align-self:end">تكلفة فارغة/صفر تُحسب من المكوّنات — وإن أصبح المنتج عادياً تبقى تكلفته الحالية.</div>
     </div>
     <div class="mini" style="font-weight:800;margin-bottom:6px">المكوّنات</div>
     <div class="row" style="gap:6px;margin-bottom:8px"><input id="ceCompCode" class="ltr" list="productsDatalist" placeholder="كود المكوّن..." style="max-width:220px"><input id="ceCompQty" type="number" value="1" min="0.5" step="0.5" class="ltr" style="max-width:80px;text-align:center"><button class="btn secondary" type="button" onclick="ceAddComp()">➕ إضافة</button></div>
@@ -6383,7 +6387,7 @@ function ceRender(){
   const p=products.find(x=>String(x.code)===String(sb.id)); if(!p) return;
   q('ceTitle').textContent=p.code; q('ceSub').textContent=p.name||(p.brand||'')+' '+(p.model||'');
   q('ceBody').innerHTML=sb.comps.map((c,i)=>{const cp=products.find(x=>String(x.code)===String(c.code));const cost=Number(cp?.purchase_price||0);
-    return `<tr><td class="ltr"><b>${esc(c.code)}</b></td><td>${esc(c.name)}</td><td style="text-align:center">${money(c.qty)}</td><td>${money(cost)}</td><td>${money(cost*c.qty)}</td><td><button class="btn danger" type="button" style="padding:4px 8px" onclick="staticOpenCountState.comps.splice(${i},1);ceRender()">حذف</button></td></tr>`}).join('')||'<tr><td colspan="6" class="mini">لا توجد مكوّنات بعد — أضف مكوّنين على الأقل.</td></tr>';
+    return `<tr><td class="ltr"><b>${esc(c.code)}</b></td><td>${esc(c.name)}</td><td style="text-align:center">${money(c.qty)}</td><td>${money(cost)}</td><td>${money(cost*c.qty)}</td><td><button class="btn danger" type="button" style="padding:4px 8px" onclick="staticOpenCountState.comps.splice(${i},1);ceRender()">حذف</button></td></tr>`}).join('')||'<tr><td colspan="6" class="mini">لا توجد مكوّنات — الحفظ هكذا يحوّل المنتج إلى منتج عادي.</td></tr>';
   const total=sb.comps.reduce((a,c)=>{const cp=products.find(x=>String(x.code)===String(c.code));return a+Number(cp?.purchase_price||0)*c.qty},0);
   q('ceFoot').innerHTML=sb.comps.length?`<tr style="background:var(--table-head)"><td colspan="4"><b>التكلفة الإجمالية للمركّب</b></td><td><b>${money(total)}</b></td><td></td></tr>`:'';
   const vs=getCompositeVirtualStock(p.code);
@@ -6407,6 +6411,10 @@ async function openCompositeEditModal(code){
   staticOpenCountState.id=p.code;
   staticOpenCountState.comps=compositeItems.filter(ci=>String(ci.composite_code)===String(p.code)).map(ci=>({code:ci.component_code,name:ci.component_name||ci.component_code,qty:Number(ci.qty||1)}));
   const ret0=Number(p.retail_price||0), pur0=Number(p.purchase_price||0), whole0=Number(p.wholesale_price||0);
+  if(q('ceName')) q('ceName').value=String(p.name||'');
+  if(q('ceBrand')) q('ceBrand').value=String(p.brand||'');
+  if(q('ceModel')) q('ceModel').value=String(p.model||'');
+  if(q('ceColor')) q('ceColor').value=String(p.color||'');
   if(q('ceRetail')) q('ceRetail').value=ret0;
   if(q('ceWholesale')) q('ceWholesale').value=whole0;
   if(q('cePurchase')) q('cePurchase').value=pur0;
@@ -6421,22 +6429,34 @@ async function openCompositeEditModal(code){
 async function ceSave(){
   const sb=staticOpenCountState;
   if(!sb.id) return;
-  if(!sb.comps.length){toast('أضف مكوّناً واحداً على الأقل','warn');return;}
+  const name=(q('ceName')?.value||'').trim();
+  if(!name){toast('اسم المنتج مطلوب','warn');return;}
+  const p=products.find(x=>String(x.code)===String(sb.id)); if(!p){toast('لم يتم العثور على المنتج','warn');return;}
+  const becamePlain=!sb.comps.length; /* حذف كل المكوّنات = العودة إلى منتج عادي */
+  if(becamePlain && !confirm('أزلتَ كل مكوّناته — الحفظ الآن يحوّل هذا المنتج المركّب إلى منتج عادي (يُباع ويُخزَّن كمنتج مستقل بلا تجزئة). متابعة؟')) return;
   if(window.__busy)return; window.__busy=true;
   try{
     showLoading(true);
-    const p=products.find(x=>String(x.code)===String(sb.id)); if(!p) throw new Error('PRODUCT_NOT_FOUND');
     const retail=Number(q('ceRetail')?.value||0), whole=Number(q('ceWholesale')?.value||0);
     let pur=Number(q('cePurchase')?.value||0);
-    if(!(pur>0)){ pur=sb.comps.reduce((a,c)=>{const cp=products.find(x=>String(x.code)===String(c.code));return a+Number(cp?.purchase_price||0)*c.qty},0); }
+    if(!(pur>0)){
+      pur=becamePlain?Number(p.purchase_price||0) /* بلا مكوّنات لا يوجد ما نحسب منه — تبقى تكلفته الحالية */
+        :sb.comps.reduce((a,c)=>{const cp=products.find(x=>String(x.code)===String(c.code));return a+Number(cp?.purchase_price||0)*c.qty},0);
+    }
     const desc=(q('ceNotes')?.value||'').trim();
-    await api('pos_products',{method:'PATCH',qs:`?code=eq.${encodeURIComponent(sb.id)}`,body:{retail_price:retail,wholesale_price:whole,purchase_price:pur,description:desc}});
+    await api('pos_products',{method:'PATCH',qs:`?code=eq.${encodeURIComponent(sb.id)}`,body:{
+      name, brand:(q('ceBrand')?.value||'').trim(), model:(q('ceModel')?.value||'').trim(), color:(q('ceColor')?.value||'').trim(),
+      retail_price:retail, wholesale_price:whole, purchase_price:pur, description:desc}});
     await api('pos_composite_items',{method:'DELETE',qs:`?composite_code=eq.${encodeURIComponent(sb.id)}`});
-    await api('pos_composite_items',{method:'POST',body:sb.comps.map(c=>({composite_code:sb.id,component_code:c.code,component_name:c.name,qty:c.qty}))});
-    await logAction('composite_update','pos_products',sb.id,`تعديل مركّب ${sb.id} — ${sb.comps.length} مكوّناً — سعر ${retail}`);
+    if(sb.comps.length){
+      await api('pos_composite_items',{method:'POST',body:sb.comps.map(c=>({composite_code:sb.id,component_code:c.code,component_name:c.name,qty:c.qty}))});
+    }
+    await logAction('composite_update','pos_products',sb.id,
+      becamePlain?`تفكيك مركّب ${sb.id} («${name}») — أصبح منتجاً عادياً`
+                 :`تعديل مركّب ${sb.id} («${name}») — ${sb.comps.length} مكوّناً — سعر ${retail}`);
     await loadAll();
     q('compositeEditModal').classList.remove('show');
-    toast('تم حفظ تعديل المنتج المركّب','success');
+    toast(becamePlain?'تم الحفظ — أصبح منتجاً عادياً بلا مكوّنات':'تم حفظ تعديل المنتج المركّب','success');
   }catch(e){console.error(e);toast('تعذّر الحفظ: '+friendlyError(e),'error');}
   finally{showLoading(false);window.__busy=false;}
 }
