@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0140';
+const APP_BUILD='b20260921-0150';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1894,7 +1894,7 @@ async function openProductMovements(code){
     if(lb){const branches=[...new Set(rows.map(m=>m.location_id).filter(Boolean))]; lb.innerHTML='<option value="">كل الفروع</option>'+branches.map(lid=>{const l=locations.find(x=>x.id===lid); return `<option value="${lid}">${esc(l?l.name:lid)}</option>`}).join('');}
     if(lt){const types=[...new Set(rows.map(m=>m.movement_type).filter(Boolean))]; lt.innerHTML='<option value="">كل الأنواع</option>'+types.map(t=>`<option value="${t}">${esc(typeLabel(t))}</option>`).join('');}
     renderMovementsModalRows();
-    q('movementsModal').classList.add('show');
+    q('movementsModal').classList.add('show'); modalToTop(q('movementsModal'));
   }catch(err){console.error(err);toast('خطأ في تحميل حركات الصنف: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
 /* قائمة الزر الأيمن في جدول الحركات: رؤية المصدر / نسخ الخلية / نسخ رقم الفاتورة */
@@ -3570,7 +3570,7 @@ let printPreviewPrinting=false;
 function showInAppPrint(html){
   const modal=q('printPreviewModal'), frame=q('printPreviewFrame');
   if(!modal||!frame){toast('تعذر فتح معاينة الطباعة','error');return;}
-  modal.classList.add('show');
+  modal.classList.add('show'); modalToTop(modal);
   printPreviewPrinting=false;
   frame.onload=null;
   frame.dataset.hasContent='1';
@@ -3749,7 +3749,7 @@ function ensureSaleViewModal(){
     <iframe id="saleViewFrame" title="معاينة الفاتورة" style="flex:1;width:100%;border:0;border-radius:10px;background:#e2e8f0"></iframe>
   </div>`;
   document.body.appendChild(d);
-  d.addEventListener('click',e=>{if(e.target===d)d.classList.remove('show');});
+  /* بلا إغلاق بالضغط على الخلفية: النافذة لا تُغلق إلا بزر الإغلاق التي يضغطه المستخدم */
 }
 function openSaleViewModal(sl,html){
   ensureSaleViewModal();
@@ -3758,9 +3758,9 @@ function openSaleViewModal(sl,html){
   const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role) && !sl.offline_pending;
   q('svEditBtn').style.display=canEdit?'':'none';
   q('saleViewFrame').srcdoc=html;
-  q('saleViewModal').classList.add('show');
+  q('saleViewModal').classList.add('show'); modalToTop(q('saleViewModal'));
 }
-function printViewedSale(){const id=viewSaleCtxId; if(!id)return; q('saleViewModal').classList.remove('show'); printSale(id);}
+function printViewedSale(){const id=viewSaleCtxId; if(!id)return; printSale(id); /* تنطبع وحدها فوق النافذة وتبقى نافذة المعاينة قائمة */}
 function editViewedSale(){const id=viewSaleCtxId; if(!id)return; q('saleViewModal').classList.remove('show'); openSaleForEdit(id);}
 function viewSelectedSale(){const id=getSelectedSaleId(); if(id) viewSaleDetails(id)}
 function viewSelectedSalePrintStyle(){const id=getSelectedSaleId(); if(id) viewSaleInvoice(id)}
@@ -3780,14 +3780,14 @@ function ensureSaleViewDetailsModal(){
     <div id="svdBody" style="max-height:72vh;overflow:auto"></div>
   </div>`;
   document.body.appendChild(d);
-  d.addEventListener('click',e=>{if(e.target===d)d.classList.remove('show');});
+  /* بلا إغلاق بالضغط على الخلفية: النافذة لا تُغلق إلا بزر الإغلاق التي يضغطه المستخدم */
 }
 function svdOpenSub(fn){
-  const m=q('saleViewDetailsModal'); if(m) m.classList.remove('show'); /* نافذة التفاصيل (حركات/مخزون) تعمل فوق القائمة الأساسية */
+  /* لا تُغلق نافذة المشاهدة — نافذة الفرع (حركات/مخزون) تطفو فوقها بفضل مكدّس النوافذ */
   try{Promise.resolve(fn()).catch(e=>{console.error(e);toast('تعذّر فتح التفاصيل','warn');});}catch(e){console.error(e);toast('تعذّر فتح التفاصيل','warn');}
 }
-function svdPrint(){const id=viewDetailsCtxId; if(!id)return; q('saleViewDetailsModal').classList.remove('show'); printSale(id);}
-function svdPrintStyle(){const id=viewDetailsCtxId; if(!id)return; q('saleViewDetailsModal').classList.remove('show'); viewSaleInvoice(id);}
+function svdPrint(){const id=viewDetailsCtxId; if(!id)return; printSale(id);}
+function svdPrintStyle(){const id=viewDetailsCtxId; if(!id)return; viewSaleInvoice(id);}
 function svdEdit(){const id=viewDetailsCtxId; if(!id)return; q('saleViewDetailsModal').classList.remove('show'); openSaleForEdit(id);}
 async function viewSaleDetails(id){
   ensureSaleViewDetailsModal();
@@ -3801,7 +3801,7 @@ async function viewSaleDetails(id){
     viewDetailsCtxId=id;
     const linkedReturns=saleReturns.filter(r=>String(r.sale_id)===String(id));
     renderSaleViewDetailsData(sl,items,linkedReturns);
-    q('saleViewDetailsModal').classList.add('show');
+    q('saleViewDetailsModal').classList.add('show'); modalToTop(q('saleViewDetailsModal'));
   }catch(err){console.error(err);toast('خطأ في فتح المشاهدة: '+friendlyError(err),'error')}
   finally{showLoading(false)}
 }
@@ -6105,6 +6105,12 @@ function defaultCtxItemsForRow(tr,target){
   if(sel) items.push({label:'نسخ النص المحدد',icon:'ti-copy',action:()=>copyText(sel)});
   return items;
 }
+/* مكدّس النوافذ: آخر نافذة تُفتَح تطفو فوق ما قبلها — ولا تُغلق أي نافذة من تلقاء نفسها */
+let __modalTopZ=200;
+function modalToTop(m){
+  const el=typeof m==='string'?q(m):m; if(!el)return;
+  el.style.zIndex=String(++__modalTopZ);
+}
 function showCtxMenu(x,y,items){
   const head=items.find(i=>i.head); const acts=items.filter(i=>!i.head);
   ctxMenu.innerHTML=(head?`<div class="ctx-head">${esc(head.head)}</div>`:'')+acts.map((it,i)=>it.sep?'<div class="ctx-sep"></div>':`<button type="button" class="ctx-item" data-i="${i}"><i class="ti ${it.icon||'ti-point'}"></i><span>${esc(it.label)}</span></button>`).join('');
@@ -6449,7 +6455,7 @@ function ensureCompositeEditModal(){
     </div>
   </div>`;
   document.body.appendChild(d);
-  d.addEventListener('click',e=>{if(e.target===d)d.classList.remove('show');});
+  /* بلا إغلاق بالضغط على الخلفية: النافذة لا تُغلق إلا بزر الإغلاق التي يضغطه المستخدم */
 }
 function ceRender(){
   const sb=staticOpenCountState;

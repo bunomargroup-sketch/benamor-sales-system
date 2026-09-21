@@ -407,7 +407,7 @@
     #sales .pos-items-card th:nth-child(2),#sales .pos-items-card td:nth-child(2){min-width:300px;width:34%}
     #saleItemsBody textarea.si-name{min-height:32px;height:32px;line-height:1.2;resize:none;white-space:nowrap;overflow:hidden}
     .print-preview-card{width:min(980px,98vw);height:92vh;display:flex;flex-direction:column;padding:12px}
-    #productViewModal,#movementsModal{z-index:120!important}
+    #productViewModal,#movementsModal{z-index:120}
     .print-preview-frame{width:100%;flex:1;border:1px solid var(--border);border-radius:12px;background:#fff}
     #sales .pos-head-grid{gap:8px;grid-template-columns:repeat(6,minmax(0,1fr))}
     #sales #saleInvoiceNo{font-weight:900;font-size:20px;text-align:center;color:var(--blue);background:var(--accent-soft);border-color:color-mix(in srgb,var(--blue) 35%,var(--border))}
