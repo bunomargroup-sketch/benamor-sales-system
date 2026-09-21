@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0220';
+const APP_BUILD='b20260921-0250';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -163,6 +163,8 @@ function friendlyError(err){
 }
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
 function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون',customer_refund:'استرداد للزبون'}[t]||t}
+function branchChipByName(name){const n=String(name||'');if(n.includes('11')) return 'chip br-11';if(n.includes('سراج')) return 'chip br-sr';if(n.includes('جنزور')) return 'chip br-jz';return 'chip';}
+function branchChip(id){const l=locations.find(x=>x.id===id);return branchChipByName(l?.name);}
 
 function staffEmail(id){return String(id||'').trim().toLowerCase()+'@bag.com'}
 function jwtExp(token){try{return JSON.parse(atob(String(token||'').split('.')[1]||''))?.exp||0;}catch(e){return 0}}
@@ -1237,23 +1239,23 @@ function applyProductColVisibility(shown, smartParsed=null){
   const heads=PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>`<th>${c.label}</th>`).join('');
   const cells=(p,isComp,vS)=>{
     const safe=String(p.code||'').replace(/'/g,"\\'");
-    const nm=isComp?esc(pLabel(p.code,p.name))+' <span style="background:#ede9fe;color:#6d28d9;border-radius:6px;padding:1px 6px;font-size:10px;font-weight:800">مركّب</span>':esc(pLabel(p.code,p.name));
+    const nm='<span class="name">'+esc(pLabel(p.code,p.name))+'</span>'+(isComp?' <span class="chip br-sr">مركّب</span>':'');
     const all={
-      code:`<td class="ltr"><b>${esc(p.code)}</b></td>`,
+      code:`<td class="ltr"><span class="code">${esc(p.code)}</span></td>`,
       name:`<td>${nm}</td>`,
       brand:`<td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td>`,
       color:`<td>${esc(p.color)}</td>`,
-      barcode:`<td class="ltr">${esc(p.barcode)}</td>`,
+      barcode:`<td class="ltr"><span class="code">${esc(p.barcode)}</span></td>`,
       supplier:`<td>${esc(p.supplier_name)}</td>`,
       category:`<td>${esc(p.category)}</td>`,
-      purchase:`<td>${money(p.purchase_price)}</td>`,
-      retail:`<td>${money(p.retail_price)}</td>`,
-      margin:`<td>${money(p._mv)}</td>`,
-      margin_pct:`<td>${money(p._mp)}%</td>`,
-      s11:`<td>${isComp?'<b style="color:#7c3aed">'+(getCompositeVStockByBranch(p.code,'stock_11_june')||0)+'</b>':money(p.stock_11_june)}</td>`,
-      ssr:`<td>${isComp?'<b style="color:#7c3aed">'+(getCompositeVStockByBranch(p.code,'stock_sarraj')||0)+'</b>':money(p.stock_sarraj)}</td>`,
-      sjz:`<td>${isComp?'<b style="color:#7c3aed">'+(getCompositeVStockByBranch(p.code,'stock_janzour')||0)+'</b>':money(p.stock_janzour)}</td>`,
-      total:`<td>${isComp?('<b style="color:#7c3aed;background:#ede9fe;border-radius:6px;padding:2px 8px">'+(vS!==null&&vS!==undefined?vS:0)+'</b>'):('<b>'+money(p.total_stock)+'</b>')}</td>`
+      purchase:`<td class="amount">${money(p.purchase_price)}</td>`,
+      retail:`<td class="amount">${money(p.retail_price)}</td>`,
+      margin:`<td class="amount">${money(p._mv)}</td>`,
+      margin_pct:`<td class="amount">${money(p._mp)}%</td>`,
+      s11:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_11_june')||0)+'</b>':money(p.stock_11_june)}</td>`,
+      ssr:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_sarraj')||0)+'</b>':money(p.stock_sarraj)}</td>`,
+      sjz:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_janzour')||0)+'</b>':money(p.stock_janzour)}</td>`,
+      total:`<td class="amount total">${isComp?('<span class="chip br-sr"><b>'+(vS!==null&&vS!==undefined?vS:0)+'</b></span>'):('<b>'+money(p.total_stock)+'</b>')}</td>`
     };
     return PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>all[c.id]||'').join('');
   };
@@ -1878,7 +1880,7 @@ function renderMovementsModalRows(){
   const list=__movRows.map((m,i)=>({m,lvl:__movLevels[i]})).filter(x=>(!fb||String(x.m.location_id||'')===fb)&&(!ft||String(x.m.movement_type||'')===ft));
   q('movementsBody').innerHTML = list.map(({m,lvl})=>{
     const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
-    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><b>${esc(info.no)}</b></td><td>${esc(info.seller)}</td><td>${esc(info.branch)}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}"><b>${money(qty)}</b></td><td><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
+    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><span class="code">${esc(info.no)}</span></td><td>${esc(info.seller)}</td><td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount"><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
   }).join('') || '<tr><td colspan="8">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
 }
 async function openProductMovements(code){
@@ -2098,7 +2100,7 @@ function renderStock(){
   const shownStock=rows.slice(0,100); /* حد العرض — مثل شاشة المنتجات؛ البحث والفلاتر تضيّق النتائج */
   q('stockBody').innerHTML = shownStock.map(r=>{
     const l=locations.find(x=>x.id===r.location_id); const p=productByCode(r.product_code); const qty=Number(r.qty||0); const cost=productCost(r.product_code); const val=qty*cost;
-    return `<tr><td>${esc(l?.name)}</td><td class="ltr"><b>${esc(r.product_code)}</b></td><td>${esc(pLabel(r.product_code,r.product_name||p?.name||''))}</td><td>${esc(p?.category||'')}</td><td>${esc(p?.supplier_name||'')}</td><td class="${qty>0?'stock-positive':qty<0?'stock-negative':''}">${money(qty)}</td><td>${money(cost)}</td><td><b>${money(val)}</b></td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`;
+    return `<tr><td><span class="${branchChip(r.location_id)}">${esc(l?.name)}</span></td><td class="ltr"><span class="code">${esc(r.product_code)}</span></td><td><span class="name">${esc(pLabel(r.product_code,r.product_name||p?.name||''))}</span></td><td>${esc(p?.category||'')}</td><td>${esc(p?.supplier_name||'')}</td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount">${money(cost)}</td><td><span class="amount total">${money(val)}</span></td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`;
   }).join('') + (rows.length>100?`<tr><td colspan="9" class="muted">عرض 100 من ${rows.length} صف — استخدم البحث أو الفلاتر لتضييق النتائج.</td></tr>`:'') || '<tr><td colspan="9">لا يوجد مخزون مطابق للفلاتر. أدخل فاتورة شراء أولاً.</td></tr>';
 }
 
@@ -2141,7 +2143,7 @@ function renderTransfers(){
   const scope=sellerBranchScope(); const list=scope?transfers.filter(t=>t.from_location_id===scope||t.to_location_id===scope):transfers;
   q('transfersBody').innerHTML = list.map(t=>{
     const from=locations.find(x=>x.id===t.from_location_id); const to=locations.find(x=>x.id===t.to_location_id);
-    return `<tr><td class="ltr"><b>${esc(t.transfer_no||t.id.slice(0,8))}</b></td><td>${t.transfer_date}</td><td>${from?.name||''}</td><td>${to?.name||''}</td><td><span class="badge green">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td><td><button class="btn secondary" onclick="openTransferForEdit('${t.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="printTransfer('${t.id}')">🖨️ طباعة</button></td></tr>`;
+    return `<tr><td class="ltr"><span class="code">${esc(t.transfer_no||t.id.slice(0,8))}</span></td><td>${t.transfer_date}</td><td><span class="${branchChip(t.from_location_id)}">${esc(from?.name||'')}</span></td><td><span class="${branchChip(t.to_location_id)}">${esc(to?.name||'')}</span></td><td><span class="chip paid">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td><td><button class="btn secondary" onclick="openTransferForEdit('${t.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="printTransfer('${t.id}')">🖨️ طباعة</button></td></tr>`;
   }).join('') || '<tr><td colspan="7">لا توجد تحويلات مخزون بعد.</td></tr>';
 }
 function addOrIncrementTransferProduct(p, qty=1){
@@ -2254,9 +2256,9 @@ function saleListRowHtml(sl){
   const l=(ctx.locIdx?.get(sl.location_id))||locations.find(x=>x.id===sl.location_id);
   const c=(ctx.custIdx?.get(sl.customer_id))||customers.find(x=>x.id===sl.customer_id);
   const safe=String(sl.id).replace(/'/g,"\\'"); const st=salePaymentStatus(sl);
-  const badge=st==='paid'?'<span class="badge green">مدفوعة</span>':(st==='partial'?'<span class="badge yellow">مدفوعة جزئيًا</span>':'<span class="badge red">غير مدفوعة</span>');
+  const badge=st==='paid'?'<span class="chip paid">مدفوعة</span>':(st==='partial'?'<span class="chip partial">مدفوعة جزئيًا</span>':'<span class="chip due">غير مدفوعة</span>');
   const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
-  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b>${sl.offline_pending?' <span class="badge yellow">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}<div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(ctx.payMap?.get(sl.id)||paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}"><b>${money(sl.balance_due)}</b></td><td style="white-space:nowrap">${!sl.offline_pending?`<button class="btn secondary" type="button" style="padding:4px 8px" title="إرجاع على هذه الفاتورة — يفتح فاتورة إرجاع جديدة لها" onclick="event.stopPropagation();openSaleReturn('${safe}')">↩ إرجاع</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
+  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(ctx.payMap?.get(sl.id)||paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td style="white-space:nowrap">${!sl.offline_pending?`<button class="btn secondary" type="button" style="padding:4px 8px" title="إرجاع على هذه الفاتورة — يفتح فاتورة إرجاع جديدة لها" onclick="event.stopPropagation();openSaleReturn('${safe}')">↩ إرجاع</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
 }
 function returnListRowHtml(r){
   const ctx=window.__salesRenderCtx||{};
@@ -2270,8 +2272,8 @@ function returnListRowHtml(r){
   if(r.sale_id && (isAdm||mine)) act+=`<button class="btn secondary" type="button" style="padding:4px 8px" title="تعديل فاتورة الإرجاع هذه" onclick="event.stopPropagation();openEditReturnModal('${safe}')">✏</button>`;
   if(isAdm) act+=` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف فاتورة الإرجاع نهائياً — للمدير فقط" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')">🗑</button>`;
   const osafe=orig?String(orig.id).replace(/'/g,"\\'"):'';
-  const noOrig=r.sale_id?'':' <span class="badge red" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
-  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}" style="background:color-mix(in srgb,#ef4444 5%,transparent)"><td class="ltr"><b>↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</b> <span class="badge red">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td>${esc(l?.name||'—')}</td><td>${esc(cust?.name||'زبون نقدي')}${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="badge red">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="stock-negative"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td style="white-space:nowrap">${act||'—'}</td></tr>`;
+  const noOrig=r.sale_id?'':' <span class="chip due" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
+  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td style="white-space:nowrap">${act||'—'}</td></tr>`;
 }
 /**** تحديث خفيف بعد الحفظ/التعديل: يجلب جداول «البيع والمخزون» المتحركة فقط بدل loadAll الكامل الثقيل — ويُعاد رسم القوائم فوراً — ويشتغل أيضاً كل 60 ثانية آلياً فتظهر فواتير وتعديلات الأجهزة الأخرى دون تحديث الصفحة يدوياً ****/
 async function refreshSalesDomain(o={}){
@@ -5573,14 +5575,14 @@ function renderReports(){
 
   const byBranch={};
   filteredSales.forEach(sl=>{const k=sl.location_id||'none'; if(!byBranch[k]) byBranch[k]={count:0,total:0,paid:0,balance:0}; byBranch[k].count++; byBranch[k].total+=Number(sl.total||0); byBranch[k].paid+=Number(sl.paid_amount||0); byBranch[k].balance+=Number(sl.balance_due||0);});
-  q('repSalesByBranchBody').innerHTML=Object.entries(byBranch).map(([id,r])=>{const l=locations.find(x=>x.id===id); return `<tr><td>${esc(l?.name||'غير محدد')}</td><td>${r.count}</td><td><b>${money(r.total)}</b></td><td>${money(r.paid)}</td><td>${money(r.balance)}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد مبيعات في الفترة المحددة.</td></tr>';
+  q('repSalesByBranchBody').innerHTML=Object.entries(byBranch).map(([id,r])=>{const l=locations.find(x=>x.id===id); return `<tr><td><span class="${branchChip(id)}">${esc(l?.name||'غير محدد')}</span></td><td>${r.count}</td><td><b>${money(r.total)}</b></td><td>${money(r.paid)}</td><td>${money(r.balance)}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد مبيعات في الفترة المحددة.</td></tr>';
 
   const top={};
   filteredItems.forEach(it=>{const k=it.product_code; if(!top[k]) top[k]={code:k,name:it.product_name,qty:0,total:0,profit:0}; top[k].qty+=Number(it.qty||0); top[k].total+=Number(it.line_total||0); top[k].profit+=(Number(it.unit_price||0)-productCost(it.product_code))*Number(it.qty||0);});
   q('repTopProductsBody').innerHTML=Object.values(top).sort((a,b)=>b.total-a.total).slice(0,30).map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.total)}</td><td>${money(r.profit)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف مباعة.</td></tr>';
 
   const low=stock.filter(st=>Number(st.qty||0)<=Number(APP_CONFIG.lowStockThreshold||0)).sort((a,b)=>Number(a.qty||0)-Number(b.qty||0)).slice(0,80);
-  q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td>${esc(l?.name||'')}</td><td class="ltr"><b>${esc(st.product_code)}</b></td><td>${esc(pLabel(st.product_code,st.product_name||''))}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
+  q('repLowStockBody').innerHTML=low.map(st=>{const l=locations.find(x=>x.id===st.location_id); return `<tr><td><span class="${branchChip(st.location_id)}">${esc(l?.name||'')}</span></td><td class="ltr"><b>${esc(st.product_code)}</b></td><td>${esc(pLabel(st.product_code,st.product_name||''))}</td><td class="${Number(st.qty)<0?'stock-negative':''}">${money(st.qty)}</td><td>${money(productCost(st.product_code))}</td></tr>`}).join('') || '<tr><td colspan="5">لا يوجد مخزون منخفض.</td></tr>';
 
   q('repSuppliersBody').innerHTML=suppliers.filter(s=>Number(s.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(s=>`<tr><td>${esc(s.name)}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة موردين.</td></tr>';
   q('repCustomersBody').innerHTML=customers.filter(c=>Number(c.balance||0)!==0).sort((a,b)=>Number(b.balance)-Number(a.balance)).slice(0,40).map(c=>`<tr><td>${esc(c.name)}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td></tr>`).join('') || '<tr><td colspan="3">لا توجد أرصدة زبائن.</td></tr>';

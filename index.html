@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0230">
+<link rel="stylesheet" href="app.css?v=20260921-0250">
 </head>
 <body class="auth-locked">
   <header>
@@ -78,15 +78,15 @@
           <button class="launch-tile lt-dark" type="button" onclick="openTab('reports')"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
         </div>
         <div class="grid cards">
-          <div class="card"><h3>الفروع</h3><div class="num" id="branchesCount">0</div></div>
-          <div class="card"><h3>المخازن</h3><div class="num" id="warehousesCount">0</div></div>
-          <div class="card"><h3>الموردون</h3><div class="num" id="suppliersCount">0</div></div>
-          <div class="card"><h3>المنتجات</h3><div class="num" id="productsCount">0</div></div>
-          <div class="card"><h3>فواتير البيع</h3><div class="num" id="salesCount">0</div></div>
-          <div class="card"><h3>مبيعات اليوم</h3><div class="num" id="todaySalesTotal">0</div></div>
-          <div class="card"><h3>فواتير اليوم</h3><div class="num" id="todaySalesCount">0</div></div>
-          <div class="card"><h3>ديون الزبائن</h3><div class="num" id="customersDebtTotal">0</div></div>
-          <div class="card"><h3>إجمالي أرصدة الموردين</h3><div class="num" id="suppliersBalance">0</div></div>
+          <div class="card"><h3>الفروع</h3><div class="num amount" id="branchesCount">0</div></div>
+          <div class="card"><h3>المخازن</h3><div class="num amount" id="warehousesCount">0</div></div>
+          <div class="card"><h3>الموردون</h3><div class="num amount" id="suppliersCount">0</div></div>
+          <div class="card"><h3>المنتجات</h3><div class="num amount" id="productsCount">0</div></div>
+          <div class="card"><h3>فواتير البيع</h3><div class="num amount" id="salesCount">0</div></div>
+          <div class="card"><h3>مبيعات اليوم</h3><div class="num amount total" id="todaySalesTotal">0</div></div>
+          <div class="card"><h3>فواتير اليوم</h3><div class="num amount" id="todaySalesCount">0</div></div>
+          <div class="card"><h3>ديون الزبائن</h3><div class="num amount total" id="customersDebtTotal">0</div></div>
+          <div class="card"><h3>إجمالي أرصدة الموردين</h3><div class="num amount total" id="suppliersBalance">0</div></div>
           <div class="card"><h3>أصناف تحت حد الطلب</h3><div class="num" id="reorderCount">0</div></div>
           <div class="card hidden" id="dashNoInvoiceReturns" style="grid-column:1/-1;border-color:rgba(217,119,6,.5)"></div>
         </div>
@@ -1291,6 +1291,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0230"></script>
+<script src="app.js?v=20260921-0250"></script>
 </body>
 </html>
