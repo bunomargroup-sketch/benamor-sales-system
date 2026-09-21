@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260920-2330';
+const APP_BUILD='b20260920-2355';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1783,6 +1783,7 @@ function resetProductForm(){
   q('productSubmitBtn').textContent='حفظ المنتج'; q('productCode').readOnly=false;
 }
 function editProduct(code){
+  if(hasCompositeComponents(code)){openCompositeEditModal(code);return;} /* المنتج المركّب يُعدَّل من نافذته الخاصة دائماً */
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   productFormMode='edit'; editingProductCode=p.code;
   document.querySelector('[data-tab="products"]').click();
@@ -1848,7 +1849,7 @@ function movementDocInfo(m){
 }
 function openMovementDocument(table,id){
   if(!table||!id){toast('لا يوجد مستند مرتبط بهذه الحركة','warn');return;}
-  if(table==='pos_sales') return viewSaleInvoice(id);
+  if(table==='pos_sales') return viewSaleDetails(id);
   if(table==='pos_purchases') return openPurchaseForEdit(id);
   if(table==='pos_stock_transfers') return openTransferForEdit(id);
   if(table==='pos_sale_returns') return toast('هذه الحركة مرتبطة بفاتورة مرتجع. افتح فاتورة البيع الأصلية من فواتير البيع.','info');
@@ -2232,8 +2233,7 @@ function renderSales(){
     const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); const safe=String(sl.id).replace(/'/g,"\'"); const st=salePaymentStatus(sl);
     const badge=st==='paid'?'<span class="badge green">مدفوعة</span>':(st==='partial'?'<span class="badge yellow">مدفوعة جزئيًا</span>':'<span class="badge red">غير مدفوعة</span>');
     const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
-    const canEditRole=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role) && !sl.offline_pending;
-    return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b>${sl.offline_pending?' <span class="badge yellow">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}<div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}"><b>${money(sl.balance_due)}</b></td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="مشاهدة الفاتورة للقراءة فقط (أو اضغط مرتين على السطر)" onclick="event.stopPropagation();viewSaleInvoice('${safe}')">👁</button>${canEditRole?` <button class="btn secondary" type="button" style="padding:4px 8px" title="فتح الفاتورة للتعديل" onclick="event.stopPropagation();openSaleForEdit('${safe}')">✏</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
+    return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b>${sl.offline_pending?' <span class="badge yellow">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}<div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}"><b>${money(sl.balance_due)}</b></td><td>${canCollect?`<button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
   }).join('') || '<tr><td colspan="9">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
   const sl=selectedSaleId?sales.find(x=>x.id===selectedSaleId):null;
@@ -2292,7 +2292,7 @@ let __lastSaleRowClick={id:null,t:0};
 function selectSaleRow(id){
   const now=Date.now();
   if(__lastSaleRowClick.id===id && now-__lastSaleRowClick.t<420){
-    __lastSaleRowClick={id:null,t:0}; viewSaleInvoice(id); return;
+    __lastSaleRowClick={id:null,t:0}; viewSaleDetails(id); return;
   }
   __lastSaleRowClick={id,t:now};
   selectedSaleId=id;renderSales();
@@ -2381,11 +2381,19 @@ function renderReturns(){
 
 /* ═══ تعديل/حذف المرتجع: المدير كل شيء، الموظف مرتجعه فقط (بلا بطاقة مسجّل = مدير فقط) ═══ */
 function retActionCell(r,negativeDoc,rec,safe){
-  if(negativeDoc || !r.sale_id) return '—';
   const isAdm=currentRole?.role==='admin';
+  if(negativeDoc){
+    /* مرتجع بفاتورة سالبة تاريخية — لا مستند له: مشاهدة الفاتورة + حذفها (المدير فقط)، وتعديل الأسطر غير متاح بنفس آلية المستندات */
+    if(!isAdm) return '—';
+    return `<button class="btn secondary" type="button" style="padding:4px 8px" title="مشاهدة الفاتورة السالبة صاحبة هذه العودة" onclick="event.stopPropagation();viewSaleDetails('${safe}')">👁</button>`
+      +` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف مرتجع الفاتورة السالبة نهائياً (يحذف الفاتورة السالبة وكل آثارها) — للمدير فقط" onclick="event.stopPropagation();deleteSale('${safe}')">🗑</button>`;
+  }
   const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
   let h='';
-  if(isAdm||mine) h+=`<button class="btn secondary" type="button" style="padding:4px 8px" onclick="event.stopPropagation();openEditReturnModal('${safe}')" title="تعديل المرتجع">✏</button>`;
+  if(r.sale_id){
+    if(isAdm||mine) h+=`<button class="btn secondary" type="button" style="padding:4px 8px" onclick="event.stopPropagation();openEditReturnModal('${safe}')" title="تعديل المرتجع">✏</button>`;
+  }
+  /* مرتجع بلا فاتورة أصلية: تعديل الأسطر غير متاح تقنياً (لا قاعدة تحقق) — لكن حذف المستند متاح للمدير */
   if(isAdm) h+=` <button class="btn danger" type="button" style="padding:4px 8px" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')" title="حذف المرتجع نهائياً — للمدير فقط">🗑</button>`;
   return h||'—';
 }
@@ -2408,7 +2416,7 @@ function ensureReturnEditModal(){
       <thead><tr><th>الكود</th><th>الصنف</th><th>المعاد الآن</th><th>الحد المتاح</th><th>السعر</th><th>الإجمالي</th></tr></thead>
       <tbody id="reItemsBody"></tbody></table></div>
     <div class="row" style="justify-content:space-between;margin-top:10px"><b>الإجمالي: <span class="ltr" id="reTotal">0.00</span></b>
-      <div class="row"><button class="btn" type="button" onclick="submitReturnEdit()">💾 حفظ التعديل</button><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">إلغاء</button></div>
+      <div class="row"><button class="btn" type="button" onclick="submitReturnEdit()">💾 حفظ التعديل</button><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">✖ إلغاء التعديل</button></div>
     </div>
     <div class="mini" style="margin-top:6px">🔒 الكمية لا تتجاوز (المباع من الفاتورة الأصلية − ما عُيد في مرتجعات أخرى) · السعر لا يتجاوز سعر البيع الأصلي · الخصم الموزَّع يبقى محفوظاً بنسبة الصف · تعديل المال/الدفتر/المخزون يعكس أثر القديم في معاملة واحدة بالخادم.</div>
   </div>`;
@@ -2988,7 +2996,8 @@ q('salesBody')?.addEventListener('contextmenu',e=>{
   const items=[{head:'فاتورة '+(sl.invoice_no||String(id).slice(0,8))}];
   if(Number(sl.balance_due)>0 && !sl.offline_pending) items.push({label:'💵 تسجيل دفعة (متبقٍ '+money(sl.balance_due)+')',icon:'ti-cash',action:()=>openInvoicePayment(id)});
   items.push({label:'🖨️ طباعة',icon:'ti-printer',action:()=>printSale(id)});
-  items.push({label:'👁️ مشاهدة الفاتورة',icon:'ti-eye',action:()=>viewSaleInvoice(id)});
+  items.push({label:'👁️ مشاهدة الفاتورة (بشكل نموذج الإدخال)',icon:'ti-eye',action:()=>viewSaleDetails(id)});
+  items.push({label:'🧾 معاينة بشكل الطباعة',icon:'ti-file-description',action:()=>viewSaleInvoice(id)});
   if(['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role)) items.push({sep:true},{label:'✏️ تعديل',icon:'ti-edit',action:()=>openSaleForEdit(id)});
   showCtxMenu(e.clientX,e.clientY,items);
 });
@@ -3682,7 +3691,95 @@ function openSaleViewModal(sl,html){
 }
 function printViewedSale(){const id=viewSaleCtxId; if(!id)return; q('saleViewModal').classList.remove('show'); printSale(id);}
 function editViewedSale(){const id=viewSaleCtxId; if(!id)return; q('saleViewModal').classList.remove('show'); openSaleForEdit(id);}
-function viewSelectedSale(){const id=getSelectedSaleId(); if(id) viewSaleInvoice(id)}
+function viewSelectedSale(){const id=getSelectedSaleId(); if(id) viewSaleDetails(id)}
+function viewSelectedSalePrintStyle(){const id=getSelectedSaleId(); if(id) viewSaleInvoice(id)}
+/* ═══ (٣) نافذة مشاهدة الفاتورة بنفس شكل نموذج إدخال/تعديل الفاتورة — قراءة فقط مع الهامش وحركات المنتج وتفاصيل أكثر ═══ */
+let viewDetailsCtxId=null;
+function ensureSaleViewDetailsModal(){
+  if(q('saleViewDetailsModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='saleViewDetailsModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(1120px,97vw)">
+    <div class="modal-head"><div><h2 style="margin:0">🧾 مشاهدة الفاتورة — <span class="ltr" id="svdTitle">—</span></h2><div class="mini">بنفس شكل نموذج إدخال الفاتورة — للقراءة فقط، والتعديل له زرّه الخاص حسب الصلاحية</div></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <button class="btn secondary" type="button" onclick="svdPrint()" title="طباعة الفاتورة">🖨️ طباعة</button>
+        <button class="btn secondary" type="button" onclick="svdPrintStyle()" title="فتح النسخة بشكل ورقة الطباعة">🧾 شكل الطباعة</button>
+        <button class="btn secondary" type="button" id="svdEditBtn" style="display:none" onclick="svdEdit()" title="فتح الفاتورة للتعديل حسب صلاحيتك">✏️ تعديل</button>
+        <button class="btn secondary" type="button" onclick="q('saleViewDetailsModal').classList.remove('show')">إغلاق</button>
+      </div></div>
+    <div id="svdBody" style="max-height:72vh;overflow:auto"></div>
+  </div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click',e=>{if(e.target===d)d.classList.remove('show');});
+}
+function svdOpenSub(fn){
+  const m=q('saleViewDetailsModal'); if(m) m.classList.remove('show'); /* نافذة التفاصيل (حركات/مخزون) تعمل فوق القائمة الأساسية */
+  try{Promise.resolve(fn()).catch(e=>{console.error(e);toast('تعذّر فتح التفاصيل','warn');});}catch(e){console.error(e);toast('تعذّر فتح التفاصيل','warn');}
+}
+function svdPrint(){const id=viewDetailsCtxId; if(!id)return; q('saleViewDetailsModal').classList.remove('show'); printSale(id);}
+function svdPrintStyle(){const id=viewDetailsCtxId; if(!id)return; q('saleViewDetailsModal').classList.remove('show'); viewSaleInvoice(id);}
+function svdEdit(){const id=viewDetailsCtxId; if(!id)return; q('saleViewDetailsModal').classList.remove('show'); openSaleForEdit(id);}
+async function viewSaleDetails(id){
+  ensureSaleViewDetailsModal();
+  try{
+    showLoading(true);
+    const localSl=sales.find(x=>x.id===id);
+    const offline=!navigator.onLine || localSl?.offline_pending;
+    const sl=localSl || (await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
+    if(!sl){toast('لم يتم العثور على الفاتورة','warn');return;}
+    const items=offline? saleItems.filter(x=>x.sale_id===id) : await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`});
+    viewDetailsCtxId=id;
+    const linkedReturns=saleReturns.filter(r=>String(r.sale_id)===String(id));
+    renderSaleViewDetailsData(sl,items,linkedReturns);
+    q('saleViewDetailsModal').classList.add('show');
+  }catch(err){console.error(err);toast('خطأ في فتح المشاهدة: '+friendlyError(err),'error')}
+  finally{showLoading(false)}
+}
+function svdLine(lbl,val,cls){return `<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--border);padding:4px 0"><span>${lbl}</span><b class="${cls||''}">${val}</b></div>`}
+function renderSaleViewDetailsData(sl,items,linkedReturns){
+  const cust=customers.find(x=>x.id===sl.customer_id), loc=locations.find(x=>x.id===sl.location_id);
+  const payRows=salePayments.filter(p=>p.sale_id===sl.id);
+  const subtotal=items.reduce((a,it)=>a+Number(it.line_total||0),0);
+  const paid=Number(sl.paid_amount||0), balance=Number(sl.balance_due||0);
+  const cur=esc(APP_CONFIG.currency);
+  const retT=linkedReturns.reduce((a,r)=>a+Number(r.total||0),0);
+  const rows=items.map((it,i)=>{
+    const codeSafe=String(it.product_code||'').replace(/'/g,"\\'");
+    const cost=Number(productCost(it.product_code)||0), price=Number(it.unit_price||0);
+    const margin=price-cost, mPct=price>0?margin/price*100:0;
+    const avail=stock.filter(st=>String(st.location_id)===String(sl.location_id)&&String(st.product_code)===String(it.product_code)).reduce((a,st)=>a+Number(st.qty||0),0);
+    const discTxt=it.discount_text?String(it.discount_text):it.line_discount?money(it.line_discount):'—';
+    return `<tr><td class="ltr"><b>${i+1}. ${esc(it.product_code)}</b></td><td>${esc(pLabel(it.product_code,it.product_name))}</td><td style="text-align:center">${money(it.qty)}</td><td style="text-align:center" class="ltr">${money(price)}</td><td style="text-align:center" class="ltr">${money(margin)}</td><td style="text-align:center" class="ltr">${mPct.toFixed(1)}%</td><td class="mini" style="text-align:center">${esc(discTxt)}</td><td class="mini" style="text-align:center">${money(avail)}</td><td style="text-align:center"><b>${money(it.line_total)}</b></td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:3px 6px" title="حركات المنتج على فروعه ومخازنه" onclick="svdOpenSub(()=>openProductMovements('${codeSafe}'))">📜</button> <button class="btn secondary" type="button" style="padding:3px 6px" title="أرصدة المنتج الآن" onclick="svdOpenSub(()=>showProductStockSummary('${codeSafe}','all'))">🏬</button></td></tr>`;
+  }).join('')||'<tr><td colspan="10">لا توجد أسطر</td></tr>';
+  q('svdBody').innerHTML=`
+    <div class="sale-topbar" style="border-radius:10px;margin-bottom:10px">
+      <div class="sale-topbar-title"><div class="sale-title">فاتورة بيع${sl.offline_pending?' — نسخة محلية بانتظار المزامنة':''}</div><div class="sale-subtitle ltr">${esc(sl.invoice_no||String(sl.id).slice(0,8))}</div></div>
+      <div class="sale-chips">
+        <div class="schip schip-date" title="تاريخ الفاتورة"><span class="schip-lbl">${esc(sl.sale_date)}</span></div>
+        <div class="schip schip-customer" title="الزبون"><span class="schip-lbl">${esc(cust?.name||'زبون نقدي')}</span><span class="schip-sub ltr">${esc(cust?.phone||'')}</span></div>
+        <div class="schip" title="الفرع"><span class="schip-lbl">${esc(loc?.name||'—')}</span></div>
+        <div class="schip" title="طريقة الدفع"><span class="schip-lbl">${esc(typeLabel(sl.payment_method))}</span></div>
+      </div>
+      <div class="sale-topbar-total"><span>الإجمالي</span><b>${money(sl.total)}</b></div>
+    </div>
+    <div class="table-scroll" style="max-height:44vh;overflow:auto"><table>
+      <thead><tr><th>الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر</th><th>المتوفر</th><th>الإجمالي</th><th>المنتج</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:var(--table-head)"><td colspan="8"><b>مجموع أسطر الفاتورة (${items.length} صنف)</b></td><td style="text-align:center"><b>${money(subtotal)}</b></td><td></td></tr></tfoot></table></div>
+    <div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:10px">
+      ${svdLine('المجموع قبل الخصم العام',money(subtotal)+' '+cur)}
+      ${svdLine('خصم الفاتورة العام',money(sl.discount)+' '+cur)}
+      ${svdLine('الإجمالي',money(sl.total)+' '+cur)}
+      ${svdLine('المدفوع',money(paid)+' '+cur)}
+      ${svdLine('المتبقي',money(balance)+' '+cur,Number(balance)>0?'stock-negative':'')}
+      ${payRows.length?svdLine('تفصيل الدفعات',`<span class="mini">${esc(paymentBreakdownText(payRows))}</span>`):''}
+      ${svdLine('مرتجعات على هذه الفاتورة',linkedReturns.length?(linkedReturns.length+' — '+money(retT)+' '+cur):'لا يوجد')}
+      <div class="mini" style="margin-top:6px">البائع: ${esc(sl.seller||'—')} · سجّلت بواسطة: ${esc(sl.created_by||sl.cashier||'—')} · الحالة: ${esc(typeLabel(sl.status||'posted'))}${sl.notes?` · ملاحظات: ${esc(sl.notes)}`:''}</div>
+    </div>`;
+  const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role) && !sl.offline_pending;
+  q('svdEditBtn').style.display=canEdit?'':'none';
+  if(q('svdTitle')) q('svdTitle').textContent=String(sl.invoice_no||String(sl.id).slice(0,8))+' · '+String(sl.sale_date||'');
+}
+
 async function printTransfer(id){
   try{
     const t=transfers.find(x=>x.id===id) || (await api('pos_stock_transfers',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
@@ -5957,7 +6054,9 @@ const CTX_BUILDERS={
       {label:'نسخ المنتج',icon:'ti-copy',action:()=>duplicateProduct(code)},
       {label:'حركات المنتج',icon:'ti-history',action:()=>openSelectedProductMovements()},
       {sep:true},
-      {label:'تحويل إلى منتج مركّب',icon:'ti-package',action:()=>{convertToComposite(code)}},
+      ...(hasCompositeComponents(code)
+        ? [{label:'تعديل المنتج المركّب',icon:'ti-package',action:()=>openCompositeEditModal(code)}]
+        : [{label:'تحويل إلى منتج مركّب',icon:'ti-package',action:()=>{convertToComposite(code)}}]),
       {label:'إضافة إلى فاتورة بيع',icon:'ti-shopping-cart-plus',action:()=>{if(!p)return; openTab('sales'); addOrIncrementSaleProduct(p,1); toast('تمت إضافة المنتج إلى فاتورة البيع');}}];
   },
   salePickerBody(tr){const code=(tr.children[0]?.querySelector('b')?.textContent||tr.children[0]?.innerText||'').split(/\s+/)[0].trim(); if(!code) return []; const p=products.find(x=>String(x.code||'').toLowerCase()===String(code).toLowerCase());
@@ -5974,7 +6073,8 @@ const CTX_BUILDERS={
   salesBody(tr){const id=ctxArg(tr,'selectSaleRow'); if(!id) return []; selectSaleRow(id);
     const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role);
     const items=[{head:'فاتورة بيع'},
-      {label:'مشاهدة الفاتورة',icon:'ti-eye',action:()=>viewSaleInvoice(id)},
+      {label:'مشاهدة الفاتورة (بشكل نموذج الإدخال)',icon:'ti-eye',action:()=>viewSaleDetails(id)},
+      {label:'معاينة بشكل الطباعة',icon:'ti-file-description',action:()=>viewSaleInvoice(id)},
       ...(canEdit?[{label:'فتح / تعديل',icon:'ti-edit',action:()=>openSaleForEdit(id)}]:[]),
       {label:'طباعة الفاتورة',icon:'ti-printer',action:()=>printSale(id)},
       {label:'مرتجع',icon:'ti-arrow-back-up',action:()=>openSaleReturn(id)},
@@ -6250,6 +6350,97 @@ async function saveProductComponents(productCode){
     }
   }catch(e){console.warn('composite save failed',e);}
 }
+/* ═══ نافذة تعديل المنتج المركّب — مكوّناته + أسعاره + وصفه في نافذة مستقلة (لا تعتمد على نموذج تبويب المنتجات) ═══ */
+const staticOpenCountState={id:null,comps:[]};
+function ensureCompositeEditModal(){
+  if(q('compositeEditModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='compositeEditModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(780px,96vw)">
+    <div class="modal-head"><div><h2 style="margin:0">🧩 تعديل منتج مركّب — <span class="ltr" id="ceTitle">—</span></h2><div class="mini" id="ceSub">عدّل المكوّنات والكمية ثم احفظ — يطبَّق فوراً على توافر البيع والكميات</div></div><button class="btn secondary" type="button" onclick="q('compositeEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="form" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:10px">
+      <div><label>سعر البيع</label><input id="ceRetail" type="number" step="0.01" min="0" class="ltr" style="text-align:center"></div>
+      <div><label>سعر الجملة</label><input id="ceWholesale" type="number" step="0.01" min="0" class="ltr" style="text-align:center"></div>
+      <div><label>تكلفة المرجع (شراء)</label><input id="cePurchase" type="number" step="0.01" min="0" class="ltr" style="text-align:center"></div>
+      <div class="mini" style="align-self:end">تكلفة فارغة أو بصفر = تُحسب من المكوّنات تلقائياً.</div>
+    </div>
+    <div class="mini" style="font-weight:800;margin-bottom:6px">المكوّنات</div>
+    <div class="row" style="gap:6px;margin-bottom:8px"><input id="ceCompCode" class="ltr" list="productsDatalist" placeholder="كود المكوّن..." style="max-width:220px"><input id="ceCompQty" type="number" value="1" min="0.5" step="0.5" class="ltr" style="max-width:80px;text-align:center"><button class="btn secondary" type="button" onclick="ceAddComp()">➕ إضافة</button></div>
+    <div class="table-scroll" style="max-height:38vh;overflow:auto"><table>
+      <thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>تكلفة الوحدة</th><th>الإجمالي</th><th></th></tr></thead>
+      <tbody id="ceBody"></tbody>
+      <tfoot id="ceFoot"></tfoot></table></div>
+    <div><label style="margin-top:10px;display:block">ملاحظة المنتج</label><input id="ceNotes" placeholder="ملاحظة حرة تظهر في نموذج المنتج"></div>
+    <div class="row" style="justify-content:space-between;margin-top:12px">
+      <div class="mini" id="ceVstock"></div>
+      <div class="row"><button class="btn" type="button" onclick="ceSave()">💾 حفظ التعديل</button><button class="btn secondary" type="button" onclick="q('compositeEditModal').classList.remove('show')">✖ إلغاء التعديل</button></div>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click',e=>{if(e.target===d)d.classList.remove('show');});
+}
+function ceRender(){
+  const sb=staticOpenCountState;
+  const p=products.find(x=>String(x.code)===String(sb.id)); if(!p) return;
+  q('ceTitle').textContent=p.code; q('ceSub').textContent=p.name||(p.brand||'')+' '+(p.model||'');
+  q('ceBody').innerHTML=sb.comps.map((c,i)=>{const cp=products.find(x=>String(x.code)===String(c.code));const cost=Number(cp?.purchase_price||0);
+    return `<tr><td class="ltr"><b>${esc(c.code)}</b></td><td>${esc(c.name)}</td><td style="text-align:center">${money(c.qty)}</td><td>${money(cost)}</td><td>${money(cost*c.qty)}</td><td><button class="btn danger" type="button" style="padding:4px 8px" onclick="staticOpenCountState.comps.splice(${i},1);ceRender()">حذف</button></td></tr>`}).join('')||'<tr><td colspan="6" class="mini">لا توجد مكوّنات بعد — أضف مكوّنين على الأقل.</td></tr>';
+  const total=sb.comps.reduce((a,c)=>{const cp=products.find(x=>String(x.code)===String(c.code));return a+Number(cp?.purchase_price||0)*c.qty},0);
+  q('ceFoot').innerHTML=sb.comps.length?`<tr style="background:var(--table-head)"><td colspan="4"><b>التكلفة الإجمالية للمركّب</b></td><td><b>${money(total)}</b></td><td></td></tr>`:'';
+  const vs=getCompositeVirtualStock(p.code);
+  if(q('ceVstock')) q('ceVstock').textContent=vs!==null?('المخزون الافتراضي الحالي: '+vs):'';
+}
+function ceAddComp(){
+  const code=(q('ceCompCode')?.value||'').split('|')[0].trim();
+  const qty=Number(q('ceCompQty')?.value||1)||1;
+  if(!code){toast('اكتب كود المكوّن','warn');return;}
+  if(String(code)===String(staticOpenCountState.id)){toast('لا يمكن إدخال المركّب داخل نفسه','warn');return;}
+  const p=products.find(x=>String(x.code).toLowerCase()===code.toLowerCase());
+  if(!p){toast('لم يتم العثور على المنتج '+code,'warn');return;}
+  if(staticOpenCountState.comps.some(c=>String(c.code)===String(p.code))){toast('المكوّن مضاف مسبقاً — عدّل بدلاً بإزالته وإضافته من جديد','warn');return;}
+  staticOpenCountState.comps.push({code:p.code,name:p.name,qty});
+  q('ceCompCode').value=''; q('ceCompQty').value=1; q('ceCompCode').focus();
+  ceRender();
+}
+async function openCompositeEditModal(code){
+  const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج','warn');return;}
+  ensureCompositeEditModal();
+  staticOpenCountState.id=p.code;
+  staticOpenCountState.comps=compositeItems.filter(ci=>String(ci.composite_code)===String(p.code)).map(ci=>({code:ci.component_code,name:ci.component_name||ci.component_code,qty:Number(ci.qty||1)}));
+  const ret0=Number(p.retail_price||0), pur0=Number(p.purchase_price||0), whole0=Number(p.wholesale_price||0);
+  if(q('ceRetail')) q('ceRetail').value=ret0;
+  if(q('ceWholesale')) q('ceWholesale').value=whole0;
+  if(q('cePurchase')) q('cePurchase').value=pur0;
+  if(q('ceNotes')) q('ceNotes').value=String(p.description||'');
+  /* الاسم/الموديل/اللون/الوصف لا تُحمَّل ضمن عرض المخزون — تمّلؤ كاملة من جدول المنتجات عند الحفظ */
+  if(!p.description){
+    try{const r=await api('pos_products',{qs:`?select=description&code=eq.${encodeURIComponent(p.code)}&limit=1`}); if(r&&r[0]&&q('ceNotes')) q('ceNotes').value=r[0].description||'';}catch(e){console.warn('composite note fetch failed',e)}
+  }
+  ceRender();
+  q('compositeEditModal').classList.add('show');
+}
+async function ceSave(){
+  const sb=staticOpenCountState;
+  if(!sb.id) return;
+  if(!sb.comps.length){toast('أضف مكوّناً واحداً على الأقل','warn');return;}
+  if(window.__busy)return; window.__busy=true;
+  try{
+    showLoading(true);
+    const p=products.find(x=>String(x.code)===String(sb.id)); if(!p) throw new Error('PRODUCT_NOT_FOUND');
+    const retail=Number(q('ceRetail')?.value||0), whole=Number(q('ceWholesale')?.value||0);
+    let pur=Number(q('cePurchase')?.value||0);
+    if(!(pur>0)){ pur=sb.comps.reduce((a,c)=>{const cp=products.find(x=>String(x.code)===String(c.code));return a+Number(cp?.purchase_price||0)*c.qty},0); }
+    const desc=(q('ceNotes')?.value||'').trim();
+    await api('pos_products',{method:'PATCH',qs:`?code=eq.${encodeURIComponent(sb.id)}`,body:{retail_price:retail,wholesale_price:whole,purchase_price:pur,description:desc}});
+    await api('pos_composite_items',{method:'DELETE',qs:`?composite_code=eq.${encodeURIComponent(sb.id)}`});
+    await api('pos_composite_items',{method:'POST',body:sb.comps.map(c=>({composite_code:sb.id,component_code:c.code,component_name:c.name,qty:c.qty}))});
+    await logAction('composite_update','pos_products',sb.id,`تعديل مركّب ${sb.id} — ${sb.comps.length} مكوّناً — سعر ${retail}`);
+    await loadAll();
+    q('compositeEditModal').classList.remove('show');
+    toast('تم حفظ تعديل المنتج المركّب','success');
+  }catch(e){console.error(e);toast('تعذّر الحفظ: '+friendlyError(e),'error');}
+  finally{showLoading(false);window.__busy=false;}
+}
+
 function getCompositeVStockByBranch(compositeCode, branchField){
   const comps=compositeItems.filter(ci=>ci.composite_code===compositeCode);
   if(!comps.length) return null;
@@ -6287,6 +6478,7 @@ function getCompositeVirtualStock(code){
   return minStock===Infinity?0:minStock;
 }
 
+function hasCompositeComponents(productCode){return compositeItems.some(ci=>String(ci.composite_code)===String(productCode));}
 function convertToComposite(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج','warn');return;}
   editProduct(code);
@@ -6303,7 +6495,7 @@ function renderComposites(){
     const cost=comps.reduce((a,ci)=>{const cp=products.find(x=>x.code===ci.component_code);return a+(Number(cp?.purchase_price||0)*Number(ci.qty||1));},0);
     const vStock=getCompositeVirtualStock(code);
     const safe=String(code||'').replace(/'/g,"\\'");
-    return `<tr><td class="ltr"><b>${esc(code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(p.retail_price)}</b></td><td>${money(cost)}</td><td><b>${vStock!==null?vStock:'—'}</b></td><td class="mini">${comps.map(ci=>`${esc(ci.component_name||ci.component_code)}×${Number(ci.qty||1)}`).join('، ')}</td><td><button class="btn secondary" type="button" onclick="editProduct('${safe}')">تعديل المكوّنات</button></td></tr>`;
+    return `<tr ondblclick="openCompositeEditModal('${safe}')" title="اضغط مرتين للتعديل"><td class="ltr"><b>${esc(code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(p.retail_price)}</b></td><td>${money(cost)}</td><td><b>${vStock!==null?vStock:'—'}</b></td><td class="mini">${comps.map(ci=>`${esc(ci.component_name||ci.component_code)}×${Number(ci.qty||1)}`).join('، ')}</td><td><button class="btn secondary" type="button" onclick="openCompositeEditModal('${safe}')">✏️ تعديل المنتج المركّب</button></td></tr>`;
   }).join('')||'<tr><td colspan="7">لا توجد منتجات مركبة. اضغط بزر الفأرة الأيمن على منتج واختر «تحويل إلى منتج مركّب».</td></tr>';
 }
 
