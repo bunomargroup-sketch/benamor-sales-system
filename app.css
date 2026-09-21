@@ -675,3 +675,7 @@ html[data-theme="dark"]{
 @media (prefers-color-scheme:dark){
   :root{--muted:#94a3b8;--text-2:#cbd5e1;--code-bg:#1e293b;--code-fg:#cbd5e1;--br-11:#93c5fd;--br-11-bg:#1e3a8a;--br-sr:#c4b5fd;--br-sr-bg:#4c1d95;--br-jz:#5eead4;--br-jz-bg:#134e4a;--ok:#6ee7b7;--ok-bg:#064e3b;--warn:#fbbf24;--warn-bg:#713f12;--bad:#fca5a5;--bad-bg:#7f1d1d}
 }
+
+    /* استكمال الحد الأدنى: تسميات المالية 12px، وجدول المنتجات 15px مثل بقية الجداول */
+    .finance-selects label{font-size:12px}
+    .product-table-wrap table{font-size:15px}
