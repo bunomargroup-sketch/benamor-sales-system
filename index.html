@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0150">
+<link rel="stylesheet" href="app.css?v=20260921-0220">
 </head>
 <body class="auth-locked">
   <header>
@@ -1021,14 +1021,31 @@
       <section id="stockCount" class="section">
         <div class="panel">
           <div class="tools"><h2>الجرد الفعلي للمخزون</h2><div class="row">
-            <select id="stockCountLocation" onchange="renderStockCount()" style="min-width:210px"></select>
-            <button class="btn secondary" onclick="loadAll()">تحديث</button>
+            <button class="btn secondary active" type="button" id="scSubEditorBtn" onclick="showStockCountSub('editor')">📝 جرد جديد</button>
+            <button class="btn secondary" type="button" id="scSubListsBtn" onclick="showStockCountSub('lists')">📚 قوائم الجرد السابقة</button>
+            <button class="btn secondary" type="button" onclick="refreshSalesDomain().then(()=>renderStockCount())">تحديث</button>
           </div></div>
-          <p class="muted">اختر الفرز/المخزن، أدخل الكمية الفعلية المعدودة، ثم احفظ. الفرق يُسجَّل كحركة تسوية.</p>
-          <input id="stockCountSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderStockCount()" style="max-width:300px;margin-bottom:10px">
-          <select id="stockCountCategory" onchange="renderStockCount()" style="min-width:170px;margin-bottom:10px"><option value="">كل التصنيفات</option></select>
-          <div class="table-scroll" style="max-height:65vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المخزون</th><th>المعدود</th><th>الفرق</th></tr></thead><tbody id="stockCountBody"></tbody></table></div>
-          <div class="row" style="margin-top:12px"><button class="btn" type="button" onclick="saveStockCount()">💾 حفظ الجرد وتسوية الفروقات</button></div>
+
+          <div id="stockCountEditor">
+            <div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+              <select id="stockCountLocation" onchange="renderStockCount()" style="min-width:210px"></select>
+              <input id="stockCountSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderStockCount()" style="max-width:300px">
+              <select id="stockCountCategory" onchange="renderStockCount()" style="min-width:170px"><option value="">كل التصنيفات</option></select>
+              <button class="btn secondary" type="button" onclick="openStockCountPicker()" title="نافذة بحث الأصناف للقفز إلى سطر الجرد">🔎 بحث في الجرد <b class="kbd">F3</b></button>
+            </div>
+            <p class="muted">اختر الفرع/المخزن وأدخل الكمية الفعلية المعدودة لكل صنف. «قيمة الفرق» = الفرق × تكلفة الصنف الحالية. يمكنك حفظ القائمة دون تسوية، أو تسوية الفروقات مباشرة على المخزون.</p>
+            <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المخزون</th><th>التكلفة</th><th>المعدود</th><th>الفرق</th><th>قيمة الفرق</th></tr></thead><tbody id="stockCountBody"></tbody></table></div>
+            <div id="stockCountTotals" class="card" style="margin-top:10px;font-size:14px"></div>
+            <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+              <button class="btn secondary" type="button" onclick="saveStockCountList()" title="حفظ قائمة الجرد كمستند (بالفروقات وقيمتها) دون تغيير المخزون">💾 حفظ قائمة الجرد</button>
+              <button class="btn" type="button" onclick="saveStockCount()" title="حفظ القائمة + تسوية الفروقات على المخزون فوراً">✓ تسوية واعتماد الفروقات</button>
+            </div>
+          </div>
+
+          <div id="stockCountLists" style="display:none">
+            <p class="muted">كل الجردات المحفوظة: الفرق الكمي و<strong>قيمة الفرق بسعر التكلفة</strong>، والحالة (مسودة لم تُسوَّ بعد / مسوّى). زر الحذف للمدير فقط.</p>
+            <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>التصنيف</th><th>المجرِد</th><th>أصناف مجردة</th><th>كمية الفرق</th><th>قيمة الفرق</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="stockCountListsBody"></tbody></table></div>
+          </div>
         </div>
       </section>
 
@@ -1274,6 +1291,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0150"></script>
+<script src="app.js?v=20260921-0220"></script>
 </body>
 </html>
