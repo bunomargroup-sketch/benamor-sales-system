@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0020">
+<link rel="stylesheet" href="app.css?v=20260921-0100">
 </head>
 <body class="auth-locked">
   <header>
@@ -411,10 +411,7 @@
       </section>
       <section id="salesList" class="section">
         <div class="panel">
-          <div class="tools"><h2>فواتير البيع</h2><div class="row" style="gap:6px">
-            <button class="btn sub-tab active" type="button" id="subTabInvoicesBtn" onclick="showSalesSub('invoices')">الفواتير</button>
-            <button class="btn secondary sub-tab" type="button" id="subTabReturnsBtn" onclick="showSalesSub('returns')">المرتجعات</button>
-          </div><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="tools"><h2>فواتير البيع</h2><span class="mini">القائمة تجمع كل النماذج: فاتورة بيع ↩ وفاتورة إرجاع — التفريق المختصر بعمود طريقة الدفع</span><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
           <div id="salesInvoicesPanel">
           <div class="grid sales-filter-grid" style="margin:10px 0">
             <div><label>بحث الفواتير</label><input id="saleListSearch" placeholder="رقم، زبون، هاتف، صنف، باركود..." oninput="renderSales()"></div>
@@ -422,7 +419,7 @@
             <div><label>إلى تاريخ</label><input id="saleFilterTo" type="date" onchange="renderSales()"></div>
             <div><label>الشهر</label><input id="saleFilterMonth" type="month" onchange="renderSales()"></div>
             <div><label>السنة</label><input id="saleFilterYear" type="number" min="2020" max="2100" placeholder="مثال 2026" oninput="renderSales()"></div>
-            <div><label>نوع الفاتورة</label><select id="saleFilterType" onchange="renderSales()"><option value="">كل الفواتير</option><option value="sale">بيع فقط</option><option value="mixed_return">بيع مع مرتجع</option></select></div>
+            <div><label>نوع الفاتورة</label><select id="saleFilterType" onchange="renderSales()"><option value="">كل الفواتير</option><option value="sale">بيع فقط</option><option value="mixed_return">بيع مع مرتجع</option><option value="return">فواتير إرجاع فقط</option></select></div>
             <div><label>البائع</label><input id="saleFilterUser" placeholder="بحث في البائع / الملاحظات" oninput="renderSales()"></div>
             <div><label>الزبون</label><select id="saleFilterCustomer" onchange="renderSales()"><option value="">كل الزبائن</option></select></div>
             <div><label>الفرع</label><select id="saleFilterBranch" onchange="renderSales()"><option value="">كل الفروع</option></select></div>
@@ -441,24 +438,9 @@
           </div>
           <div class="row" style="margin:0 0 8px"><button class="btn secondary" type="button" onclick="openNoInvoiceReturn()">↩ مرتجع بدون فاتورة</button><span class="mini">بضاعة بيعت قبل دخول المنظومة تعود اليوم</span></div>
           <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
           </div>
 
-          <div id="salesReturnsPanel" style="display:none">
-            <div class="grid sales-filter-grid" style="margin:10px 0">
-              <div><label>من تاريخ</label><input id="retFilterFrom" type="date" onchange="renderReturns()"></div>
-              <div><label>إلى تاريخ</label><input id="retFilterTo" type="date" onchange="renderReturns()"></div>
-              <div><label>الفرع</label><select id="retFilterBranch" onchange="renderReturns()"><option value="">كل الفروع</option></select></div>
-              <div><label>طريقة الاسترداد</label><select id="retFilterMethod" onchange="renderReturns()"><option value="">كل الطرق</option><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="credit_reduction">تخفيض دين</option><option value="none">بدون استرداد نقدي</option></select></div>
-              <div><label>بحث برقم الفاتورة الأصلية</label><input id="retFilterSearch" placeholder="مثال: INV-1095" oninput="renderReturns()"></div>
-              <div class="row" style="align-items:end"><button class="btn" type="button" onclick="openNoInvoiceReturn()">↩ مرتجع بدون فاتورة</button><button class="btn secondary" type="button" onclick="resetReturnFilters()">مسح الفلاتر</button></div>
-            </div>
-            <div class="table-scroll"><table>
-              <thead><tr><th>التاريخ</th><th>المرتجع</th><th>الفاتورة الأصلية</th><th>الزبون</th><th>الفرع</th><th>الإجمالي</th><th>طريقة الاسترداد</th><th>الحساب</th><th>السبب</th><th>مَن سجّل</th><th>إجراء</th></tr></thead>
-              <tbody id="returnsBody"></tbody>
-              <tfoot id="returnsTotalFoot"><tr><td colspan="11" class="mini">—</td></tr></tfoot>
-            </table></div>
-            <div class="row" style="justify-content:space-between;margin-top:8px"><span class="mini" id="returnsListInfo"></span><span class="mini">نقر يمين على الصف: التفاصيل · طباعة · الانتقال للفاتورة الأصلية</span></div>
-          </div>
         </div>
       </section>
 
@@ -1292,6 +1274,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0020"></script>
+<script src="app.js?v=20260921-0100"></script>
 </body>
 </html>

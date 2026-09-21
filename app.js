@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0020';
+const APP_BUILD='b20260921-0100';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2226,19 +2226,80 @@ function saleMatchesFilters(sl){
   const pay=q('saleFilterPayment')?.value||''; const st=salePaymentStatus(sl); if(pay==='due' && Number(sl.balance_due||0)<=0) return false; if(pay && pay!=='due' && st!==pay) return false;
   return true;
 }
+function retRefundLabel(m){return ({credit_reduction:'تخفيض دين الزبون',none:'بدون استرداد نقدي'})[m]||typeLabel(m)}
+function retListMatchesFilters(r){
+  /* فواتير الإرجاع تسري عليها نفس فلاتر قائمة فواتير البيع */
+  const scope=sellerBranchScope(); if(scope && r.location_id!==scope) return false;
+  const paySt=q('saleFilterPayment')?.value||''; if(paySt) return false; /* الإرجاع لا حالة دفع له */
+  const branch=q('saleFilterBranch')?.value||''; if(branch && r.location_id!==branch) return false;
+  const cust=q('saleFilterCustomer')?.value||''; if(cust && r.customer_id!==cust) return false;
+  const d=String(r.return_date||'');
+  const from=q('saleFilterFrom')?.value||'', to=q('saleFilterTo')?.value||'', month=q('saleFilterMonth')?.value||'', year=(q('saleFilterYear')?.value||'').trim();
+  if(from&&d<from) return false; if(to&&d>to) return false; if(month&&!d.startsWith(month)) return false; if(year&&!d.startsWith(year)) return false;
+  const rec=returnRecorder(r.id);
+  const user=(q('saleFilterUser')?.value||'').trim(); if(user && !smartMatch(user,[rec,r.notes].filter(Boolean).join(' '))) return false;
+  const term=(q('saleListSearch')?.value||'').trim();
+  if(term){
+    const orig=sales.find(x=>x.id===r.sale_id), c=customers.find(x=>x.id===r.customer_id), l=locations.find(x=>x.id===r.location_id);
+    const prodText=saleReturnItems.filter(i=>i.return_id===r.id).map(it=>{const p=productByCode(it.product_code);return [it.product_code,it.product_name,p?.barcode,p?.sku,p?.model,p?.brand].filter(Boolean).join(' ')}).join(' ');
+    const txt=[r.id,orig?.invoice_no,d,c?.name,c?.phone,l?.name,r.refund_method,r.notes,r.reason,rec,prodText].filter(Boolean).join(' ');
+    if(!smartMatch(term,txt)) return false;
+  }
+  return true;
+}
+function saleListRowHtml(sl){
+  const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); const safe=String(sl.id).replace(/'/g,"\\'"); const st=salePaymentStatus(sl);
+  const badge=st==='paid'?'<span class="badge green">مدفوعة</span>':(st==='partial'?'<span class="badge yellow">مدفوعة جزئيًا</span>':'<span class="badge red">غير مدفوعة</span>');
+  const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
+  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b>${sl.offline_pending?' <span class="badge yellow">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}<div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}"><b>${money(sl.balance_due)}</b></td><td>${canCollect?`<button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
+}
+function returnListRowHtml(r){
+  const cust=customers.find(c=>c.id===r.customer_id), l=locations.find(x=>x.id===r.location_id);
+  const orig=sales.find(x=>x.id===r.sale_id);
+  const safe=String(r.id).replace(/'/g,"\\'");
+  const isAdm=currentRole?.role==='admin';
+  const rec=returnRecorder(r.id);
+  const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
+  let act='';
+  if(r.sale_id && (isAdm||mine)) act+=`<button class="btn secondary" type="button" style="padding:4px 8px" title="تعديل فاتورة الإرجاع هذه" onclick="event.stopPropagation();openEditReturnModal('${safe}')">✏</button>`;
+  if(isAdm) act+=` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف فاتورة الإرجاع نهائياً — للمدير فقط" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')">🗑</button>`;
+  const osafe=orig?String(orig.id).replace(/'/g,"\\'"):'';
+  const noOrig=r.sale_id?'':' <span class="badge red" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
+  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}" style="background:color-mix(in srgb,#ef4444 5%,transparent)"><td class="ltr"><b>↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</b> <span class="badge red">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td>${esc(l?.name||'—')}</td><td>${esc(cust?.name||'زبون نقدي')}${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="badge red">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="stock-negative"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td style="white-space:nowrap">${act||'—'}</td></tr>`;
+}
 function renderSales(){
   fillSaleListFilterOptions();
-  const rows=sales.filter(saleMatchesFilters);
-  q('salesBody').innerHTML = rows.map(sl=>{
-    const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); const safe=String(sl.id).replace(/'/g,"\'"); const st=salePaymentStatus(sl);
-    const badge=st==='paid'?'<span class="badge green">مدفوعة</span>':(st==='partial'?'<span class="badge yellow">مدفوعة جزئيًا</span>':'<span class="badge red">غير مدفوعة</span>');
-    const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
-    return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(sl.invoice_no||sl.id.slice(0,8))}</b>${sl.offline_pending?' <span class="badge yellow">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||'زبون نقدي')}<div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><b>${money(sl.total)}</b></td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0?'stock-negative':''}"><b>${money(sl.balance_due)}</b></td><td>${canCollect?`<button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
-  }).join('') || '<tr><td colspan="9">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
+  const typ=q('saleFilterType')?.value||'';
+  const showReturns=!typ||typ==='return'; /* المرتجع = فاتورة إرجاع ضمن نفس القائمة */
+  const rows=typ==='return'?[]:sales.filter(saleMatchesFilters);
+  const rets=showReturns?saleReturns.filter(retListMatchesFilters):[];
+  const entries=[...rows.map(sl=>({kind:'sale',date:String(sl.sale_date||''),key:String(sl.invoice_no||String(sl.id).slice(0,8)),sl})),
+                 ...rets.map(r=>({kind:'ret',date:String(r.return_date||''),key:String(sales.find(x=>x.id===r.sale_id)?.invoice_no||String(r.id).slice(0,8)),r}))];
+  entries.sort((a,b)=>{const d=b.date.localeCompare(a.date);return d||b.key.localeCompare(a.key,'ar',{numeric:true});});
+  q('salesBody').innerHTML=entries.map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('') || '<tr><td colspan="9">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
+  const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
+  const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
   const sl=selectedSaleId?sales.find(x=>x.id===selectedSaleId):null;
-  if(q('selectedSaleInfo')) q('selectedSaleInfo').textContent=sl?`المحدد: ${sl.sale_date} - ${money(sl.total)} ${APP_CONFIG.currency} | النتائج: ${rows.length} | الديون: ${money(totalDue)} ${APP_CONFIG.currency}`:`النتائج: ${rows.length} | إجمالي الديون: ${money(totalDue)} ${APP_CONFIG.currency}`;
+  if(q('selectedSaleInfo')) q('selectedSaleInfo').textContent=sl?`المحدد: ${sl.sale_date} - ${money(sl.total)} ${APP_CONFIG.currency} | النتائج: ${entries.length}`:`النتائج: ${entries.length}`;
+  /* شريط الإجماليات تحت القائمة — للمدير فقط ويتغير تبعاً للفلاتر */
+  const bar=q('salesTotalsBar');
+  if(bar){
+    if(currentRole?.role!=='admin'){bar.style.display='none';bar.innerHTML='';}
+    else{
+      bar.style.display='';
+      const cur=esc(APP_CONFIG.currency);
+      const chip=(lbl,val,neg)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--card)"><div class="mini">${lbl}</div><b class="${neg?'stock-negative':''}" style="font-size:15px">${val}</b></div>`;
+      bar.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+        ${chip(`💰 إجمالي الفواتير (${rows.length})`,money(gross)+' '+cur)}
+        ${chip(`↩️ إجمالي فواتير الإرجاع (${rets.length})`,'− '+money(retSum)+' '+cur,true)}
+        ${chip('📊 الصافي بعد الإرجاع',money(gross-retSum)+' '+cur)}
+        ${chip('🧾 ديون الزبائن (المعروضة)',money(totalDue)+' '+cur,Number(totalDue)>0)}
+      </div><div class="mini" style="margin-top:4px">القيم تنعكس فورياً مع كل فلتر أعلاه — وتظهر هذه البطاقة للمدير فقط.</div>`;
+    }
+  }
 }
+
 function clearSaleFilters(){['saleListSearch','saleFilterFrom','saleFilterTo','saleFilterMonth','saleFilterYear','saleFilterUser'].forEach(id=>{if(q(id))q(id).value=''}); ['saleFilterType','saleFilterCustomer','saleFilterBranch','saleFilterWarehouse','saleFilterPayment'].forEach(id=>{if(q(id))q(id).value=''}); renderSales();}
 function showDueSalesOnly(){if(q('saleFilterPayment'))q('saleFilterPayment').value='due'; renderSales();}
 
