@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0130';
+const APP_BUILD='b20260921-0140';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2280,8 +2280,7 @@ function renderSales(){
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
-  const sl=selectedSaleId?sales.find(x=>x.id===selectedSaleId):null;
-  if(q('selectedSaleInfo')) q('selectedSaleInfo').textContent=sl?`المحدد: ${sl.sale_date} - ${money(sl.total)} ${APP_CONFIG.currency} | النتائج: ${entries.length}`:`النتائج: ${entries.length}`;
+  window.__salesListCount=entries.length; refreshSelectedSaleInfo();
   /* شريط الإجماليات تحت القائمة — للمدير فقط ويتغير تبعاً للفلاتر */
   const bar=q('salesTotalsBar');
   if(bar){
@@ -2348,15 +2347,26 @@ function printSalesList(){
   w.onload=()=>{try{w.focus();w.print();}catch(e){}};
   setTimeout(()=>{try{w.focus();w.print();}catch(e){}},600);
 }
-/* الضغط المزدوج على سطر الفاتورة = مشاهدة (يُحسب يدوياً لأن التحديد يعيد رسم الصف فيقطع حدث dblclick) */
+/* تحديد/مضاعف الضغط على سطر الفاتورة — بلا إعادة رسم للإبقاء على ترتيب الأعمدة الحالي */
 let __lastSaleRowClick={id:null,t:0};
+function refreshSelectedSaleInfo(){
+  const sl=selectedSaleId?sales.find(x=>x.id===selectedSaleId):null;
+  const n=(window.__salesListCount!=null)?window.__salesListCount:[...(q('salesBody')?.querySelectorAll('tr')||[])].filter(r=>r.children.length>1).length;
+  if(q('selectedSaleInfo')) q('selectedSaleInfo').textContent=sl?`المحدد: ${sl.sale_date} - ${money(sl.total)} ${APP_CONFIG.currency} | النتائج: ${n}`:`النتائج: ${n}`;
+}
+function markSaleRowSelectedUi(){
+  const body=q('salesBody'); if(!body) return;
+  [...body.querySelectorAll('tr[data-id]')].forEach(tr=>tr.classList.toggle('selected-row', String(tr.dataset.id)===String(selectedSaleId)));
+}
 function selectSaleRow(id){
   const now=Date.now();
-  if(__lastSaleRowClick.id===id && now-__lastSaleRowClick.t<420){
-    __lastSaleRowClick={id:null,t:0}; viewSaleDetails(id); return;
+  if(__lastSaleRowClick.id===id && now-__lastSaleRowClick.t<600){
+    __lastSaleRowClick={id:null,t:0};
+    selectedSaleId=id; markSaleRowSelectedUi(); refreshSelectedSaleInfo();
+    viewSaleDetails(id); return;
   }
   __lastSaleRowClick={id,t:now};
-  selectedSaleId=id;renderSales();
+  selectedSaleId=id; markSaleRowSelectedUi(); refreshSelectedSaleInfo();
 }
 
 /* ═══════════ (٢) قائمة المرتجعات — تبويب فرعي داخل «فواتير البيع» ═══════════
