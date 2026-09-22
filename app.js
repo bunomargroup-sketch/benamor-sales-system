@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0290';
+const APP_BUILD='b20260921-0300';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -5298,15 +5298,7 @@ async function openPurchaseForEdit(id){
     toast('تم فتح فاتورة الشراء للتعديل');
   }catch(err){console.error(err);toast('خطأ في فتح الفاتورة: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
-async function reversePurchaseEffects(){
-  if(!editingPurchaseId || !originalPurchase) return;
-  // عند تعديل الفاتورة نعكس تأثير المخزون بدون تسجيل حركة وهمية، ثم نحذف حركات الفاتورة القديمة.
-  for(const it of originalPurchaseItems){
-    await adjustStockOnly(originalPurchase.location_id,{product_code:it.product_code,product_name:it.product_name},-Math.abs(Number(it.qty||0)));
-  }
-  await deleteStockMovements('pos_purchases', editingPurchaseId);
-  await api('pos_supplier_ledger',{method:'DELETE',qs:`?reference_table=eq.pos_purchases&reference_id=eq.${editingPurchaseId}`});
-}
+/* ⚙️ متابعة 1b: reversePurchaseEffects أُزيلت — العكس صار داخل update_purchase_transaction الذرّي */
 
 
 q('proformaForm')?.addEventListener('submit',async e=>{
@@ -5335,23 +5327,20 @@ q('purchaseForm').addEventListener('submit', async e=>{
       resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون رقم '+(saved.purchase_no||''),'success'); applyPurchaseLocally(saved, body, items, payment); refreshAfterLocalUpdate();
       return;
     }
-    if(editingPurchaseId){
-      await reversePurchaseEffects();
-      await api('pos_purchases',{method:'PATCH',qs:`?id=eq.${editingPurchaseId}`,body:{...body,updated_at:new Date().toISOString()}});
-      await api('pos_purchase_items',{method:'DELETE',qs:`?purchase_id=eq.${editingPurchaseId}`});
-    }else{
-      const purchase=await api('pos_purchases',{method:'POST',body}); purchaseId=purchase[0].id;
-    }
-    await api('pos_purchase_items',{method:'POST',body:items.map(it=>({...it,purchase_id:purchaseId}))});
-    for(const it of items){ await updateStock(body.location_id,it,purchaseId); }
-    if(total>0){
-      await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',description:body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء',debit:0,credit:total,reference_table:'pos_purchases',reference_id:purchaseId}});
-    }
-    if(purchasePaid>0){
-      await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'payment',description:'دفعة على فاتورة شراء',debit:Math.min(purchasePaid,total),credit:0,reference_table:'pos_purchases',reference_id:purchaseId}});
-      await addFinanceMovement(q('purchaseFinanceAccount')?.value||defaultFinanceAccountFor(purchasePayMethod),'out','supplier_payment',Math.min(purchasePaid,total),body.purchase_date,'pos_purchases',purchaseId,'دفع فاتورة شراء');
-    }
-    const msg=editingPurchaseId?'تم تعديل فاتورة الشراء وتحديث المخزون':'تم حفظ فاتورة الشراء وزيادة المخزون';
+    /* 🔒 متابعة 1b: تعديل فاتورة الشراء الآن نداء RPC ذرّي واحد (0063).
+       كانت 6+ كتابات متتابعة (عكس مخزون بلا حارس/حذف حركات/PATCH/إعادة إدراج/
+       قيدا مورّد/حركة مالية) — انقطاع واحد كان يفسد مخزون وذمة ومالية معاً.
+       الفرع "else" الميت (POST مباشر) أُزيل لأنه غير قابل للوصول بعد مسار
+       الإنشاء الذرّي post_purchase_transaction أعلاه. */
+    await rpc('update_purchase_transaction',{
+      p_purchase_id:editingPurchaseId,
+      p_purchase:body,
+      p_items:items,
+      p_payment:{amount:purchasePaid,payment_method:purchasePayMethod,account_id:(q('purchaseFinanceAccount')?.value||defaultFinanceAccountFor(purchasePayMethod, body.location_id))},
+      p_user_identifier:appUser?.identifier||''
+    });
+    purchaseId=editingPurchaseId;
+    const msg='تم تعديل فاتورة الشراء وتحديث المخزون';
     resetPurchaseForm(); toast(msg); await loadAll();
   }catch(err){console.error(err);toast('خطأ في حفظ فاتورة الشراء: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
