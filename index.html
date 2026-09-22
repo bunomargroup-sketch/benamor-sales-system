@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0320">
+<link rel="stylesheet" href="app.css?v=20260921-0330">
 </head>
 <body class="auth-locked">
   <header>
@@ -367,6 +367,7 @@
               <div class="finish-total"><span>الإجمالي</span><b id="saleFinishTotal">0.00</b><span class="mini" id="saleFinishBalance">المتبقي: 0.00</span><span class="mini">· <span id="saleItemsCountMini">0</span> أصناف</span></div>
               <div class="finish-spacer"></div>
               <div class="finish-actions">
+                <button class="btn secondary hidden" id="saleFinishCancelEditBtn" type="button" onclick="resetSaleFormWithConfirm()">إلغاء التعديل</button>
                 <button class="btn secondary" type="button" onclick="parkCurrentSale()">تعليق</button>
                 <button class="btn secondary" type="button" onclick="resumeParkedSale()">المعلقة</button>
                 <button class="btn secondary" type="button" onclick="resetSaleFormWithConfirm()">فاتورة جديدة</button>
@@ -403,6 +404,7 @@
                 <button class="btn" type="button" onclick="saleSaveMode='new';q('salePrintAfterSave').value='yes';q('saleForm').requestSubmit()">حفظ وطباعة</button>
                 <button class="btn secondary" type="button" onclick="saleSaveMode='close';q('salePrintAfterSave').value='no';q('saleForm').requestSubmit()">حفظ وإغلاق</button>
                 <button class="btn secondary hidden" id="saleCancelEditBtn" type="button" onclick="resetSaleForm()">إلغاء التعديل</button>
+                <button class="btn secondary hidden" id="saleKeepPayBtn" type="button" title="يحفظ التعديل دون المساس بطرق الدفع المسجلة — أي مبالغ مكتوبة في هذه الشاشة تُتجاهل عند ضغطه" onclick="saleSaveMode='close';q('salePrintAfterSave').value='no';keepOriginalPaymentsOnSave=true;q('saleForm').requestSubmit()">⏵ حفظ بنفس طرق الدفع المسجلة</button>
                 <button class="btn hidden" id="saleSubmitBtn" type="submit">حفظ البيع</button>
               </div>
             </div>
@@ -1295,6 +1297,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0320"></script>
+<script src="app.js?v=20260921-0330"></script>
 </body>
 </html>

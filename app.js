@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0320';
+const APP_BUILD='b20260921-0330';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -18,6 +18,7 @@ let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), authSession=JSO
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
 let editingSaleId=null, originalSale=null, originalSaleItems=[];
+let keepOriginalPaymentsOnSave=false; /* ⏵ الزر الجديد: حفظ التعديل بنفس طرق الدفع المسجلة */
 let selectedProductCode=null;
 let productFormMode='create', editingProductCode=null;
 let selectedSaleId=null;
@@ -3722,7 +3723,9 @@ function resetSaleForm(){
   suppressSaleDraftSave=true; saleSupervisorApproved=false; sourcePriceCheckerCartId=null;
   editingSaleId=null; originalSale=null; originalSaleItems=[];
   q('saleForm').reset(); if(q('saleLocation') && appUser?.branch_id) q('saleLocation').value=appUser.branch_id; if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0;} q('saleItemsBody').innerHTML=''; setToday(); ensureSaleInvoiceNo(true); syncSaleInvoiceNoText(); syncSaleWholesaleChip();
-  q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden'); setActivePayInput(q('saleCashAmount')); renderSaleStockInfo(''); renderSaleCustomerInfo(); updateSaleTotal(); suppressSaleDraftSave=false; setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
+  q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden');
+  q('saleKeepPayBtn')?.classList.add('hidden'); q('saleFinishCancelEditBtn')?.classList.add('hidden');
+  keepOriginalPaymentsOnSave=false; if(q('salePaymentDetected'))q('salePaymentDetected').textContent='طريقة الدفع تحفظ تلقائيًا حسب المبالغ المدخلة'; setActivePayInput(q('saleCashAmount')); renderSaleStockInfo(''); renderSaleCustomerInfo(); updateSaleTotal(); suppressSaleDraftSave=false; setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
 }
 async function openSaleForEdit(id){
   const role=currentRole?.role;
@@ -3745,6 +3748,12 @@ async function openSaleForEdit(id){
     if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0; salePayments.filter(p=>p.sale_id===id).forEach(p=>{if(p.payment_method==='cash')q('saleCashAmount').value=Number(p.amount||0); if(p.payment_method==='bank_transfer')q('saleBankAmount').value=Number(p.amount||0); if(p.payment_method==='card')q('saleCardAmount').value=Number(p.amount||0);});}
     q('saleItemsBody').innerHTML=''; rows.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount,discount_text:it.discount_text}));
     updateSaleTotal(); refreshSaleAvailability(); q('saleSubmitBtn').textContent='حفظ تعديل البيع وتحديث المخزون'; q('saleCancelEditBtn').classList.remove('hidden'); q('saleEditAlert')?.classList.remove('hidden');
+    q('saleKeepPayBtn')?.classList.remove('hidden'); q('saleFinishCancelEditBtn')?.classList.remove('hidden');
+    /* (طلب المالك) قدّم طرق الدفع المسجلة داخل شاشة الدفع عند التعديل */
+    if(q('salePaymentDetected')){
+      const reg=(salePayments||[]).filter(p=>p.sale_id===id).map(p=>typeLabel(p.payment_method)+': '+money(p.amount)).join(' · ');
+      q('salePaymentDetected').textContent=reg?('طرق الدفع المسجلة حالياً: '+reg+' — عدّل المبالغ عند الحاجة، وزر «نفس طرق الدفع» يحفظ بدونها'):'لا توجد مدفوعات مسجلة بعد لهذه الفاتورة';
+    }
     toast('تم فتح فاتورة البيع للتعديل');
   }catch(err){console.error(err);toast('خطأ في فتح فاتورة البيع: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
@@ -3985,8 +3994,34 @@ async function viewSaleDetails(id){
     const linkedReturns=saleReturns.filter(r=>String(r.sale_id)===String(id));
     renderSaleViewDetailsData(sl,items,linkedReturns);
     q('saleViewDetailsModal').classList.add('show'); modalToTop(q('saleViewDetailsModal'));
+    /* (طلب المالك) سجل التعديلات داخل الفاتورة نفسها — من الخادم */
+    if(!offline) fillSaleEditLog(id).catch(e=>console.warn('edit log',e));
   }catch(err){console.error(err);toast('خطأ في فتح المشاهدة: '+friendlyError(err),'error')}
   finally{showLoading(false)}
+}
+async function fillSaleEditLog(saleId){
+  q('svdBody')?.insertAdjacentHTML('beforeend',`<div id="svdEditLog" style="margin-top:12px"><h3 style="font-size:14px;margin:0 0 6px">📝 سجل التعديلات والدفعات</h3><div id="svdEditLogBody" class="mini">يجلب…</div></div>`);
+  const rows=await api('pos_audit_log',{qs:`?select=created_at,user_identifier,action,details&entity_type=eq.pos_sales&entity_id=eq.${saleId}&order=created_at.desc&limit=30`});
+  const el=q('svdEditLogBody'); if(!el)return;
+  const fmt=ts=>{try{return new Date(ts).toLocaleString('ar', {dateStyle:'short',timeStyle:'short'})}catch(e){return ts}};
+  const summarize=(r)=>{
+    if(r.action==='sale_edit'&&r.details&&typeof r.details==='object'){
+      const d=r.details; const parts=[];
+      if(Number(d.old_total)!==Number(d.new_total))parts.push(`الإجمالي ${money(Number(d.old_total||0))} → ${money(Number(d.new_total||0))}`);
+      if(Number(d.old_items)!==Number(d.new_items))parts.push(`الأصناف ${d.old_items} → ${d.new_items}`);
+      parts.push(`المدفوع ${money(Number(d.old_paid||0))} → ${money(Number(d.new_paid||0))}`);
+      if(d.payments_kept)parts.push('(أُبقيت طرق الدفع المسجلة)');
+      return parts.join(' · ');
+    }
+    if(r.action==='sale_payment_delete'&&r.details&&typeof r.details==='object'){const d=r.details;return `حذف دفعة ${money(Number(d.amount||0))} (${d.method||''} — ${d.date||''})`;}
+    if(r.action==='invoice_payment'){return 'تحصيل دفعة على الفاتورة';}
+    if(r.action==='sale'){return typeof r.details==='string'?'إنشاء الفاتورة — '+r.details:'إنشاء الفاتورة';}
+    return String(typeof r.details==='string'?r.details:(r.action||''));
+  };
+  const interesting=(rows||[]).filter(r=>['sale_edit','sale_payment_delete','invoice_payment','sale'].includes(r.action));
+  el.innerHTML=interesting.length
+    ?interesting.map(r=>`<div style="display:flex;gap:8px;border-bottom:1px dashed var(--border);padding:3px 0"><span class="ltr">${fmt(r.created_at)}</span><b>${esc(r.user_identifier||'—')}</b><span>${esc(summarize(r))}</span></div>`).join('')
+    :'لا توجد سجلات لهذه الفاتورة بعد.';
 }
 function svdLine(lbl,val,cls){return `<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--border);padding:4px 0"><span>${lbl}</span><b class="${cls||''}">${val}</b></div>`}
 function renderSaleViewDetailsData(sl,items,linkedReturns){
@@ -5152,7 +5187,15 @@ q('saleForm').addEventListener('submit', async e=>{
   const location_id=canSelectSaleBranch() ? q('saleLocation').value : (appUser?.branch_id || q('saleLocation').value); if(q('saleLocation') && location_id) q('saleLocation').value=location_id; if(!location_id){toast('اختر فرع البيع','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   updateSaleTotal();
   const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=moneyVal(q('saleDiscount').value); const total=subtotal-discount;
-  const payRows=getSalePaymentBreakdown(); const rawPaid=payRows.reduce((a,x)=>a+Number(x.amount||0),0); const isRefundInvoice=total<0; const refundRequired=Math.abs(total);
+  const payRows=getSalePaymentBreakdown(); let rawPaid=payRows.reduce((a,x)=>a+Number(x.amount||0),0); const isRefundInvoice=total<0; const refundRequired=Math.abs(total);
+  /* ⏵ «حفظ بنفس طرق الدفع المسجلة» (تعديل فقط): ما كُتب في مربعات الشاشة يُتجاهل
+     وتُحسب الفاتورة كأن الدفعات القديمة هي المدخلات — والخادم لا يمسّها أصلاً (0065) */
+  const keepOriginalPayments=!!editingSaleId && keepOriginalPaymentsOnSave; keepOriginalPaymentsOnSave=false;
+  if(keepOriginalPayments){
+    payRows.length=0;
+    payRows.push(...((salePayments||[]).filter(p=>p.sale_id===editingSaleId).map(p=>({payment_method:p.payment_method,amount:Number(p.amount||0)}))));
+    rawPaid=payRows.reduce((a,x)=>a+x.amount,0);
+  }
   if(isRefundInvoice){
     /* 🔴 إغلاق باب «المرتجع بفاتورة سالبة»: الخادم يرفضه في البيع الجديد أصلاً
        (NEGATIVE_OR_ZERO_SALE_QTY / DISCOUNT_EXCEEDS_SUBTOTAL) — وهنا نمنعه مبكراً
@@ -5230,11 +5273,12 @@ q('saleForm').addEventListener('submit', async e=>{
       p_sale_id:editingSaleId,
       p_sale:body,
       p_items:items,
-      p_payments:payRows.map(r=>({...r,account_id:defaultAccountFor(r.payment_method,location_id),notes:''})),
-      p_user_identifier:appUser?.identifier||''
+      p_payments:keepOriginalPayments?[]:payRows.map(r=>({...r,account_id:defaultAccountFor(r.payment_method,location_id),notes:''})),
+      p_user_identifier:appUser?.identifier||'',
+      p_keep_original_payments:keepOriginalPayments /* TRUE = لا تمسّ الدفعات المسجلة بتاتاً (0065) */
     });
     saleId=updated.id; body.invoice_no=updated.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||''; syncSaleInvoiceNoText();
-    await logAction('sale_edit','pos_sales',saleId,`${body.invoice_no||saleId.slice(0,8)} - ${money(body.total)} ${APP_CONFIG.currency} - تعديل بواسطة ${appUser?.identifier||''}`);
+    /* ⚙️ أُزيلت logAction('sale_edit') من العميل: 0065 يسطر التدقيق من الخادم بتفاصيل أغنى (سجل التعديلات داخل الفاتورة) */
     const msg='تم تعديل فاتورة البيع وتحديث المخزون';
     const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); resetSaleForm(); await refreshSalesDomain(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
   }catch(err){console.error(err);toast('خطأ في حفظ البيع: '+friendlyError(err),'error')}
