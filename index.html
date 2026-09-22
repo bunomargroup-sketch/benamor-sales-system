@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0330">
+<link rel="stylesheet" href="app.css?v=20260921-0340">
 </head>
 <body class="auth-locked">
   <header>
@@ -280,6 +280,11 @@
           </form>
         </div>
         <div class="panel"><h2>آخر الدفعات</h2><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>المورد</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead><tbody id="paymentsBody"></tbody></table></div></div>
+        <div class="panel">
+          <div class="tools"><h2>دفعات الزبائن</h2><input id="custPaymentsSearch" placeholder="🔍 ابحث بالزبون أو رقم الفاتورة…" style="max-width:340px" oninput="renderCustomerPaymentsList()"></div>
+          <p class="muted">آخر 300 دفعة على فواتير البيع. التعديل والحذف للمدير فقط وتنعكس تلقائياً على الخزينة بتاريخ الدفعة ورصيد الفاتورة وكشف الزبون.</p>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الزبون</th><th>الفاتورة</th><th>الطريقة</th><th>المبلغ</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="customerPaymentsBody"></tbody></table></div>
+        </div>
       </section>
 
 
@@ -1297,6 +1302,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0330"></script>
+<script src="app.js?v=20260921-0340"></script>
 </body>
 </html>

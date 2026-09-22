@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0330';
+const APP_BUILD='b20260921-0340';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -791,7 +791,7 @@ async function loadAll(){
   finally{showLoading(false);window.__busy=false}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderSales();renderReturns();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();renderProductOptionSettings();refreshAuditLog();renderComposites();renderStockCount();renderExpensesList();applyPermissions();setTimeout(setupTableSorting,0)}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderCustomerPaymentsList();renderSales();renderReturns();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();renderProductOptionSettings();refreshAuditLog();renderComposites();renderStockCount();renderExpensesList();applyPermissions();setTimeout(setupTableSorting,0)}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -2154,6 +2154,93 @@ function renderLedger(){
   q('ledgerBalance').textContent=money(bal); q('ledgerStatus').innerHTML=badgeStatus(bal);
   q('ledgerBody').innerHTML = sid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا المورد.</td></tr>') : '<tr><td colspan="6">اختر المورد أولاً.</td></tr>';
 }
+/* ═══ قائمة دفعات الزبائن (طلب المالك): عرض آخر 300 + تعديل/حذف للمدير عبر RPC ذرّية ═══ */
+function paymentSale(p){return sales.find(x=>x.id===p.sale_id);}
+function renderCustomerPaymentsList(){
+  const body=q('customerPaymentsBody'); if(!body)return;
+  const term=(q('custPaymentsSearch')?.value||'').trim().toLowerCase();
+  const isAdmin=currentRole?.role==='admin';
+  let rows=(salePayments||[]).slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||new Date(b.created_at||0)-new Date(a.created_at||0));
+  if(term) rows=rows.filter(p=>{
+    const sl=paymentSale(p), c=customers.find(x=>x.id===sl?.customer_id);
+    return [c?.name,String(sl?.invoice_no||''),('فاتورة '+String(sl?.invoice_no||''))].filter(Boolean).join(' ').toLowerCase().includes(term)
+        || String(sl?.id||'').startsWith(term);
+  });
+  const capped=rows.slice(0,300);
+  body.innerHTML=capped.map(p=>{
+    const sl=paymentSale(p), c=customers.find(x=>x.id===sl?.customer_id);
+    const inv=sl?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="viewSaleDetails('${sl.id}')"><span class="ltr">${esc(sl.invoice_no||String(sl.id).slice(0,8))}</span></button>`:'—';
+    const tools=isAdmin
+      ?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openCustomerPaymentEdit('${p.id}')">✏️</button>
+        <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteCustomerPaymentAdmin('${p.id}')">🗑</button>`:'';
+    /* الطريقة بلا لون (قاعدة النظام) */
+    return `<tr><td>${esc(p.payment_date||'')}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${inv}</td><td>${esc(typeLabel(p.payment_method))}</td><td class="amount"><b>${money(p.amount)}</b></td><td class="mini">${esc(p.notes||'')}</td><td style="white-space:nowrap">${tools}</td></tr>`;
+  }).join('') || '<tr><td colspan="7">لا توجد دفعات زبائن مسجلة بعد.</td></tr>';
+}
+/* حساب الدفعة المالية القديم الناتج من الحركة (pos_finance_movements يحتفظ بالمرجع) */
+function findPaymentAccount(p){
+  return (financeMovements||[]).find(m=>m.reference_table==='pos_sales'&&m.reference_id===p.sale_id&&m.movement_type==='sale_payment'&&m.direction==='in'
+    &&Number(m.amount)===Number(p.amount)&&String(m.movement_date||'').slice(0,10)===String(p.payment_date||'').slice(0,10))?.account_id||'';
+}
+let customerPaymentEditId=null;
+function ensureCustomerPaymentEditModal(){
+  if(q('customerPaymentEditModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='customerPaymentEditModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:460px">
+    <div class="modal-head"><div><h2 style="margin:0">✏️ تعديل دفعة زبون</h2><div class="mini" id="cpeSub">—</div></div><button class="btn secondary" type="button" onclick="q('customerPaymentEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="grid" style="gap:10px;margin-top:8px">
+      <div><label>المبلغ</label><input id="cpeAmount" type="text" inputmode="decimal" class="ltr" style="text-align:center"></div>
+      <div><label>الطريقة</label><select id="cpeMethod" onchange="cpeFillAccounts()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
+      <div><label>التاريخ</label><input id="cpeDate" type="date" class="ltr"></div>
+      <div><label>الحساب المالي</label><select id="cpeAccount"></select></div>
+      <div style="grid-column:1/-1"><label>ملاحظات</label><input id="cpeNotes" placeholder="اختياري"></div>
+      <div class="mini">يُعكس أثرها على الخزينة بتاريخ الدفعة الجديد، ويُعاد حساب المتبقي على الفاتورة ورصيد الزبون تلقائياً.</div>
+      <div class="row"><button class="btn" type="button" onclick="saveCustomerPaymentEdit()">💾 حفظ</button><button class="btn secondary" type="button" onclick="q('customerPaymentEditModal').classList.remove('show')">إلغاء</button></div>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
+function cpeFillAccounts(){
+  if(q('cpeAccount')) q('cpeAccount').innerHTML=financeAccountOptionsFor(q('cpeMethod')?.value||'cash','اختر الحساب');
+}
+function openCustomerPaymentEdit(paymentId){
+  if(currentRole?.role!=='admin'){toast('تعديل الدفعات للمدير فقط','warn');return;}
+  const p=(salePayments||[]).find(x=>x.id===paymentId); if(!p){toast('الدفعة غير موجودة','warn');return;}
+  ensureCustomerPaymentEditModal();
+  customerPaymentEditId=paymentId;
+  const sl=paymentSale(p), c=customers.find(x=>x.id===sl?.customer_id);
+  q('cpeSub').textContent=`${c?.name||'زبون نقدي'} — فاتورة ${sl?.invoice_no||''} — المبلغ الحالي ${money(p.amount)}`;
+  q('cpeAmount').value=Number(p.amount||0);
+  q('cpeMethod').value=p.payment_method||'cash'; cpeFillAccounts();
+  const acc=findPaymentAccount(p); if(acc && [...q('cpeAccount').options].some(o=>o.value===acc)) q('cpeAccount').value=acc;
+  q('cpeDate').value=p.payment_date||''; q('cpeNotes').value=p.notes||'';
+  q('customerPaymentEditModal').classList.add('show');
+}
+async function saveCustomerPaymentEdit(){
+  try{
+    showLoading(true);
+    const body={p_payment_id:customerPaymentEditId,p_amount:moneyVal(q('cpeAmount').value),p_payment_method:q('cpeMethod').value,p_payment_date:q('cpeDate').value||null,p_account_id:q('cpeAccount').value||null,p_notes:q('cpeNotes').value.trim()||null,p_user_identifier:appUser?.identifier||''};
+    const res=await rpc('admin_update_sale_payment',body);
+    toast('تم تعديل الدفعة وعكس آثارها','success');
+    q('customerPaymentEditModal').classList.remove('show');
+    await loadAll(); renderCustomerPaymentsList();
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
+}
+async function deleteCustomerPaymentAdmin(paymentId){
+  if(currentRole?.role!=='admin'){toast('حذف الدفعات للمدير فقط','warn');return;}
+  const p=(salePayments||[]).find(x=>x.id===paymentId); if(!p)return;
+  const sl=paymentSale(p), c=customers.find(x=>x.id===sl?.customer_id);
+  if(!confirm(`حذف نهائي للدفعة: ${money(p.amount)} ${APP_CONFIG.currency} — ${c?.name||''} (فاتورة ${sl?.invoice_no||''} — ${p.payment_date||''})؟\nيُعاد المبلغ إلى رصيد الفاتورة وكشف الزبون وتُعكس الحركة من الخزينة — لا رجوع.`))return;
+  try{
+    showLoading(true);
+    await rpc('admin_delete_sale_payment',{p_payment_id:paymentId,p_user_identifier:appUser?.identifier||''});
+    toast('حُذفت الدفعة وعُكسَت آثارها','success');
+    await loadAll(); renderCustomerPaymentsList();
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
+}
+
 function renderPayments(){
   q('paymentsBody').innerHTML = payments.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);return `<tr><td>${esc(p.payment_date)}</td><td>${esc(s?.name||'')}</td><td><b>${money(p.amount)}</b></td><td>${esc(typeLabel(p.payment_method))}</td><td>${esc(p.notes||'')}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد دفعات بعد.</td></tr>';
 }
