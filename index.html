@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0260">
+<link rel="stylesheet" href="app.css?v=20260921-0290">
 </head>
 <body class="auth-locked">
   <header>
@@ -34,7 +34,7 @@
       <button class="active" data-tab="dashboard"><i class="ti ti-layout-dashboard"></i><span>الرئيسية</span></button>
 
       <div class="nav-group">المبيعات</div>
-      <button data-tab="sales"><i class="ti ti-shopping-cart"></i><span>البيع اليومي</span></button>
+      <button data-tab="sales"><i class="ti ti-shopping-cart"></i><span>فاتورة جديدة</span></button>
       <button data-tab="salesList"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
       <button data-tab="proformas"><i class="ti ti-file-description"></i><span>الفواتير المبدئية</span></button>
       <button data-tab="customers"><i class="ti ti-users"></i><span>الزبائن والديون</span></button>
@@ -92,7 +92,7 @@
         </div>
         <div class="panel">
           <h2>ملخص سريع</h2>
-          <p class="muted">هذه النسخة تشمل المنتجات، الموردين، فواتير الشراء، التحويلات، البيع اليومي، وطباعة فاتورة عربية.</p>
+          <p class="muted">هذه النسخة تشمل المنتجات، الموردين، فواتير الشراء، التحويلات، إنشاء فاتورة جديدة، وطباعة فاتورة عربية.</p>
           <div class="quick-board">
             <div class="quick-group">
               <h2><i class="ti ti-shopping-cart"></i> البيع</h2>
@@ -437,7 +437,7 @@
             <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
           </div>
-          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>هامش</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
           <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
           </div>
 
@@ -1028,12 +1028,12 @@
 
           <div id="stockCountEditor">
             <div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
-              <select id="stockCountLocation" onchange="renderStockCount()" style="min-width:210px"></select>
+              <select id="stockCountLocation" onchange="stockCountBranchChanged(this)" style="min-width:210px"></select>
               <input id="stockCountSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderStockCount()" style="max-width:300px">
               <select id="stockCountCategory" onchange="renderStockCount()" style="min-width:170px"><option value="">كل التصنيفات</option></select>
-              <button class="btn secondary" type="button" onclick="openStockCountPicker()" title="نافذة بحث الأصناف للقفز إلى سطر الجرد">🔎 بحث في الجرد <b class="kbd">F3</b></button>
+              <button class="btn secondary" type="button" onclick="openStockCountPicker()" title="نافذة بحث الأصناف للقفز إلى سطر الجرد">🔎 إضافة صنف للجرد <b class="kbd">F3</b></button>
             </div>
-            <p class="muted">اختر الفرع/المخزن وأدخل الكمية الفعلية المعدودة لكل صنف. «قيمة الفرق» = الفرق × تكلفة الصنف الحالية. يمكنك حفظ القائمة دون تسوية، أو تسوية الفروقات مباشرة على المخزون.</p>
+            <p class="muted">الجرد يبدأ <b>بقائمة فارغة</b>: اختر الفرع/المخزن، أضف الأصناف من نافذة البحث F3 (أو من قائمة الزر الأيمن على المنتج في شاشة المنتجات)، ثم أدخل الكمية المعدودة. المخزون الظاهر يُقرأ حيّاً من المنظومة. «قيمة الفرق» = الفرق × تكلفة الصنف الحالية. يمكنك حفظ القائمة دون تسوية، أو تسوية الفروقات مباشرة على المخزون.</p>
             <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المخزون</th><th>التكلفة</th><th>المعدود</th><th>الفرق</th><th>قيمة الفرق</th></tr></thead><tbody id="stockCountBody"></tbody></table></div>
             <div id="stockCountTotals" class="card" style="margin-top:10px;font-size:14px"></div>
             <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
@@ -1291,6 +1291,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0260"></script>
+<script src="app.js?v=20260921-0290"></script>
 </body>
 </html>
