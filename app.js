@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0310';
+const APP_BUILD='b20260921-0320';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -952,6 +952,7 @@ function tidyNavGroups(){
 }
 function canSelectSaleBranch(){return currentRole?.role==='admin'||currentRole?.role==='sales_purchase'}
 function applyPermissions(){
+  const _dup=q('dupPaymentsBtn'); if(_dup)_dup.classList.toggle('hidden',currentRole?.role!=='admin');
   if(!appUser?.id){updateAuthUI();return;}
   currentRole=getUserRole()||currentRole||{role:'viewer'}; updateAuthUI();
   document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.style.display=canTab(b.dataset.tab)?'block':'none'});
@@ -1979,10 +1980,128 @@ function renderCustomerLedger(){
   const cid=q('customerLedgerCustomer')?.value||'';
   const rows=customerLedger.filter(l=>l.customer_id===cid).sort((a,b)=> new Date(a.entry_date+'T00:00:00')-new Date(b.entry_date+'T00:00:00') || new Date(a.created_at)-new Date(b.created_at));
   let running=0;
-  const rendered=rows.map(l=>{running += Number(l.debit||0)-Number(l.credit||0); return `<tr><td>${esc(l.entry_date)}</td><td>${esc(typeLabel(l.entry_type))}</td><td>${esc(l.description||'')}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
+  const isAdminL=currentRole?.role==='admin';
+  const rendered=rows.map(l=>{running += Number(l.debit||0)-Number(l.credit||0);
+    /* زر تعديل الرصيد الافتتاحي — جاء من المنظومة القديمة أو من نموذج الإضافة، طلب المالك إمكانية تعديله */
+    const openBtn=(l.entry_type==='opening'&&isAdminL)
+      ?` <button class="btn secondary" type="button" style="padding:2px 7px" title="تعديل الرصيد الافتتاحي" onclick="openOpeningEditModal('${l.customer_id}')">✏️</button>`:'';
+    return `<tr><td>${esc(l.entry_date)}</td><td>${esc(typeLabel(l.entry_type))}</td><td>${esc(l.description||'')}${openBtn}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
   const bal=rows.reduce((a,l)=>a+Number(l.debit||0)-Number(l.credit||0),0);
   q('customerLedgerBalance').textContent=money(bal); q('customerLedgerStatus').innerHTML=badgeCustomer(bal);
   q('customerLedgerBody').innerHTML = cid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا الزبون.</td></tr>') : '<tr><td colspan="6">اختر الزبون أولاً.</td></tr>';
+}
+
+/* ═══ تعديل الرصيد الافتتاحي للزبون (المدير فقط، عبر set_customer_opening_balance الذرّية) ═══ */
+let openingEditCustomerId=null;
+function ensureOpeningEditModal(){
+  if(q('openingEditModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='openingEditModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:420px">
+    <div class="modal-head"><div><h2 style="margin:0">✏️ تعديل الرصيد الافتتاحي</h2><div class="mini" id="obSub">—</div></div><button class="btn secondary" type="button" onclick="q('openingEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="grid" style="gap:10px;margin-top:8px">
+      <div><label>المبلغ</label><input id="obAmount" type="text" inputmode="decimal" class="ltr" style="text-align:center"></div>
+      <div><label>الجهة</label><select id="obDirection"><option value="debit">على الزبون (مدين)</option><option value="credit">للزبون رصيد عندنا (دائن)</option></select></div>
+      <div><label>التاريخ</label><input id="obDate" type="date" class="ltr"></div>
+      <div class="mini">مبلغ صفر يحذف الرصيد الافتتاحي نهائياً. النافذة تستبدل كل صفوف الافتتاحي القديمة بصف واحد نظيف.</div>
+      <div class="row"><button class="btn" type="button" onclick="saveOpeningBalance()">💾 حفظ</button><button class="btn secondary" type="button" onclick="q('openingEditModal').classList.remove('show')">إلغاء</button></div>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
+async function openOpeningEditModal(customerId){
+  if(currentRole?.role!=='admin'){toast('تعديل الرصيد الافتتاحي للمدير فقط','warn');return;}
+  const c=customers.find(x=>x.id===customerId)||(await api('pos_customers',{qs:`?select=id,name,customer_no&limit=1&id=eq.${customerId}`}))?.[0];
+  if(!c){toast('الزبون غير موجود','warn');return;}
+  if(String(c.customer_no||'')==='9999'||c.name==='الزبون'){toast('رصيد زبون الكاش العام لا يعدّل من هنا','warn');return;}
+  ensureOpeningEditModal();
+  openingEditCustomerId=customerId;
+  const ops=(customerLedger||[]).filter(l=>l.customer_id===customerId&&l.entry_type==='opening');
+  q('obSub').textContent='الزبون: '+(c.name||'')+(ops.length?' — الرصيد الحالي: '+money(ops.reduce((a,l)=>a+Number(l.debit||0)-Number(l.credit||0),0)):' — لا يوجد رصيد افتتاحي بعد');
+  const net=ops.reduce((a,l)=>a+Number(l.debit||0)-Number(l.credit||0),0);
+  q('obAmount').value=ops.length?Math.abs(net):0; q('obDirection').value=net<0?'credit':'debit';
+  q('obDate').value=ops[0]?.entry_date||new Date().toISOString().slice(0,10);
+  q('openingEditModal').classList.add('show');
+}
+async function saveOpeningBalance(){
+  try{
+    showLoading(true);
+    const {ok,data}=await rpc('set_customer_opening_balance',{p_customer_id:openingEditCustomerId,p_amount:moneyVal(q('obAmount').value)||0,p_direction:q('obDirection').value,p_date:q('obDate').value||null,p_user_identifier:appUser?.identifier||''});
+    if(!ok)throw new Error(data||'فشل التعديل');
+    toast('تم حفظ الرصيد الافتتاحي','success');
+    q('openingEditModal').classList.remove('show');
+    const cid=openingEditCustomerId; await loadAll();
+    if(cid) openCustomerLedger(cid);
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
+}
+
+/* ═══ منظف الدفعات المكررة (قديم/جديد): عرض مقترح فقط + حذف فردي عبر admin_delete_sale_payment ═══ */
+function detectDuplicatePayments(){
+  const isMig=s=>/old_(ticket_)?id=/i.test(String(s?.notes||''));
+  const byKA=new Map();
+  for(const p of (salePayments||[])){
+    const sl=sales.find(x=>x.id===p.sale_id); if(!sl||!sl.customer_id) continue;
+    const k=sl.customer_id+'|'+Number(p.amount||0).toFixed(3);
+    const a=byKA.get(k)||[]; a.push({p,sl,mig:isMig(sl)}); byKA.set(k,a);
+  }
+  const out=[];
+  for(const [,a] of byKA){
+    const mig=a.filter(r=>r.mig), nwe=a.filter(r=>!r.mig);
+    for(const m of mig)for(const n of nwe){
+      const d=Math.abs(new Date(m.p.payment_date)-new Date(n.p.payment_date))/864e5;
+      if(d<=3) out.push({amount:Number(m.p.amount||0),cust:m.sl.customer_id,mig:m,nw:n});
+    }
+  }
+  return out;
+}
+let dupPaymentsCache=[];
+function ensureDupPaymentsModal(){
+  if(q('dupPaymentsModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='dupPaymentsModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(760px,96vw)">
+    <div class="modal-head"><div><h2 style="margin:0">🔍 دفعات مشتبه بتكرارها</h2><div class="mini">نفس الزبون ونفس المبلغ وبفارق ≤ 3 أيام — واحدة من فاتورة مهاجرة (old) وواحدة من فاتورة جديدة. احذف النسخة التي لا تريد إبقاءها.</div></div><button class="btn secondary" type="button" onclick="q('dupPaymentsModal').classList.remove('show')">إغلاق</button></div>
+    <div class="table-scroll" style="max-height:60vh;margin-top:10px"><table><thead><tr><th>الزبون</th><th>المبلغ</th><th>النسخة المهاجرة 🗄</th><th>النسخة الجديدة ✨</th><th>احذف</th></tr></thead><tbody id="dupPaymentsBody"></tbody></table></div>
+  </div>`;
+  document.body.appendChild(d);
+}
+function renderDupPaymentsList(){
+  const body=q('dupPaymentsBody'); if(!body)return;
+  body.innerHTML=dupPaymentsCache.map((d,i)=>{
+    const c=customers.find(x=>x.id===d.cust);
+    const mrk=(r,label)=>`<div class="mini"><b>${label}</b><br>فاتورة ${esc(r.sl.invoice_no||String(r.sl.id).slice(0,8))} — ${esc(r.p.payment_date||'')}<br><span class="mini">${esc(r.p.payment_method||'')}</span></div>`;
+    return `<tr>
+      <td>${esc(c?.name||d.cust)}</td>
+      <td class="amount"><b>${money(d.amount)}</b></td>
+      <td>${mrk(d.mig,'🗄 قديمة')}</td>
+      <td>${mrk(d.nw,'✨ جديدة')}</td>
+      <td style="white-space:nowrap">
+        <button class="btn danger" type="button" style="padding:3px 8px" onclick="deleteDupePayment(${i},'mig')">حذف القديمة</button>
+        <button class="btn danger" type="button" style="padding:3px 8px" onclick="deleteDupePayment(${i},'nw')">حذف الجديدة</button>
+      </td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5">لا توجد دفعات مشتبه بتكرارها مبدئياً — هذا كشف اقتراحي فقط، لا يحذف شيئاً إلا بضغطك على زر.</td></tr>';
+}
+function openDupPaymentsModal(){
+  if(currentRole?.role!=='admin'){toast('هذه الأداة للمدير فقط','warn');return;}
+  ensureDupPaymentsModal();
+  try{ dupPaymentsCache=detectDuplicatePayments(); }catch(e){ console.warn(e); dupPaymentsCache=[]; }
+  renderDupPaymentsList();
+  q('dupPaymentsModal').classList.add('show');
+}
+async function deleteDupePayment(i,side){
+  const d=dupPaymentsCache[i]; if(!d)return;
+  const r=d[side==='mig'?'mig':'nw']; if(!r)return;
+  const c=customers.find(x=>x.id===d.cust);
+  if(!confirm(`حذف نهائي للدفعة: ${money(r.p.amount)} ${APP_CONFIG.currency} من ${c?.name||''} (فاتورة ${r.sl.invoice_no||String(r.sl.id).slice(0,8)})؟\nسيُعاد المبلغ إلى رصيد الفاتورة والزبون وتُعكس الحركة المالية — لا رجوع.`))return;
+  try{
+    showLoading(true);
+    const {ok,data}=await rpc('admin_delete_sale_payment',{p_payment_id:r.p.id,p_user_identifier:appUser?.identifier||''});
+    if(!ok)throw new Error(data||'فشل الحذف');
+    toast('حُذفت الدفعة وعُكسَت آثارها بالكامل','success');
+    await loadAll();
+    dupPaymentsCache=detectDuplicatePayments(); renderDupPaymentsList();
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
 }
 
 function fillSupplierSelects(){
