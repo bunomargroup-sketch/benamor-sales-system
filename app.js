@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0260';
+const APP_BUILD='b20260921-0290';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -96,7 +96,7 @@ function validateAccountingForSale(items,total,payRows,balanceDue){
     lines.push(AccountingIntegrity.line('Sales_Returns',absTotal,0));
     payRows.forEach(r=>lines.push(AccountingIntegrity.line(AccountingIntegrity.paymentAccount(r.payment_method),0,r.amount)));
   }
-  const cogs=items.reduce((a,it)=>a+(productCost(it.product_code)*Number(it.qty||0)),0);
+  const cogs=items.reduce((a,it)=>a+(Number(it.qty||0)*saleLineCost(it)),0);
   if(cogs>0){lines.push(AccountingIntegrity.line('COGS_Expense',cogs,0)); lines.push(AccountingIntegrity.line('Inventory_Asset',0,cogs));}
   if(cogs<0){lines.push(AccountingIntegrity.line('Inventory_Asset',Math.abs(cogs),0)); lines.push(AccountingIntegrity.line('COGS_Expense',0,Math.abs(cogs)));}
   return AccountingIntegrity.validate({type:'SALE',lines});
@@ -2204,6 +2204,8 @@ function fillSaleListFilterOptions(){
   keep('saleFilterCustomer','<option value="">كل الزبائن</option>'+customers.map(c=>`<option value="${c.id}">${esc(c.name)}${c.phone?' - '+esc(c.phone):''}</option>`).join(''));
   keep('saleFilterBranch','<option value="">كل الفروع</option>'+locations.filter(l=>l.is_sales_location||l.location_type==='branch').map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join(''));
   keep('saleFilterWarehouse','<option value="">كل المخازن / غير مطبق</option>'+locations.filter(l=>l.location_type==='warehouse').map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join(''));
+  const mf=q('saleFilterMonth');
+  if(mf && !mf.dataset.once){ mf.dataset.once='1'; if(!mf.value) mf.value=new Date().toISOString().slice(0,7); /* افتراضي: فواتير الشهر الحالي — امسحه لعرض كل التاريخ */ }
 }
 function salePaymentStatus(sl){
   const total=Number(sl.total||0), paid=Number(sl.paid_amount||0), due=Number(sl.balance_due||0);
@@ -2258,7 +2260,7 @@ function saleListRowHtml(sl){
   const safe=String(sl.id).replace(/'/g,"\\'"); const st=salePaymentStatus(sl);
   const badge=st==='paid'?'<span class="chip paid">مدفوعة</span>':(st==='partial'?'<span class="chip partial">مدفوعة جزئيًا</span>':'<span class="chip due">غير مدفوعة</span>');
   const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
-  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(ctx.payMap?.get(sl.id)||paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td style="white-space:nowrap">${!sl.offline_pending?`<button class="btn secondary" type="button" style="padding:4px 8px" title="إرجاع على هذه الفاتورة — يفتح فاتورة إرجاع جديدة لها" onclick="event.stopPropagation();openSaleReturn('${safe}')">↩ إرجاع</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
+  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(ctx.payMap?.get(sl.id)||paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td class="amount total">${(()=>{const c=ctx.costBySale?.get(sl.id);return c===undefined?'—':money(Number(sl.total||0)-c);})()}</td><td style="white-space:nowrap">${!sl.offline_pending?`<button class="btn secondary" type="button" style="padding:4px 8px" title="إرجاع على هذه الفاتورة — يفتح فاتورة إرجاع جديدة لها" onclick="event.stopPropagation();openSaleReturn('${safe}')">↩ إرجاع</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
 }
 function returnListRowHtml(r){
   const ctx=window.__salesRenderCtx||{};
@@ -2273,7 +2275,7 @@ function returnListRowHtml(r){
   if(isAdm) act+=` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف فاتورة الإرجاع نهائياً — للمدير فقط" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')">🗑</button>`;
   const osafe=orig?String(orig.id).replace(/'/g,"\\'"):'';
   const noOrig=r.sale_id?'':' <span class="chip due" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
-  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td style="white-space:nowrap">${act||'—'}</td></tr>`;
+  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>—</td><td style="white-space:nowrap">${act||'—'}</td></tr>`;
 }
 /**** تحديث خفيف بعد الحفظ/التعديل: يجلب جداول «البيع والمخزون» المتحركة فقط بدل loadAll الكامل الثقيل — ويُعاد رسم القوائم فوراً — ويشتغل أيضاً كل 60 ثانية آلياً فتظهر فواتير وتعديلات الأجهزة الأخرى دون تحديث الصفحة يدوياً ****/
 async function refreshSalesDomain(o={}){
@@ -2334,16 +2336,19 @@ function renderSales(){
   financeMovements.forEach(mv=>{ if(mv.movement_type==='customer_refund'&&mv.reference_table==='pos_sale_returns'&&!recMap.has(mv.reference_id)){ const t=String(mv.notes||'').match(/المستخدم:\s*([^|-]+)/); recMap.set(mv.reference_id, t?t[1].trim():'—'); } });
   const payMap=new Map();
   salePayments.forEach(p=>{ const cur=payMap.get(p.sale_id); payMap.set(p.sale_id,(cur?cur+' | ':'')+`${typeLabel(p.payment_method)}: ${money(p.amount)} ${APP_CONFIG.currency}`); });
-  window.__salesRenderCtx={saleIdx,custIdx,locIdx,recMap,payMap};
+  const costBySale=new Map();
+  saleItems.forEach(it=>{costBySale.set(it.sale_id,(costBySale.get(it.sale_id)||0)+Number(it.qty||0)*saleLineCost(it));});
+  window.__salesRenderCtx={saleIdx,custIdx,locIdx,recMap,payMap,costBySale};
   const rows=typ==='return'?[]:sales.filter(saleMatchesFilters);
   const rets=showReturns?saleReturns.filter(retListMatchesFilters):[];
   const entries=[...rows.map(sl=>({kind:'sale',date:String(sl.sale_date||''),key:String(sl.invoice_no||String(sl.id).slice(0,8)),sl})),
                  ...rets.map(r=>({kind:'ret',date:String(r.return_date||''),key:String(saleIdx.get(r.sale_id)?.invoice_no||String(r.id).slice(0,8)),r}))];
   entries.sort((a,b)=>{const d=b.date.localeCompare(a.date);return d||b.key.localeCompare(a.key,'ar',{numeric:true});});
-  q('salesBody').innerHTML=entries.map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('') || '<tr><td colspan="9">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
+  q('salesBody').innerHTML=entries.map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('') || '<tr><td colspan="10">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
+  const totalMargin=rows.reduce((a,x)=>a+(Number(x.total||0)-((window.__salesRenderCtx?.costBySale?.get(x.id))||0)),0);
   window.__salesListCount=entries.length; refreshSelectedSaleInfo();
   /* شريط الإجماليات تحت القائمة — للمدير فقط ويتغير تبعاً للفلاتر */
   const bar=q('salesTotalsBar');
@@ -2358,6 +2363,7 @@ function renderSales(){
         ${chip(`↩️ إجمالي فواتير الإرجاع (${rets.length})`,'− '+money(retSum)+' '+cur,true)}
         ${chip('📊 الصافي بعد الإرجاع',money(gross-retSum)+' '+cur)}
         ${chip('🧾 ديون الزبائن (المعروضة)',money(totalDue)+' '+cur,Number(totalDue)>0)}
+        ${chip('💹 إجمالي هامش الفواتير',money(totalMargin)+' '+cur,Number(totalMargin)<0)}
       </div><div class="mini" style="margin-top:4px">القيم تنعكس فورياً مع كل فلتر أعلاه — وتظهر هذه البطاقة للمدير فقط.</div>`;
     }
   }
@@ -3619,17 +3625,7 @@ async function openSaleForEdit(id){
     toast('تم فتح فاتورة البيع للتعديل');
   }catch(err){console.error(err);toast('خطأ في فتح فاتورة البيع: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
-async function reverseSaleEffects(){
-  if(!editingSaleId || !originalSale) return;
-  // عند تعديل فاتورة البيع نرجع المخزون بدون تسجيل حركة مرتجع وهمية، ثم نحذف حركات البيع القديمة.
-  for(const it of originalSaleItems){
-    const comps=compositeItems.filter(ci=>ci.composite_code===it.product_code);
-    if(comps.length){ for(const ci of comps){ await adjustStockOnly(originalSale.location_id,{product_code:ci.component_code,product_name:ci.component_code},Number(it.qty||0)*Number(ci.qty||1)); } }
-    else{ await adjustStockOnly(originalSale.location_id,{product_code:it.product_code,product_name:it.product_name},Number(it.qty||0)); }
-  }
-  await deleteStockMovements('pos_sales', editingSaleId);
-  await api('pos_customer_ledger',{method:'DELETE',qs:`?reference_table=eq.pos_sales&reference_id=eq.${editingSaleId}`});
-}
+/* ⚙️ المرحلة 1: reverseSaleEffects أُزيلت — عكس الأثر صار داخل update_sale_transaction الذرّي */
 let printPreviewPrinting=false;
 function showInAppPrint(html){
   const modal=q('printPreviewModal'), frame=q('printPreviewFrame');
@@ -4583,12 +4579,7 @@ async function addFinanceMovement(account_id,direction,movement_type,amount,date
   if(!(Number(amount)>0)) throw new Error('مبلغ الحركة المالية غير صحيح');
   await api('pos_finance_movements',{method:'POST',body:{account_id,direction,movement_type,amount:Number(amount),movement_date:date,reference_table,reference_id,notes}});
 }
-async function recordSaleFinanceMovements(saleId, location_id, saleDate, payRows, saleTotal=0){
-  const isRefund=Number(saleTotal||0)<0;
-  for(const r of payRows){
-    await addFinanceMovement(defaultAccountFor(r.payment_method,location_id),isRefund?'out':'in',isRefund?'customer_refund':'sale_payment',r.amount,saleDate,'pos_sales',saleId,isRefund?`Customer Refund / استرداد للزبون - فاتورة ${q('saleInvoiceNo')?.value||''}${appUser?.identifier?' - المستخدم: '+appUser.identifier:''}`:`تحصيل فاتورة بيع${appUser?.identifier?' - المستخدم: '+appUser.identifier:''}`,isRefund)
-  }
-}
+/* ⚙️ المرحلة 1: recordSaleFinanceMovements أُزيلت — الحركات المالية للفاتورة تُكتب داخل الـ RPC فقط بلا مسار يدوي */
 function renderFinance(){
   if(!q('financeAccountsBody')) return;
   const cash=financeAccounts.filter(a=>a.account_type==='cash').reduce((x,a)=>x+Number(a.balance||0),0), bank=financeAccounts.filter(a=>a.account_type==='bank').reduce((x,a)=>x+Number(a.balance||0),0), card=financeAccounts.filter(a=>a.account_type==='card').reduce((x,a)=>x+Number(a.balance||0),0);
@@ -5107,25 +5098,21 @@ q('saleForm').addEventListener('submit', async e=>{
       const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); clearActiveSaleDraft(); resetSaleForm(); applySaleLocally(saleId, body, items, paymentsForRpc); refreshAfterLocalUpdate(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
       return;
     }
-    if(editingSaleId){
-      await reverseSaleEffects();
-      await api('pos_sales',{method:'PATCH',qs:`?id=eq.${editingSaleId}`,body:{...body,updated_at:new Date().toISOString()}});
-      await api('pos_sale_items',{method:'DELETE',qs:`?sale_id=eq.${editingSaleId}`});
-      await api('pos_sale_payments',{method:'DELETE',qs:`?sale_id=eq.${editingSaleId}`}).catch(()=>{});
-      await api('pos_finance_movements',{method:'DELETE',qs:`?reference_table=eq.pos_sales&reference_id=eq.${editingSaleId}`}).catch(()=>{});
-    }else{
-      const sale=await api('pos_sales',{method:'POST',body}); saleId=sale[0].id; body.invoice_no=sale[0].invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||''; syncSaleInvoiceNoText();
-    }
-    await api('pos_sale_items',{method:'POST',body:items.map(it=>({...it,sale_id:saleId}))});
-    const paymentsToSave=payRows.map(r=>({...r,sale_id:saleId,payment_date:body.sale_date}));
-    if(paymentsToSave.length) await api('pos_sale_payments',{method:'POST',body:paymentsToSave}).catch(e=>console.warn('sale payments save failed',e));
-    await recordSaleFinanceMovements(saleId, body.location_id, body.sale_date, paymentsToSave, body.total);
-    for(const it of items){ const comps=compositeItems.filter(ci=>ci.composite_code===it.product_code); if(comps.length){ for(const ci of comps){ await adjustStockDoc(location_id,{product_code:ci.component_code,product_name:ci.component_code},-Number(it.qty||0)*Number(ci.qty||1),'sale','pos_sales',saleId,`مكوّنات منتج مركّب ${it.product_code}`); } } else { await adjustStockDoc(location_id,it,-Number(it.qty||0),'sale','pos_sales',saleId,it.qty<0?'مرتجع داخل فاتورة بيع':'فاتورة بيع'); } }
-    if(balance_due>0){
-      await api('pos_customer_ledger',{method:'POST',body:{customer_id,entry_date:body.sale_date,entry_type:'sale',description:body.invoice_no?`فاتورة بيع رقم ${body.invoice_no}`:'فاتورة بيع',debit:balance_due,credit:0,reference_table:'pos_sales',reference_id:saleId}});
-    }
-    if(editingSaleId){ await logAction('sale_edit','pos_sales',saleId,`${body.invoice_no||saleId.slice(0,8)} - ${money(body.total)} ${APP_CONFIG.currency} - تعديل بواسطة ${appUser?.identifier||''}`); }
-    const msg=editingSaleId?'تم تعديل فاتورة البيع وتحديث المخزون':'تم حفظ فاتورة البيع وتحديث المخزون';
+    /* 🔒 المرحلة 1 — قلب الأعمال: تعديل الفاتورة الآن نداء RPC ذرّي واحد.
+       الكتلة القديمة كانت 9 سياقات كتابة متتابعة (عكس مخزون/حذف حركات/PATCH/
+       إعادة إدراج أصناف ومدفوعات ومالية وذمة) — انقطاع واحد كان يفسد الاتساق.
+       كما أُزيل فرع "else" الميت (POST مباشر لإنشاء البيع) لأنه غير قابل للوصول
+       بعد مسار الإنشاء الروتيني post_sale_transaction + طابور اللااتصال. */
+    const updated=await rpc('update_sale_transaction',{
+      p_sale_id:editingSaleId,
+      p_sale:body,
+      p_items:items,
+      p_payments:payRows.map(r=>({...r,account_id:defaultAccountFor(r.payment_method,location_id),notes:''})),
+      p_user_identifier:appUser?.identifier||''
+    });
+    saleId=updated.id; body.invoice_no=updated.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||''; syncSaleInvoiceNoText();
+    await logAction('sale_edit','pos_sales',saleId,`${body.invoice_no||saleId.slice(0,8)} - ${money(body.total)} ${APP_CONFIG.currency} - تعديل بواسطة ${appUser?.identifier||''}`);
+    const msg='تم تعديل فاتورة البيع وتحديث المخزون';
     const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); resetSaleForm(); await refreshSalesDomain(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
   }catch(err){console.error(err);toast('خطأ في حفظ البيع: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false;document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false)}
@@ -5516,6 +5503,11 @@ function productCost(code){
   return result||0;
 }
 
+/* ══════ المرجعية الواحدة لتكلفة البيع: لا حساب تكلفة في أي كود آخر — يقضي على انجراف الربح بين التقرير والتفصيل والقائمة ══════
+   التعريف الرسمي: تكلفة السطر = qty × (unit_cost_at_sale المحفوظ وقت البيع إن كان >0، وإلا productCost الحالية احتياطاً). */
+function saleLineCost(it){const c=Number(it?.unit_cost_at_sale||0); return c>0?c:productCost(it?.product_code);}
+function saleCost(sl){const id=typeof sl==='string'?sl:sl?.id; return (saleItems||[]).filter(x=>x.sale_id===id).reduce((a,it)=>a+Number(it.qty||0)*saleLineCost(it),0);}
+
 function marginValue(code, price){return Number(price||0)-productCost(code)}
 function marginPct(code, price){const cost=productCost(code); return cost?marginValue(code,price)/cost*100:0}
 function marginHtml(code, price){const m=marginValue(code,price), pct=marginPct(code,price); return `<div class="${m>=0?'stock-positive':'stock-negative'}"><b>${money(m)}</b><div class="mini">${money(pct)}%</div></div>`}
@@ -5542,15 +5534,15 @@ function productByCode(code){
 function itemProfitRows(){
   const d=repScopeData();
   const m={};
-  d.fItems.forEach(it=>{const k=it.product_code; const o=m[k]||(m[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0}); o.qty+=Number(it.qty||0); o.sales+=Number(it.line_total||0); o.cost+=productCost(k)*Number(it.qty||0);});
-  d.fRetItems.forEach(it=>{const k=it.product_code; const o=m[k]||(m[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0}); o.qty-=Number(it.qty||0); o.sales-=Number(it.line_total||0); o.cost-=productCost(k)*Number(it.qty||0);});
+  d.fItems.forEach(it=>{const k=it.product_code; const o=m[k]||(m[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0}); o.qty+=Number(it.qty||0); o.sales+=Number(it.line_total||0); o.cost+=Number(it.qty||0)*saleLineCost(it);});
+  d.fRetItems.forEach(it=>{const k=it.product_code; const o=m[k]||(m[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0}); o.qty-=Number(it.qty||0); o.sales-=Number(it.line_total||0); o.cost-=Number(it.qty||0)*saleLineCost(it);});
   return Object.values(m).map(r=>({...r,profit:r.sales-r.cost,margin:r.sales?(r.sales-r.cost)/r.sales*100:0}));
 }
 function customerProfitRows(){
   const d=repScopeData(); const bySale={}; d.fItems.forEach(it=>{(bySale[it.sale_id]||(bySale[it.sale_id]=[])).push(it)}); const m={};
-  d.fSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const k=sl.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.count++; o.sales+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=productCost(it.product_code)*Number(it.qty||0));});
+  d.fSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const k=sl.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.count++; o.sales+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
   const byRet={}; d.fRetItems.forEach(it=>{(byRet[it.return_id]||(byRet[it.return_id]=[])).push(it)});
-  d.fReturns.forEach(r=>{const c=customers.find(x=>x.id===r.customer_id); const k=r.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.sales-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=productCost(it.product_code)*Number(it.qty||0));});
+  d.fReturns.forEach(r=>{const c=customers.find(x=>x.id===r.customer_id); const k=r.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.sales-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));});
   return Object.values(m).map(r=>({...r,profit:r.sales-r.cost}));
 }
 function renderReports(){
@@ -6015,8 +6007,8 @@ function reportContext(){
 }
 function aggregateItemProfit(items, returnItems=[]){
   const map={};
-  items.forEach(it=>{const k=it.product_code; if(!map[k])map[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0,returns:0,profit:0}; map[k].qty+=Number(it.qty||0); map[k].sales+=Number(it.line_total||0); map[k].cost+=productCost(k)*Number(it.qty||0);});
-  returnItems.forEach(it=>{const k=it.product_code; if(!map[k])map[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0,returns:0,profit:0}; map[k].qty-=Number(it.qty||0); map[k].returns+=Number(it.line_total||0); map[k].sales-=Number(it.line_total||0); map[k].cost-=productCost(k)*Number(it.qty||0);});
+  items.forEach(it=>{const k=it.product_code; if(!map[k])map[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0,returns:0,profit:0}; map[k].qty+=Number(it.qty||0); map[k].sales+=Number(it.line_total||0); map[k].cost+=Number(it.qty||0)*saleLineCost(it);});
+  returnItems.forEach(it=>{const k=it.product_code; if(!map[k])map[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0,returns:0,profit:0}; map[k].qty-=Number(it.qty||0); map[k].returns+=Number(it.line_total||0); map[k].sales-=Number(it.line_total||0); map[k].cost-=Number(it.qty||0)*saleLineCost(it);});
   Object.values(map).forEach(r=>{r.profit=r.sales-r.cost; r.margin=r.sales?((r.profit/r.sales)*100):0;});
   return Object.values(map);
 }
@@ -6035,14 +6027,14 @@ function renderReportsDetail(){
   const term=(q('repItemSearch')?.value||'').trim().toLowerCase();
   if(q('repItemProfitBody')) q('repItemProfitBody').innerHTML=itemAgg.filter(r=>!term||[r.code,r.name].join(' ').toLowerCase().includes(term)).sort((a,b)=>b.profit-a.profit).slice(0,200).map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="${r.profit>=0?'profit-positive':'profit-negative'}">${money(r.profit)}</td><td>${money(r.margin)}%</td></tr>`).join('')||'<tr><td colspan="7">لا توجد بيانات.</td></tr>';
   const byCustomer={};
-  ctx.filteredSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const key=sl.customer_id||'cash'; if(!byCustomer[key])byCustomer[key]={name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,profit:0,balance:Number(c?.balance||0)}; byCustomer[key].count++; byCustomer[key].sales+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>byCustomer[key].cost+=productCost(it.product_code)*Number(it.qty||0));});
+  ctx.filteredSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const key=sl.customer_id||'cash'; if(!byCustomer[key])byCustomer[key]={name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,profit:0,balance:Number(c?.balance||0)}; byCustomer[key].count++; byCustomer[key].sales+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>byCustomer[key].cost+=Number(it.qty||0)*saleLineCost(it));});
   Object.values(byCustomer).forEach(r=>r.profit=r.sales-r.cost);
   if(q('repCustomerProfitBody')) q('repCustomerProfitBody').innerHTML=Object.values(byCustomer).sort((a,b)=>b.sales-a.sales).map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="${r.profit>=0?'profit-positive':'profit-negative'}">${money(r.profit)}</td><td>${money(r.balance)}</td></tr>`).join('')||'<tr><td colspan="6">لا توجد بيانات.</td></tr>';
-  if(q('repInvoiceProfitBody')) q('repInvoiceProfitBody').innerHTML=ctx.filteredSales.map(sl=>{const l=locations.find(x=>x.id===sl.location_id), c=customers.find(x=>x.id===sl.customer_id); const cost=saleItems.filter(it=>it.sale_id===sl.id).reduce((a,it)=>a+productCost(it.product_code)*Number(it.qty||0),0); const profit=Number(sl.total||0)-cost; const margin=Number(sl.total||0)?profit/Number(sl.total||0)*100:0; return `<tr><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span></td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</td><td>${money(sl.total)}</td><td>${money(cost)}</td><td class="${profit>=0?'profit-positive':'profit-negative'}">${money(profit)}</td><td>${money(margin)}%</td></tr>`}).join('')||'<tr><td colspan="7">لا توجد فواتير.</td></tr>';
+  if(q('repInvoiceProfitBody')) q('repInvoiceProfitBody').innerHTML=ctx.filteredSales.map(sl=>{const l=locations.find(x=>x.id===sl.location_id), c=customers.find(x=>x.id===sl.customer_id); const cost=saleCost(sl); const profit=Number(sl.total||0)-cost; const margin=Number(sl.total||0)?profit/Number(sl.total||0)*100:0; return `<tr><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span></td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</td><td>${money(sl.total)}</td><td>${money(cost)}</td><td class="${profit>=0?'profit-positive':'profit-negative'}">${money(profit)}</td><td>${money(margin)}%</td></tr>`}).join('')||'<tr><td colspan="7">لا توجد فواتير.</td></tr>';
   if(q('repExpenseTotal')){q('repExpenseTotal').textContent=money(expenseTotal); q('repSalaryTotal').textContent=money(salaryTotal); q('repExpenseSalaryTotal').textContent=money(expenseTotal+salaryTotal)}
   if(q('repExpensesBody')) q('repExpensesBody').innerHTML=[...ctx.filteredExpenses.map(e=>({date:e.expense_date,type:'مصروف',title:e.title,account:e.account_id,amount:e.amount})),...ctx.filteredSalaries.map(e=>({date:e.payment_date,type:'مرتب',title:e.period||'مرتب',account:e.account_id,amount:e.amount}))].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.title)}</td><td>${esc(financeAccountName(r.account))}</td><td>${money(r.amount)}</td></tr>`).join('')||'<tr><td colspan="5">لا توجد مصاريف أو مرتبات.</td></tr>';
   const months={};
-  ctx.filteredSales.forEach(s=>{const m=(s.sale_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].sales+=Number(s.total||0); saleItems.filter(it=>it.sale_id===s.id).forEach(it=>months[m].cost+=productCost(it.product_code)*Number(it.qty||0));});
+  ctx.filteredSales.forEach(s=>{const m=(s.sale_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].sales+=Number(s.total||0); saleItems.filter(it=>it.sale_id===s.id).forEach(it=>months[m].cost+=Number(it.qty||0)*saleLineCost(it));});
   ctx.filteredReturns.forEach(r=>{const m=(r.return_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].returns+=Number(r.total||0);});
   ctx.filteredExpenses.forEach(e=>{const m=(e.expense_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].expenses+=Number(e.amount||0);});
   ctx.filteredSalaries.forEach(e=>{const m=(e.payment_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].expenses+=Number(e.amount||0);});
@@ -6051,19 +6043,19 @@ function renderReportsDetail(){
   const d=repScopeData();
   if(currentReport==='branchprofit' && q('repBranchProfitBody')){
     const bySale={}; d.fItems.forEach(it=>{(bySale[it.sale_id]||(bySale[it.sale_id]=[])).push(it);});
-    const m={}; d.fSales.forEach(sl=>{const k=sl.location_id||'none'; const o=m[k]||(m[k]={id:k,count:0,rev:0,cost:0}); o.count++; o.rev+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=productCost(it.product_code)*Number(it.qty||0));});
+    const m={}; d.fSales.forEach(sl=>{const k=sl.location_id||'none'; const o=m[k]||(m[k]={id:k,count:0,rev:0,cost:0}); o.count++; o.rev+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
     const byRet={}; d.fRetItems.forEach(it=>{(byRet[it.return_id]||(byRet[it.return_id]=[])).push(it);});
-    d.fReturns.forEach(r=>{const o=m[r.location_id]; if(!o)return; o.rev-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=productCost(it.product_code)*Number(it.qty||0));});
+    d.fReturns.forEach(r=>{const o=m[r.location_id]; if(!o)return; o.rev-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));});
     const rows=Object.values(m).map(r=>({...r,name:locations.find(l=>l.id===r.id)?.name||'غير محدد',profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
     q('repBranchProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(6);
   }
   if(currentReport==='catprofit' && q('repCatProfitBody')){
-    const m={}; const add=(it,sign=1)=>{const p=productByCode(it.product_code); const k=p?.category||'بدون تصنيف'; const o=m[k]||(m[k]={name:k,qty:0,rev:0,cost:0}); o.qty+=sign*Number(it.qty||0); o.rev+=sign*Number(it.line_total||0); o.cost+=sign*productCost(it.product_code)*Number(it.qty||0);};
+    const m={}; const add=(it,sign=1)=>{const p=productByCode(it.product_code); const k=p?.category||'بدون تصنيف'; const o=m[k]||(m[k]={name:k,qty:0,rev:0,cost:0}); o.qty+=sign*Number(it.qty||0); o.rev+=sign*Number(it.line_total||0); o.cost+=sign*Number(it.qty||0)*saleLineCost(it);};
     d.fItems.forEach(it=>add(it,1)); d.fRetItems.forEach(it=>add(it,-1)); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
     q('repCatProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(6);
   }
   if(currentReport==='supplierprofit' && q('repSupplierProfitBody')){
-    const m={}; const add=(it,sign=1)=>{const p=productByCode(it.product_code); const k=p?.supplier_name||'بدون مورد'; const o=m[k]||(m[k]={name:k,rev:0,cost:0}); o.rev+=sign*Number(it.line_total||0); o.cost+=sign*productCost(it.product_code)*Number(it.qty||0);};
+    const m={}; const add=(it,sign=1)=>{const p=productByCode(it.product_code); const k=p?.supplier_name||'بدون مورد'; const o=m[k]||(m[k]={name:k,rev:0,cost:0}); o.rev+=sign*Number(it.line_total||0); o.cost+=sign*Number(it.qty||0)*saleLineCost(it);};
     d.fItems.forEach(it=>add(it,1)); d.fRetItems.forEach(it=>add(it,-1)); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
     q('repSupplierProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(5);
   }
@@ -6078,17 +6070,17 @@ function renderReportsDetail(){
   if(currentReport==='itemhistory' && q('repItemHistoryBody')){
     const code=(q('repHistItemCode')?.value||'').split('|')[0].trim().toLowerCase(); const period=q('repHistPeriod')?.value||'month';
     if(!code){q('repItemHistoryBody').innerHTML=emptyRow(5,'اختر صنفًا أولاً.');}
-    else{const saleDate={}; d.fSales.forEach(s=>saleDate[s.id]=s.sale_date); const m={}; d.fItems.filter(it=>String(it.product_code).toLowerCase()===code).forEach(it=>{const k=bucketKey(saleDate[it.sale_id],period); if(!k)return; const o=m[k]||(m[k]={k,qty:0,rev:0,cost:0}); o.qty+=Number(it.qty||0); o.rev+=Number(it.line_total||0); o.cost+=productCost(it.product_code)*Number(it.qty||0);}); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost})).sort((a,b)=>a.k.localeCompare(b.k)); q('repItemHistoryBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${money(r.qty)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td></tr>`).join('')||emptyRow(5,'لا توجد حركة لهذا الصنف.');}
+    else{const saleDate={}; d.fSales.forEach(s=>saleDate[s.id]=s.sale_date); const m={}; d.fItems.filter(it=>String(it.product_code).toLowerCase()===code).forEach(it=>{const k=bucketKey(saleDate[it.sale_id],period); if(!k)return; const o=m[k]||(m[k]={k,qty:0,rev:0,cost:0}); o.qty+=Number(it.qty||0); o.rev+=Number(it.line_total||0); o.cost+=Number(it.qty||0)*saleLineCost(it);}); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost})).sort((a,b)=>a.k.localeCompare(b.k)); q('repItemHistoryBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${money(r.qty)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td></tr>`).join('')||emptyRow(5,'لا توجد حركة لهذا الصنف.');}
   }
   if(currentReport==='customerhistory' && q('repCustomerHistoryBody')){
     const cid=q('repHistCustomer')?.value||''; const period=q('repHistCustomerPeriod')?.value||'month';
     if(!cid){q('repCustomerHistoryBody').innerHTML=emptyRow(4,'اختر زبونًا أولاً.');}
-    else{const saleById={}; d.fSales.forEach(s=>saleById[s.id]=s); const m={}; d.fItems.filter(it=>saleById[it.sale_id]?.customer_id===cid).forEach(it=>{const k=bucketKey(saleById[it.sale_id]?.sale_date,period); if(!k)return; const o=m[k]||(m[k]={k,rev:0,cost:0}); o.rev+=Number(it.line_total||0); o.cost+=productCost(it.product_code)*Number(it.qty||0);}); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost})).sort((a,b)=>a.k.localeCompare(b.k)); q('repCustomerHistoryBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td></tr>`).join('')||emptyRow(4,'لا توجد حركة لهذا الزبون.');}
+    else{const saleById={}; d.fSales.forEach(s=>saleById[s.id]=s); const m={}; d.fItems.filter(it=>saleById[it.sale_id]?.customer_id===cid).forEach(it=>{const k=bucketKey(saleById[it.sale_id]?.sale_date,period); if(!k)return; const o=m[k]||(m[k]={k,rev:0,cost:0}); o.rev+=Number(it.line_total||0); o.cost+=Number(it.qty||0)*saleLineCost(it);}); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost})).sort((a,b)=>a.k.localeCompare(b.k)); q('repCustomerHistoryBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td></tr>`).join('')||emptyRow(4,'لا توجد حركة لهذا الزبون.');}
   }
   if(currentReport==='compare' && q('repCompareBody')){
     const period=q('repComparePeriod')?.value||'month'; const m={}; const ensure=k=>m[k]||(m[k]={k,count:0,rev:0,cost:0,expenses:0});
-    d.fSales.forEach(sl=>{const k=bucketKey(sl.sale_date,period), o=ensure(k); o.count++; o.rev+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>o.cost+=productCost(it.product_code)*Number(it.qty||0));});
-    d.fReturns.forEach(r=>{const k=bucketKey(r.return_date,period), o=ensure(k); o.rev-=Number(r.total||0); saleReturnItems.filter(it=>it.return_id===r.id).forEach(it=>o.cost-=productCost(it.product_code)*Number(it.qty||0));});
+    d.fSales.forEach(sl=>{const k=bucketKey(sl.sale_date,period), o=ensure(k); o.count++; o.rev+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
+    d.fReturns.forEach(r=>{const k=bucketKey(r.return_date,period), o=ensure(k); o.rev-=Number(r.total||0); saleReturnItems.filter(it=>it.return_id===r.id).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));});
     d.fExpenses.forEach(e=>ensure(bucketKey(e.expense_date,period)).expenses+=Number(e.amount||0)); d.fSalaries.forEach(e=>ensure(bucketKey(e.payment_date,period)).expenses+=Number(e.amount||0));
     const rows=Object.values(m).filter(r=>r.k).sort((a,b)=>b.k.localeCompare(a.k)); q('repCompareBody').innerHTML=rows.map(r=>{const gp=r.rev-r.cost, net=gp-r.expenses; return `<tr><td>${esc(r.k)}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(gp)}">${money(gp)}</td><td>${money(r.expenses)}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(7);
   }
@@ -6200,7 +6192,9 @@ const CTX_BUILDERS={
       ...(hasCompositeComponents(code)
         ? [{label:'تعديل المنتج المركّب',icon:'ti-package',action:()=>openCompositeEditModal(code)}]
         : [{label:'تحويل إلى منتج مركّب',icon:'ti-package',action:()=>{convertToComposite(code)}}]),
-      {label:'إضافة إلى فاتورة بيع',icon:'ti-shopping-cart-plus',action:()=>{if(!p)return; openTab('sales'); addOrIncrementSaleProduct(p,1); toast('تمت إضافة المنتج إلى فاتورة البيع');}}];
+      {label:'إضافة إلى فاتورة بيع',icon:'ti-shopping-cart-plus',action:()=>{if(!p)return; openTab('sales'); addOrIncrementSaleProduct(p,1); toast('تمت إضافة المنتج إلى فاتورة البيع');}},
+      {sep:true},
+      {label:'إنشاء جرد بهذا الصنف',icon:'ti-clipboard-check',action:()=>startProductCount(code)}];
   },
   salePickerBody(tr){const code=(tr.children[0]?.querySelector('b')?.textContent||tr.children[0]?.innerText||'').split(/\s+/)[0].trim(); if(!code) return []; const p=products.find(x=>String(x.code||'').toLowerCase()===String(code).toLowerCase());
     return [{head:p?`${code} — ${p.name||''}`:code},
@@ -6438,46 +6432,66 @@ function showStockCountSub(name){
   q('scSubEditorBtn')?.classList.toggle('active',!lists); q('scSubListsBtn')?.classList.toggle('active',lists);
   if(lists) renderStockCountLists();
 }
+function stockCountBranchChanged(el){
+  const n=Object.keys(stockCountData).length;
+  if(n>0 && !confirm(`قائمة الجرد الحالية فيها ${n} صنفاً — تغيير الفرع يفرغها. متابعة؟`)){ el.value=el.dataset.prev||el.value; return; }
+  el.dataset.prev=el.value; stockCountData={}; renderStockCount();
+}
+function scLocStockMap(loc){
+  const m=new Map(); stock.forEach(s=>{if(s.location_id===loc) m.set(String(s.product_code),Number(s.qty||0));});
+  return m;
+}
 function renderStockCount(){
   const locEl=q('stockCountLocation'); if(!locEl)return;
-  if(!locEl.dataset.ready){locEl.innerHTML=locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join(''); if(appUser?.branch_id) locEl.value=appUser.branch_id; locEl.dataset.ready='1';}
-  const loc=locEl.value; if(!loc){q('stockCountBody').innerHTML='<tr><td colspan="7">اختر الفرع.</td></tr>';__scItems=[];updateStockCountTotals();return;}
+  if(!locEl.dataset.ready){locEl.innerHTML=locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join(''); if(appUser?.branch_id) locEl.value=appUser.branch_id; locEl.dataset.ready='1'; locEl.dataset.prev=locEl.value;}
+  const loc=locEl.value;
   const catEl=q('stockCountCategory');
   if(catEl && !catEl.dataset.ready){const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();catEl.innerHTML='<option value="">كل التصنيفات</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');catEl.dataset.ready='1';}
+  if(!loc){q('stockCountBody').innerHTML='<tr><td colspan="8">اختر الفرع.</td></tr>';__scItems=[];window.__scLocStock=new Map();updateStockCountTotals();return;}
   const term=(q('stockCountSearch')?.value||'').trim().toLowerCase();
   const cat=catEl?.value||'';
-  const items=stock.filter(s=>s.location_id===loc).filter(s=>{
-    if(term&&!(s.product_code||'').toLowerCase().includes(term)&&!(s.product_name||'').toLowerCase().includes(term))return false;
-    if(cat){const p=products.find(x=>x.code===s.product_code);return p&&p.category===cat;}
+  const locStock=scLocStockMap(loc); window.__scLocStock=locStock;
+  /* الجرد يبدأ بقائمة فارغة: لا أسطر إلا الأصناف المضافة (F3 أو يمين المنتج) — ومخزون الفرع يُقرأ حيّاً */
+  const items=Object.keys(stockCountData).map(sc=>{
+    const p=products.find(x=>String(x.code)===String(sc));
+    return {code:sc,pname:p?.name||'',cat:p?.category||'',qty:Number(locStock.get(sc)||0),cost:productCost(sc)};
+  }).filter(it=>{
+    if(cat && it.cat!==cat) return false;
+    if(term && !(it.code||'').toLowerCase().includes(term) && !(it.pname||'').toLowerCase().includes(term)) return false;
     return true;
   });
   __scItems=items;
+  if(!items.length){
+    q('stockCountBody').innerHTML=Object.keys(stockCountData).length
+      ?'<tr><td colspan="8">لا أصناف تطابق البحث/التصنيف ضمن قائمة الجرد الحالية.</td></tr>'
+      :'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:26px">📋 قائمة الجرد فارغة — اضغط <b class="kbd">F3</b> أو زر «🔎 إضافة صنف للجرد» لإضافة أول صنف، أو من شاشة المنتجات اضغط بالزر الأيمن على المنتج واختر «إنشاء جرد بهذا الصنف».</td></tr>';
+    updateStockCountTotals(); return;
+  }
   q('stockCountBody').innerHTML=items.map(s=>{
-    const sc=String(s.product_code||'').replace(/'/g,'');
+    const sc=String(s.code||'').replace(/'/g,'');
     const counted=stockCountData[sc];
-    const cost=productCost(s.product_code);
     const diff=(counted!==undefined&&counted!=='')?(Number(counted)-Number(s.qty||0)):null;
-    const dv=diff!==null?diff*cost:null;
+    const dv=diff!==null?diff*s.cost:null;
     const dc=diff!==null&&diff>0?'stock-positive':diff<0?'stock-negative':'';
-    return `<tr id="scrow_${sc}"><td class="ltr"><b>${esc(s.product_code)}</b></td><td>${esc(pLabel(s.product_code,s.product_name))}</td><td>${money(s.qty)}</td><td class="mini ltr">${money(cost)}</td><td><input id="sci_${sc}" type="number" step="any" value="${counted??''}" placeholder="${money(s.qty)}" style="max-width:110px;text-align:center" oninput="stockCountData['${sc}']=this.value;renderStockCountDiff(this,'${sc}',${Number(s.qty||0)},${cost})"></td><td id="scd_${sc}" class="${dc}">${diff!==null?money(diff):''}</td><td id="scv_${sc}" class="${dc}">${dv!==null?money(dv):''}</td></tr>`;
-  }).join('')||'<tr><td colspan="7">لا توجد أصناف.</td></tr>';
+    return `<tr id="scrow_${sc}"><td class="ltr"><span class="code">${esc(sc)}</span></td><td><span class="name">${esc(pLabel(sc,s.pname))}</span></td><td class="amount">${money(s.qty)}</td><td class="amount mini ltr">${money(s.cost)}</td><td><input id="sci_${sc}" type="number" step="any" value="${counted??''}" placeholder="${money(s.qty)}" style="max-width:110px;text-align:center" oninput="stockCountData['${sc}']=this.value;renderStockCountDiff(this,'${sc}',${Number(s.qty||0)},${s.cost})"></td><td id="scd_${sc}" class="amount ${dc}">${diff!==null?money(diff):''}</td><td id="scv_${sc}" class="amount ${dc}">${dv!==null?money(dv):''}</td><td><button class="btn danger" type="button" style="padding:3px 7px" title="إزالة الصنف من قائمة الجرد" onclick="removeStockCountItem('${sc}')">✕</button></td></tr>`;
+  }).join('');
   updateStockCountTotals();
 }
 function renderStockCountDiff(inp,code,sysQty,cost){
   const elD=q('scd_'+code), elV=q('scv_'+code); if(!elD)return;
   if(inp.value===''){elD.textContent='';elD.className='';if(elV){elV.textContent='';elV.className='';}updateStockCountTotals();return;}
   const d=Number(inp.value)-Number(sysQty);
-  elD.textContent=money(d); elD.className=d>0?'stock-positive':d<0?'stock-negative':'';
-  if(elV){const v=d*Number(cost||0); elV.textContent=money(v); elV.className=v>0?'stock-positive':v<0?'stock-negative':'';}
+  elD.textContent=money(d); elD.className='amount '+(d>0?'stock-positive':d<0?'stock-negative':'');
+  if(elV){const v=d*Number(cost||0); elV.textContent=money(v); elV.className='amount '+(v>0?'stock-positive':v<0?'stock-negative':'');}
   updateStockCountTotals();
 }
 function stockCountTotals(){
   let counted=0,posQ=0,posV=0,negQ=0,negV=0;
-  (__scItems||[]).forEach(s=>{
-    const c=stockCountData[String(s.product_code||'').replace(/'/g,'')];
-    if(c===undefined||c==='')return;
+  Object.keys(stockCountData).forEach(sc=>{
+    const c=stockCountData[sc]; if(c===undefined||c==='')return;
     counted++;
-    const d=Number(c)-Number(s.qty||0), v=d*productCost(s.product_code);
+    const sys=Number((window.__scLocStock?.get(sc))||0);
+    const d=Number(c)-sys, v=d*productCost(sc);
     if(d>0){posQ+=d;posV+=v;}else if(d<0){negQ+=d;negV+=v;}
   });
   return {counted,posQ,posV,negQ,negV,netQ:posQ+negQ,netV:posV+negV};
@@ -6485,43 +6499,58 @@ function stockCountTotals(){
 function updateStockCountTotals(){
   const el=q('stockCountTotals'); if(!el)return;
   const t=stockCountTotals();
-  el.innerHTML=`🖐 مجُرِّد حتى الآن: <b>${money(t.counted)}</b> صنف · زيادة: <b class="stock-positive">+${money(t.posQ)}</b> (+${money(t.posV)} ${APP_CONFIG.currency}) · نقص: <b class="stock-negative">${money(t.negQ)}</b> (${money(t.negV)} ${APP_CONFIG.currency}) · <b>الصافي: ${money(t.netQ)} (${money(t.netV)} ${APP_CONFIG.currency})</b>`;
+  el.innerHTML=`🖐 في القائمة: <b>${money(Object.keys(stockCountData).length)}</b> صنفاً — مُدخل منه: <b>${money(t.counted)}</b> · زيادة: <b class="stock-positive">+${money(t.posQ)}</b> (+${money(t.posV)} ${APP_CONFIG.currency}) · نقص: <b class="stock-negative">${money(t.negQ)}</b> (${money(t.negV)} ${APP_CONFIG.currency}) · <b>الصافي: ${money(t.netQ)} (${money(t.netV)} ${APP_CONFIG.currency})</b>`;
 }
-/* ─── نافذة البحث في الجرد (F3): تقفز إلى سطر الصنف وتركّز خانة المعدود ─── */
+function addStockCountItem(code){
+  const loc=q('stockCountLocation')?.value; if(!loc){toast('اختر الفرع أولاً','warn');return;}
+  const sc=String(code||'').replace(/'/g,''); if(!sc)return;
+  if(stockCountData[sc]!==undefined){ toast('الصنف موجود في قائمة الجرد','info'); }
+  else{ stockCountData[sc]=''; renderStockCount(); }
+  setTimeout(()=>{ const row=q('scrow_'+sc); row?.scrollIntoView({block:'center',behavior:'smooth'}); row?.classList.add('row-highlight'); setTimeout(()=>row?.classList.remove('row-highlight'),1600);
+    const inp=q('sci_'+sc); if(inp){inp.focus();inp.select();} },80);
+}
+function removeStockCountItem(code){ if(stockCountData[code]===undefined)return; delete stockCountData[code]; renderStockCount(); }
+/* ─── نافذة F3 للجرد: تضيف الصنف المختار إلى قائمة الجرد وتركّز خانة المعدود ─── */
 function openStockCountPicker(){
   if(q('stockCountLists') && q('stockCountLists').style.display!=='none'){toast('ارجع إلى تبويب «جرد جديد» أولاً','info');return;}
-  if(!__scItems.length){toast('اختر الفرع أولاً (أو وسّع الفلاتر) حتى تظهر الأصناف في الجدول','warn');return;}
+  const loc=q('stockCountLocation')?.value; if(!loc){toast('اختر الفرع أولاً ثم F3 لإضافة أصناف','warn');return;}
+  const locStock=window.__scLocStock&&window.__scLocStock.size?window.__scLocStock:scLocStockMap(loc);
   const dummy=document.createElement('input');
-  dummy.addEventListener('input',()=>{
-    const code=String(dummy.value||'').replace(/'/g,'');
-    const row=q('scrow_'+code);
-    if(row){row.scrollIntoView({block:'center',behavior:'smooth'}); row.classList.add('row-highlight'); setTimeout(()=>row.classList.remove('row-highlight'),1600);}
-    const inp=q('sci_'+code); if(inp) setTimeout(()=>{inp.focus();inp.select();},90);
-  });
+  dummy.addEventListener('input',()=>{ addStockCountItem(dummy.value); });
   longPickerState={target:dummy,type:'input',
-    items:__scItems.map(s=>({value:String(s.product_code||''),text:String(s.product_code||'')+' — '+(s.product_name||''),sub:'مخزون المنظومة: '+money(s.qty),search:String(s.product_code||'')+' '+(s.product_name||'')})),
-    filtered:[],index:0,title:'البحث في أصناف الجرد — اختر صنفاً للقفز إلى سطره'};
+    items:(products||[]).map(p=>{const sc=String(p.code||''); return {value:sc,text:sc+' — '+(p.name||''),sub:'المخزون في هذا الفرع: '+money(locStock.get(sc)||0)+(stockCountData[sc]!==undefined?' · ✓ في قائمة الجرد':''),search:sc+' '+(p.name||'')+' '+(p.barcode||'')}}),
+    filtered:[],index:0,title:'إضافة صنف إلى قائمة الجرد (F3)'};
   longPickerState.filtered=longPickerState.items;
   q('longPickerTitle').textContent=longPickerState.title;
   q('longPickerSearch').value='';
   q('longPickerModal').classList.add('show'); modalToTop(q('longPickerModal'));
   renderLongPicker(); setTimeout(()=>q('longPickerSearch')?.focus(),40);
 }
+/* فتح الجرد بصنف محدد (من قائمة يمين المنتج أو أي زر خارجي) */
+function startProductCount(code){
+  openTab('stockCount'); showStockCountSub('editor');
+  setTimeout(()=>{
+    const locEl=q('stockCountLocation');
+    if(locEl){ if(!locEl.dataset.ready) renderStockCount(); if(appUser?.branch_id && [...locEl.options].some(o=>o.value===appUser.branch_id)){ locEl.value=appUser.branch_id; locEl.dataset.prev=locEl.value; } }
+    addStockCountItem(code);
+  },60);
+}
 /* ─── توثيق الجرد: بناء المستند (أسطر معدودة بفروقاتها المقيّمة بالتكلفة) ─── */
 function buildStockCountDoc(){
   const loc=q('stockCountLocation')?.value; if(!loc){toast('اختر الفرع','warn');return null;}
   const cat=q('stockCountCategory')?.value||'';
-  const items=stock.filter(s=>s.location_id===loc);
+  const locStock=scLocStockMap(loc);
   const rows=[];
-  items.forEach(s=>{
-    const c=stockCountData[String(s.product_code||'').replace(/'/g,'')];
-    if(c===undefined||c==='')return;
-    const sys=Number(s.qty||0), cnt=Number(c)||0, d=cnt-sys, cost=productCost(s.product_code);
-    rows.push({product_code:s.product_code,product_name:s.product_name||'',system_qty:sys,counted_qty:cnt,diff_qty:d,unit_cost:cost,diff_value:d*cost});
+  Object.keys(stockCountData).forEach(sc=>{
+    const c=stockCountData[sc]; if(c===undefined||c==='')return;
+    const sys=Number(locStock.get(sc)||0);
+    const cnt=Number(c)||0, d=cnt-sys, cost=productCost(sc);
+    const p=products.find(x=>String(x.code)===String(sc));
+    rows.push({product_code:sc,product_name:p?.name||'',system_qty:sys,counted_qty:cnt,diff_qty:d,unit_cost:cost,diff_value:d*cost});
   });
-  if(!rows.length){toast('أدخل كمية معدودة لصنف واحد على الأقل','warn');return null;}
+  if(!rows.length){toast('قائمة الجرد فارغة أو بلا كمية معدودة واحدة على الأقل','warn');return null;}
   const diffQ=rows.reduce((a,r)=>a+r.diff_qty,0), diffV=rows.reduce((a,r)=>a+r.diff_value,0);
-  return {loc,cat,rows,header:{count_date:new Date().toISOString().slice(0,10),location_id:loc,category:cat||null,status:'draft',items_count:items.length,counted_items:rows.length,diff_qty:diffQ,diff_value:diffV,user_identifier:appUser?.identifier||null}};
+  return {loc,cat,rows,header:{count_date:new Date().toISOString().slice(0,10),location_id:loc,category:cat||null,status:'draft',items_count:locStock.size,counted_items:rows.length,diff_qty:diffQ,diff_value:diffV,user_identifier:appUser?.identifier||null}};
 }
 function stockCountLocalList(){try{return JSON.parse(localStorage.getItem('posStockCountLocal')||'[]');}catch(_){return[]}}
 function mergedStockCounts(){
