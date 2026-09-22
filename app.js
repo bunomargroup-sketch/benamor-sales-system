@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0300';
+const APP_BUILD='b20260921-0310';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -165,6 +165,10 @@ function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `
 function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون',customer_refund:'استرداد للزبون'}[t]||t}
 function branchChipByName(name){const n=String(name||'');if(n.includes('11')) return 'chip br-11';if(n.includes('سراج')) return 'chip br-sr';if(n.includes('جنزور')) return 'chip br-jz';return 'chip';}
 function branchChip(id){const l=locations.find(x=>x.id===id);return branchChipByName(l?.name);}
+/* الماركة لها لون والموديل له لون — كالفروع — وتُطبَّق في كل القوائم (طلب المالك).
+   فارغة ⇒ لا شارة (تبقى الخلية نظيفة مثل قبل) */
+function brandChip(brand){const b=String(brand||'').trim();return b?` <span class="chip brand" title="الماركة">${esc(b)}</span>`:'';}
+function modelChip(model){const m=String(model||'').trim();return m?` <span class="chip model" title="الموديل">${esc(m)}</span>`:'';}
 
 function staffEmail(id){return String(id||'').trim().toLowerCase()+'@bag.com'}
 function jwtExp(token){try{return JSON.parse(atob(String(token||'').split('.')[1]||''))?.exp||0;}catch(e){return 0}}
@@ -1243,7 +1247,7 @@ function applyProductColVisibility(shown, smartParsed=null){
     const all={
       code:`<td class="ltr"><span class="code">${esc(p.code)}</span></td>`,
       name:`<td>${nm}</td>`,
-      brand:`<td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td>`,
+      brand:`<td>${brandChip(p.brand)}${modelChip(p.model)}</td>`,
       color:`<td>${esc(p.color)}</td>`,
       barcode:`<td class="ltr"><span class="code">${esc(p.barcode)}</span></td>`,
       supplier:`<td>${esc(p.supplier_name)}</td>`,
@@ -1748,7 +1752,7 @@ function renderSaleProductPicker(){
   rows.sort((a,b)=>{const av=key==='available'?(maps.availableMap.get(String(a.code))||0):(key==='margin_value'?(maps.mvMap.get(String(a.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(a.code))||0):(a[key]??''))); const bv=key==='available'?(maps.availableMap.get(String(b.code))||0):(key==='margin_value'?(maps.mvMap.get(String(b.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(b.code))||0):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,250);
   if(!shown.length) pickerSelectedIndex=-1; else if(pickerSelectedIndex>=shown.length) pickerSelectedIndex=shown.length-1;
-q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 var(--br-sr)"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><span class="code">${esc(p.code||'')}</span><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td><span class="name">${esc(p.name)}</span>${isComp?' <span class="chip br-sr">مركّب</span>':''}</td><td>${esc(p.brand)}<div class="mini ltr">${esc(p.model)}</div></td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="amount"><b>${money(available)}</b></td><td class="amount">${money(p.retail_price)}</td><td class="amount">${money(p._mv)}</td><td class="amount">${money(p._mp)}%</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="11">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
+q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 var(--br-sr)"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><span class="code">${esc(p.code||'')}</span><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td><span class="name">${esc(p.name)}</span>${isComp?' <span class="chip br-sr">مركّب</span>':''}</td><td>${brandChip(p.brand)}${modelChip(p.model)}</td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="amount"><b>${money(available)}</b></td><td class="amount">${money(p.retail_price)}</td><td class="amount">${money(p._mv)}</td><td class="amount">${money(p._mp)}%</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="11">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
   setupTableSorting();
 }
@@ -6652,7 +6656,7 @@ function renderProductComponents(){
   const body=q('productComponentsBody'); if(!body)return;
   if(!editingProductComponents.length){body.innerHTML='<p class="mini">لا توجد مكوّنات — منتج عادي. أضف مكوّنات ليصبح مركّباً.</p>';return;}
   const total=editingProductComponents.reduce((a,c)=>{const p=products.find(x=>x.code===c.code);return a+(Number(p?.purchase_price||0)*c.qty);},0);
-  body.innerHTML=`<table style="font-size:13px"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>تكلفة الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody>${editingProductComponents.map((c,i)=>{const p=products.find(x=>x.code===c.code);const cost=Number(p?.purchase_price||0);return `<tr><td class="ltr"><b>${esc(c.code)}</b></td><td>${esc(c.name)}</td><td style="text-align:center">${c.qty}</td><td>${money(cost)}</td><td>${money(cost*c.qty)}</td><td><button class="btn danger" type="button" onclick="removeProductComponent(${i})">حذف</button></td></tr>`}).join('')}<tr style="background:var(--table-head)"><td colspan="4"><b>التكلفة الإجمالية للمركّب</b></td><td><b>${money(total)}</b></td><td></td></tr></tbody></table>`;
+  body.innerHTML=`<table style="font-size:13px"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>تكلفة الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody>${editingProductComponents.map((c,i)=>{const p=products.find(x=>x.code===c.code);const cost=Number(p?.purchase_price||0);return `<tr><td class="ltr"><b>${esc(c.code)}</b></td><td>${esc(c.name)}${brandChip(p.brand)}${modelChip(p.model)}</td><td style="text-align:center">${c.qty}</td><td>${money(cost)}</td><td>${money(cost*c.qty)}</td><td><button class="btn danger" type="button" onclick="removeProductComponent(${i})">حذف</button></td></tr>`}).join('')}<tr style="background:var(--table-head)"><td colspan="4"><b>التكلفة الإجمالية للمركّب</b></td><td><b>${money(total)}</b></td><td></td></tr></tbody></table>`;
 }
 function addProductComponent(){
   const code=(q('componentCodeInput')?.value||'').trim();
@@ -6713,7 +6717,7 @@ function ceRender(){
   const p=products.find(x=>String(x.code)===String(sb.id)); if(!p) return;
   q('ceTitle').textContent=p.code; q('ceSub').textContent=p.name||(p.brand||'')+' '+(p.model||'');
   q('ceBody').innerHTML=sb.comps.map((c,i)=>{const cp=products.find(x=>String(x.code)===String(c.code));const cost=Number(cp?.purchase_price||0);
-    return `<tr><td class="ltr"><b>${esc(c.code)}</b></td><td>${esc(c.name)}</td><td style="text-align:center">${money(c.qty)}</td><td>${money(cost)}</td><td>${money(cost*c.qty)}</td><td><button class="btn danger" type="button" style="padding:4px 8px" onclick="staticOpenCountState.comps.splice(${i},1);ceRender()">حذف</button></td></tr>`}).join('')||'<tr><td colspan="6" class="mini">لا توجد مكوّنات — الحفظ هكذا يحوّل المنتج إلى منتج عادي.</td></tr>';
+    return `<tr><td class="ltr"><b>${esc(c.code)}</b></td><td>${esc(c.name)}${brandChip(cp.brand)}${modelChip(cp.model)}</td><td style="text-align:center">${money(c.qty)}</td><td>${money(cost)}</td><td>${money(cost*c.qty)}</td><td><button class="btn danger" type="button" style="padding:4px 8px" onclick="staticOpenCountState.comps.splice(${i},1);ceRender()">حذف</button></td></tr>`}).join('')||'<tr><td colspan="6" class="mini">لا توجد مكوّنات — الحفظ هكذا يحوّل المنتج إلى منتج عادي.</td></tr>';
   const total=sb.comps.reduce((a,c)=>{const cp=products.find(x=>String(x.code)===String(c.code));return a+Number(cp?.purchase_price||0)*c.qty},0);
   q('ceFoot').innerHTML=sb.comps.length?`<tr style="background:var(--table-head)"><td colspan="4"><b>التكلفة الإجمالية للمركّب</b></td><td><b>${money(total)}</b></td><td></td></tr>`:'';
   const vs=getCompositeVirtualStock(p.code);
@@ -6832,17 +6836,36 @@ function convertToComposite(code){
   toast('أضف مكوّنات هذا المنتج ثم احفظ ليصبح مركّباً','info');
   q('componentCodeInput')?.focus();
 }
+let selectedCompositeCode=null;
+function selectCompositeRow(code){selectedCompositeCode=(selectedCompositeCode===String(code))?null:String(code);renderComposites();}
+function editSelectedComposite(){if(!selectedCompositeCode){toast('اختر منتجًا مركّبًا من القائمة أولاً','warn');return;}openCompositeEditModal(selectedCompositeCode);}
 function renderComposites(){
   const body=q('compositesBody'); if(!body)return;
+  const head=q('compositesHead');
+  const term=(q('compositeSearch')?.value||'').trim(); /* (1) بحث ذكي: نفس smartMatch المستعمل في باقي القوائم */
   const codes=[...new Set(compositeItems.map(ci=>ci.composite_code))];
-  body.innerHTML=codes.map(code=>{
+  /* (2) عمود مخزون افتراضي لكل فرع على حدة — شارة الفرع في الرأس فقط والرقم بلا لون (قاعدة المخزون) */
+  if(head)head.innerHTML='<tr><th>الكود</th><th>الاسم</th><th>سعر البيع</th><th>التكلفة</th>'
+    +(locations||[]).map(l=>`<th><span class="${branchChip(l.id)}">${esc(l.name||'')}</span></th>`).join('')
+    +'<th>المجموع الافتراضي</th><th>المكوّنات</th></tr>';
+  const colspan=6+(locations||[]).length;
+  let anySelected=false;
+  const rows=codes.map(code=>{
     const p=products.find(x=>x.code===code); if(!p)return '';
     const comps=compositeItems.filter(ci=>ci.composite_code===code);
+    const hay=[code,p.name,p.brand,p.model,...comps.map(ci=>`${ci.component_name||''} ${ci.component_code||''}`)].filter(Boolean).join(' ');
+    if(term && !smartMatch(term,hay)) return '';
     const cost=comps.reduce((a,ci)=>{const cp=products.find(x=>x.code===ci.component_code);return a+(Number(cp?.purchase_price||0)*Number(ci.qty||1));},0);
-    const vStock=getCompositeVirtualStock(code);
-    const safe=String(code||'').replace(/'/g,"\\'");
-    return `<tr ondblclick="openCompositeEditModal('${safe}')" title="اضغط مرتين للتعديل"><td class="ltr"><b>${esc(code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(p.retail_price)}</b></td><td>${money(cost)}</td><td><b>${vStock!==null?vStock:'—'}</b></td><td class="mini">${comps.map(ci=>`${esc(ci.component_name||ci.component_code)}×${Number(ci.qty||1)}`).join('، ')}</td><td><button class="btn secondary" type="button" onclick="openCompositeEditModal('${safe}')">✏️ تعديل المنتج المركّب</button></td></tr>`;
-  }).join('')||'<tr><td colspan="7">لا توجد منتجات مركبة. اضغط بزر الفأرة الأيمن على منتج واختر «تحويل إلى منتج مركّب».</td></tr>';
+    const vTotal=getCompositeVirtualStock(code);
+    const safe=String(code||'').replace(/'/g,"\'");
+    const sel=selectedCompositeCode===String(code); if(sel)anySelected=true;
+    const perBranch=(locations||[]).map(l=>{const vs=getCompositeVStockByLocation(code,l.id);return `<td class="amount"><b>${vs!==null?vs:'—'}</b></td>`;}).join('');
+    const compsHtml=comps.map(ci=>{const cp=products.find(x=>String(x.code)===String(ci.component_code));return `${esc(ci.component_name||ci.component_code)}${brandChip(cp?.brand)}${modelChip(cp?.model)}×${Number(ci.qty||1)}`;}).join('، ');
+    return `<tr class="${sel?'selected-row':''}" onclick="selectCompositeRow('${safe}')" ondblclick="openCompositeEditModal('${safe}')" title="اختر الصف، أو نقرة مزدوجة للتعديل"><td class="ltr"><b>${esc(code)}</b></td><td>${esc(pLabel(p.code,p.name))}${brandChip(p.brand)}${modelChip(p.model)}</td><td><b>${money(p.retail_price)}</b></td><td>${money(cost)}</td>${perBranch}<td class="amount"><span class="chip br-sr"><b>${vTotal!==null?vTotal:'—'}</b></span></td><td class="mini">${compsHtml}</td></tr>`;
+  }).join('');
+  if(!anySelected)selectedCompositeCode=null;
+  body.innerHTML=rows||`<tr><td colspan="${colspan}">${term?'لا نتائج مطابقة للبحث.':'لا توجد منتجات مركبة. اضغط بزر الفأرة الأيمن على منتج واختر «تحويل إلى منتج مركّب».'}</td></tr>`;
+  const eb=q('compositeEditBtn'); if(eb)eb.disabled=!selectedCompositeCode;
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDateFrom')) q('dailyCashDateFrom').value=d; if(q('dailyCashDateTo')) q('dailyCashDateTo').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}

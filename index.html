@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260921-0300">
+<link rel="stylesheet" href="app.css?v=20260921-0310">
 </head>
 <body class="auth-locked">
   <header>
@@ -1062,8 +1062,12 @@
       <section id="composites" class="section">
         <div class="panel">
           <div class="tools"><h2>المنتجات المركبة</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
-          <p class="muted">قائمة المنتجات المركّبة ومكوّناتها. المخزون الافتراضي = أقل كمية متوفرة من المكوّنات.</p>
-          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الاسم</th><th>سعر البيع</th><th>التكلفة</th><th>المخزون الافتراضي</th><th>المكوّنات</th><th>إجراء</th></tr></thead><tbody id="compositesBody"></tbody></table></div>
+          <p class="muted">قائمة المنتجات المركّبة ومكوّناتها. المخزون الافتراضي = أقل كمية متوفرة من المكوّنات لكل فرع على حدة. اختر صفاً ثم زر التعديل أعلى القائمة (أو نقرة مزدوجة على الصف).</p>
+          <div class="row" style="gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+            <input id="compositeSearch" placeholder="🔍 بحث ذكي: الاسم أو الكود أو الماركة أو الموديل أو اسم/كود أي مكوّن…" style="flex:1;min-width:240px" oninput="renderComposites()">
+            <button class="btn" type="button" id="compositeEditBtn" disabled onclick="editSelectedComposite()">✏️ تعديل المحدد</button>
+          </div>
+          <div class="table-scroll"><table><thead id="compositesHead"><tr><th>الكود</th><th>الاسم</th><th>سعر البيع</th><th>التكلفة</th><th>المخزون الافتراضي</th><th>المكوّنات</th></tr></thead><tbody id="compositesBody"></tbody></table></div>
         </div>
       </section>
     </main>
@@ -1291,6 +1295,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260921-0300"></script>
+<script src="app.js?v=20260921-0310"></script>
 </body>
 </html>
