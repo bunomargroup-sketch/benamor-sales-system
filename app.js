@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0360';
+const APP_BUILD='b20260923-0370';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -211,7 +211,7 @@ async function rpc(name, body){
   return fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:H,body:JSON.stringify(body)},null);
 }
 
-async function apiAll(table, qs='', batch=1000){
+async function apiAll(table, qs='', batch=5000){
   let from=0, all=[];
   while(true){
     const data = await fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method:'GET', headers:{...H, Range:`${from}-${from+batch-1}`} }, []);
@@ -374,7 +374,7 @@ function locStockCol(location_id){
    تصليح علة: فرق قائمة المنتجات عن المتاح في التحويل. 0069/0070 تزامّن الأعمدة
    سيرفرية أيضاً، لكن العرض هنا لا يعتمد عليها. */
 function liveBranchQty(code,col){
-  const loc=(locations||[]).find(l=>stockColumnForLocation(l)===col);
+  const loc=(locations||[]).find(l=>locStockCol(l.id)===col);
   return loc?getStockQty(loc.id,code):0;
 }
 function liveTotalQty(code){return (locations||[]).reduce((a,l)=>a+getStockQty(l.id,code),0);}
