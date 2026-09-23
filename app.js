@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0350';
+const APP_BUILD='b20260923-0360';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -370,6 +370,14 @@ function locStockCol(location_id){
   if(l.name==='مخزن جنزور') return 'stock_janzour';
   return null;
 }
+/* قراءة مخزون حيّة من pos_stock (مصدر الحقيقة) بدل أعمدة pos_products القديمة —
+   تصليح علة: فرق قائمة المنتجات عن المتاح في التحويل. 0069/0070 تزامّن الأعمدة
+   سيرفرية أيضاً، لكن العرض هنا لا يعتمد عليها. */
+function liveBranchQty(code,col){
+  const loc=(locations||[]).find(l=>stockColumnForLocation(l)===col);
+  return loc?getStockQty(loc.id,code):0;
+}
+function liveTotalQty(code){return (locations||[]).reduce((a,l)=>a+getStockQty(l.id,code),0);}
 function localAdjustStock(location_id, product_code, product_name, delta, mvType, refTable, refId, note){
   if(!delta) return;
   let row=stock.find(x=>x.location_id===location_id && String(x.product_code||'').toLowerCase()===String(product_code||'').toLowerCase());
@@ -1023,9 +1031,9 @@ async function changeUserCredentials(oldId){
 
 
 function renderReorderAlerts(){
-  const rows=products.filter(p=>Number(p.reorder_point||0)>0 && Number(p.total_stock||0)<=Number(p.reorder_point||0));
+  const rows=products.filter(p=>Number(p.reorder_point||0)>0 && liveTotalQty(p.code)<=Number(p.reorder_point||0));
   if(q('reorderCount')) q('reorderCount').textContent=rows.length;
-  if(q('reorderBody')) q('reorderBody').innerHTML=rows.slice(0,80).map(p=>`<tr><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(p.total_stock)}</b></td><td>${money(p.reorder_point)}</td><td>${esc(p.supplier_name)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف تحت حد الطلب.</td></tr>';
+  if(q('reorderBody')) q('reorderBody').innerHTML=rows.slice(0,80).map(p=>`<tr><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(liveTotalQty(p.code))}</b></td><td>${money(p.reorder_point)}</td><td>${esc(p.supplier_name)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف تحت حد الطلب.</td></tr>';
 }
 
 /* (د) إصلاح جذري: إعادة بناء خيارات زبون البيع كانت تُسقط الاختيار الحالي بصمت
@@ -1258,10 +1266,10 @@ function applyProductColVisibility(shown, smartParsed=null){
       retail:`<td class="amount">${money(p.retail_price)}</td>`,
       margin:`<td class="amount">${money(p._mv)}</td>`,
       margin_pct:`<td class="amount">${money(p._mp)}%</td>`,
-      s11:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_11_june')||0)+'</b>':money(p.stock_11_june)}</td>`,
-      ssr:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_sarraj')||0)+'</b>':money(p.stock_sarraj)}</td>`,
-      sjz:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_janzour')||0)+'</b>':money(p.stock_janzour)}</td>`,
-      total:`<td class="amount total">${isComp?('<span class="chip br-sr"><b>'+(vS!==null&&vS!==undefined?vS:0)+'</b></span>'):('<b>'+money(p.total_stock)+'</b>')}</td>`
+      s11:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_11_june')||0)+'</b>':money(liveBranchQty(p.code,'stock_11_june'))}</td>`,
+      ssr:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_sarraj')||0)+'</b>':money(liveBranchQty(p.code,'stock_sarraj'))}</td>`,
+      sjz:`<td class="amount">${isComp?'<b>'+(getCompositeVStockByBranch(p.code,'stock_janzour')||0)+'</b>':money(liveBranchQty(p.code,'stock_janzour'))}</td>`,
+      total:`<td class="amount total">${isComp?('<span class="chip br-sr"><b>'+(vS!==null&&vS!==undefined?vS:0)+'</b></span>'):('<b>'+money(liveTotalQty(p.code))+'</b>')}</td>`
     };
     return PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>all[c.id]||'').join('');
   };
@@ -1617,10 +1625,10 @@ function viewSelectedProduct(){
     <div class="card"><h3>المورد</h3><div>${esc(p.supplier_name)}</div></div>
     <div class="card"><h3>سعر الشراء</h3><div class="num">${money(p.purchase_price)}</div></div>
     <div class="card"><h3>سعر البيع</h3><div class="num">${money(p.retail_price)}</div></div>
-    <div class="card"><h3>فرع 11 يونيو</h3><div class="num">${money(p.stock_11_june)}</div></div>
-    <div class="card"><h3>فرع السراج</h3><div class="num">${money(p.stock_sarraj)}</div></div>
-    <div class="card"><h3>مخزن جنزور</h3><div class="num">${money(p.stock_janzour)}</div></div>
-    <div class="card"><h3>الإجمالي</h3><div class="num">${money(p.total_stock)}</div></div>
+    <div class="card"><h3>فرع 11 يونيو</h3><div class="num">${money(liveBranchQty(p.code,'stock_11_june'))}</div></div>
+    <div class="card"><h3>فرع السراج</h3><div class="num">${money(liveBranchQty(p.code,'stock_sarraj'))}</div></div>
+    <div class="card"><h3>مخزن جنزور</h3><div class="num">${money(liveBranchQty(p.code,'stock_janzour'))}</div></div>
+    <div class="card"><h3>الإجمالي</h3><div class="num">${money(liveTotalQty(p.code))}</div></div>
   </div>`;
   q('productViewModal').classList.add('show');
 }
