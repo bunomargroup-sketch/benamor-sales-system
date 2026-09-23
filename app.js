@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0390';
+const APP_BUILD='b20260923-0400';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1208,9 +1208,16 @@ function findProductByInput(value){
   value=(value||'').trim();
   if(!value) return null;
   const codePart=value.includes('|') ? value.split('|')[0].trim() : value;
-  return products.find(p=>String(p.code||'').toLowerCase()===codePart.toLowerCase())
-      || products.find(p=>String(p.name||'').trim()===value)
-      || null;
+  const low=codePart.toLowerCase();
+  const exact=products.find(p=>String(p.code||'').toLowerCase()===low)
+      || products.find(p=>String(p.name||'').trim()===value);
+  if(exact) return exact;
+  /* كود جزئي (مثال: 10169 لمنتج WS10169): يُقبل فقط إذا كانت المطابقة اللاحقة فريدة — وإلا يبقى غير مطابق بدل صمت */
+  if(low.length>=3){
+    const m=products.filter(p=>String(p.code||'').toLowerCase().endsWith(low));
+    if(m.length===1) return m[0];
+  }
+  return null;
 }
 function fillPurchaseRow(input){
   const p=findProductByInput(input.value);
@@ -2414,7 +2421,9 @@ function updateTransferAvailable(el){
   if(editingTransferId){
     available += (originalTransferItems||[]).filter(x=>String(x.product_code||'').toLowerCase()===String(code).toLowerCase()).reduce((a,b)=>a+Number(b.qty||0),0);
   }
-  tr.querySelector('.ti-available').innerHTML=`<b class="${available>0?'stock-positive':available<0?'stock-negative':''}">${money(available)}</b>`;
+  /* كود غير مطابق لمنتج: نعرض ؟ بدل 0.00 الصامت حتى لا يظن المستخدم أن المخزون صفراً */
+  const unresolved=!!code && !picked;
+  tr.querySelector('.ti-available').innerHTML = unresolved ? '<b class="stock-negative" title="الكود غير مطابق لمنتج — أكمل الكود">؟</b>' : `<b class="${available>0?'stock-positive':available<0?'stock-negative':''}">${money(available)}</b>`;
 }
 function refreshTransferAvailability(){[...q('transferItemsBody').querySelectorAll('.ti-qty')].forEach(updateTransferAvailable)}
 function getTransferItems(){
