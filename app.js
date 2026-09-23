@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260921-0340';
+const APP_BUILD='b20260921-0350';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2383,7 +2383,11 @@ function fillTransferRow(input){
 function updateTransferAvailable(el){
   const tr=el.closest('tr'); const from=q('transferFrom').value;
   let code=tr.querySelector('.ti-code').value.trim(); const picked=findProductByInput(code); if(picked) code=picked.code; if(code.includes('|')) code=code.split('|')[0].trim();
-  const available=from && code ? getStockQty(from, code) : 0;
+  let available=from && code ? getStockQty(from, code) : 0;
+  /* طلب المالك: عند تعديل تحويل قائم، المتاح بالمصدر = الحالة قبل إنشاء التحويل — نعيد كمية هذه الفاتورة المسجلة */
+  if(editingTransferId){
+    available += (originalTransferItems||[]).filter(x=>String(x.product_code)===String(code)).reduce((a,b)=>a+Number(b.qty||0),0);
+  }
   tr.querySelector('.ti-available').innerHTML=`<b class="${available>0?'stock-positive':available<0?'stock-negative':''}">${money(available)}</b>`;
 }
 function refreshTransferAvailability(){[...q('transferItemsBody').querySelectorAll('.ti-qty')].forEach(updateTransferAvailable)}
