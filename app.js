@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0370';
+const APP_BUILD='b20260923-0380';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -212,12 +212,17 @@ async function rpc(name, body){
 }
 
 async function apiAll(table, qs='', batch=5000){
-  let from=0, all=[];
+  let from=0, all=[], page=batch;
   while(true){
-    const data = await fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method:'GET', headers:{...H, Range:`${from}-${from+batch-1}`} }, []);
+    const data = await fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method:'GET', headers:{...H, Range:`${from}-${from+page-1}`} }, []);
     all = all.concat(data||[]);
-    if(!data || data.length < batch) break;
-    from += batch;
+    if(!data || data.length === 0) break;
+    if(data.length < page){
+      /* صفحة أقصر من المطلوب: إمّا جدول صغير أو سقف خادم أصغر (db-max-rows — حادثة 1000 منتج).
+         نتبنى الحجم حجم صفحة، ثم تُقطع عند أول صفحة أقصر من السقف (أو صفراً). */
+      if(page === batch){ page = data.length; } else break;
+    }
+    from += data.length;
   }
   return all;
 }
