@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0420';
+const APP_BUILD='b20260923-0430';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7159,36 +7159,31 @@ async function ceSave(){
 }
 
 function getCompositeVStockByBranch(compositeCode, branchField){
-  const comps=compositeItems.filter(ci=>ci.composite_code===compositeCode);
+  /* 0430: live pos_stock (عبر locStockCol) — كانت تقرأ أعمدة pos_products المخزنة (مرآة متزامنة
+     بترجيحات) ⇒ أرقام مركّبات قائمة المنتجات كانت تتأخر عن الواقع — نفس علة عائلات أعطال التحويل */
+  const loc=(locations||[]).find(l=>locStockCol(l.id)===branchField);
+  return loc?getCompositeVStockByLocation(compositeCode, loc.id):0;
+}
+function isCompositeProduct(code){return compositeItems.some(ci=>ci.composite_code===code);}
+function getCompositeVStockByLocation(compositeCode, locId){
+  /* 0430: عبر getStockQty (خريطة مخبأة لكل فرع) بدل مسح خطي لكل سطر×مكوّن، ومطابقة بلا حساسية حالة */
+  const comps=compositeItems.filter(ci=>String(ci.composite_code||'').toLowerCase()===String(compositeCode||'').toLowerCase());
   if(!comps.length) return null;
   let min=Infinity;
   for(const ci of comps){
-    const cp=products.find(p=>p.code===ci.component_code);
-    if(!cp) continue;
-    const bs=Number(cp[branchField]||0);
+    const bs=getStockQty(locId, ci.component_code);
     const possible=Math.floor(bs/Number(ci.qty||1));
     if(possible<min)min=possible;
   }
   return min===Infinity?0:min;
 }
-function isCompositeProduct(code){return compositeItems.some(ci=>ci.composite_code===code);}
-function getCompositeVStockByLocation(compositeCode, locId){
-  const comps=compositeItems.filter(ci=>ci.composite_code===compositeCode);
-  if(!comps.length) return null;
-  let min=Infinity;
-  for(const ci of comps){
-    const st=stock.filter(x=>x.location_id===locId && String(x.product_code||'').toLowerCase()===String(ci.component_code||'').toLowerCase()).reduce((a,x)=>a+Number(x.qty||0),0);
-    const possible=Math.floor(st/Number(ci.qty||1));
-    if(possible<min)min=possible;
-  }
-  return min===Infinity?0:min;
-}
 function getCompositeVirtualStock(code){
-  const comps=compositeItems.filter(ci=>ci.composite_code===code);
+  /* 0430: live عبر getStockQty (مخبأ) + بلا حساسية حالة — كان مسحاً خطياً مطابقةً حساسة الحالة */
+  const comps=compositeItems.filter(ci=>String(ci.composite_code||'').toLowerCase()===String(code||'').toLowerCase());
   if(!comps.length) return null;
   let minStock=Infinity;
   for(const ci of comps){
-    const stockQty=stock.filter(s=>s.product_code===ci.component_code).reduce((a,s)=>a+Number(s.qty||0),0);
+    const stockQty=(locations||[]).reduce((a,l)=>a+getStockQty(l.id, ci.component_code),0);
     const possible=Math.floor(stockQty/Number(ci.qty||1));
     if(possible<minStock)minStock=possible;
   }
