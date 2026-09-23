@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0400';
+const APP_BUILD='b20260923-0410';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2411,10 +2411,52 @@ function compositeAvailableAt(compositeCode, location_id){
   }
   return min===Infinity?0:min;
 }
+/* قرار المالك (0410): شاشة التحويل لا تعتمد على الذاكرة — عند اختيار الصنف تُسأل الخادم
+   مباشرة عن الكمية في المصدر والوجهة (pos_stock). القيمة المحلية تُعرض فورياً (UX)
+   ثم تُصحَّح خلال ثوانٍ بالقيمة الحيّة؛ وعند فشل الشبكة: قيمة محلية بعلامة مرئية. */
+function transferServerRefresh(tr){
+  const from=q('transferFrom').value, to=q('transferTo')?q('transferTo').value:'';
+  let code=tr.querySelector('.ti-code').value.trim();
+  const picked=findProductByInput(code); if(picked) code=picked.code; if(code.includes('|')) code=code.split('|')[0].trim();
+  if(!code || !from) return;
+  const comps=compositeItems.filter(ci=>String(ci.composite_code||'').toLowerCase()===String(code).toLowerCase());
+  const codes=comps.length?comps.map(ci=>String(ci.component_code||'')):[code];
+  const locs=[from,to].filter(Boolean);
+  const cell=tr.querySelector('.ti-available');
+  const seq=(tr.__avSeq=(Number(tr.__avSeq)||0)+1);
+  cell.innerHTML='<b style="color:#8a97a8" data-src="loading">…</b>';
+  const qs=`?select=location_id,product_code,qty&location_id=in.(${locs.map(encodeURIComponent).join(',')})&product_code=in.(${codes.map(encodeURIComponent).join(',')})`;
+  api('pos_stock',{qs})
+  .then(rows=>{
+    if(tr.__avSeq!==seq) return; /* استجابة أقدم من أحدث نداء — تُهمل */
+    const qtyAt=(loc)=>{
+      const m=new Map();
+      for(const r of rows||[]){ if(String(r.location_id)===String(loc)){ const k=String(r.product_code||'').toLowerCase(); m.set(k,(m.get(k)||0)+Number(r.qty||0)); } }
+      if(comps.length){
+        let min=Infinity;
+        for(const ci of comps){ const bs=m.get(String(ci.component_code||'').toLowerCase())||0; const possible=Math.floor(bs/Number(ci.qty||1)); if(possible<min) min=possible; }
+        return min===Infinity?0:min;
+      }
+      return m.get(String(code).toLowerCase())||0;
+    };
+    const addBack=editingTransferId?(originalTransferItems||[]).filter(x=>String(x.product_code||'').toLowerCase()===String(code).toLowerCase()).reduce((a,b)=>a+Number(b.qty||0),0):0;
+    const available=qtyAt(from)+addBack;
+    const destHtml=to?`<div class="mini" style="direction:rtl">بالوجهة: <b>${money(qtyAt(to))}</b></div>`:'';
+    cell.innerHTML=`<b class="${available>0?'stock-positive':available<0?'stock-negative':''}" data-src="server">${money(available)}</b>${destHtml}`;
+  })
+  .catch(err=>{
+    if(tr.__avSeq!==seq) return;
+    console.warn('فشل جلب كمية التحويل الحيّة — قيمة محلية:', err);
+    const compL=comps.length?compositeAvailableAt(code, from):null;
+    const local=compL!==null?compL:getStockQty(from, code);
+    const addBack=editingTransferId?(originalTransferItems||[]).filter(x=>String(x.product_code||'').toLowerCase()===String(code).toLowerCase()).reduce((a,b)=>a+Number(b.qty||0),0):0;
+    cell.innerHTML=`<b class="stock-negative" data-src="local" title="تعذّر جلب الكمية الحيّة — قيمة محلية">${money(local+addBack)}</b>`;
+  });
+}
 function updateTransferAvailable(el){
   const tr=el.closest('tr'); const from=q('transferFrom').value;
   let code=tr.querySelector('.ti-code').value.trim(); const picked=findProductByInput(code); if(picked) code=picked.code; if(code.includes('|')) code=code.split('|')[0].trim();
-  /* المركّبات: المتاح = كم يمكن تكوينه من مكوّنات المصدر (live) — وليس صف المركّب نفسه */
+  /* المركّبات: المتاح = كم يمكن تكوينه من مكوّنات المصدر (فوري محلي) */
   const compAvail=from && code ? compositeAvailableAt(code, from) : null;
   let available=from && code ? (compAvail!==null ? compAvail : getStockQty(from, code)) : 0;
   /* طلب المالك: عند تعديل تحويل قائم، المتاح بالمصدر = الحالة قبل إنشاء التحويل — نعيد كمية هذه الفاتورة المسجلة (بلا حساسية حالة) */
@@ -2423,7 +2465,10 @@ function updateTransferAvailable(el){
   }
   /* كود غير مطابق لمنتج: نعرض ؟ بدل 0.00 الصامت حتى لا يظن المستخدم أن المخزون صفراً */
   const unresolved=!!code && !picked;
-  tr.querySelector('.ti-available').innerHTML = unresolved ? '<b class="stock-negative" title="الكود غير مطابق لمنتج — أكمل الكود">؟</b>' : `<b class="${available>0?'stock-positive':available<0?'stock-negative':''}">${money(available)}</b>`;
+  tr.querySelector('.ti-available').innerHTML = unresolved ? '<b class="stock-negative" title="الكود غير مطابق لمنتج — أكمل الكود">؟</b>' : `<b class="${available>0?'stock-positive':available<0?'stock-negative':''}" data-src="local">${money(available)}</b>`;
+  /* ثم التصحيح برقم الخادم (debounce لكل سطر + حارس سباق — الأحدث يفوز) */
+  clearTimeout(tr.__avTimer);
+  if(!unresolved && from && code){ tr.__avTimer=setTimeout(()=>transferServerRefresh(tr),350); }
 }
 function refreshTransferAvailability(){[...q('transferItemsBody').querySelectorAll('.ti-qty')].forEach(updateTransferAvailable)}
 function getTransferItems(){
