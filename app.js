@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0410';
+const APP_BUILD='b20260923-0420';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -5717,6 +5717,48 @@ async function reverseTransferEffects(){
   await deleteStockMovements('pos_stock_transfers', editingTransferId);
 }
 
+/* قرار المالك (0410/0420): التحقق من الكمية ضد الخادم لا ضد الذاكرة —
+   سؤال واحد لكل الأصناف في موقع المصدر (المركّبات تُوسَّع لمكوّناتها كي يطابق الخصم السيرفري).
+   عند التعديل: تُعاكس تأثيرات التحويل الأصلي (حالة ما قبل التحويل) — للمركّبات أيضاً.
+   عند فشل السؤال: تراجع للقيم المحلية (سلوك قديم) مع تحذير في console. */
+async function validateTransferStockServer(items, from){
+  const compsOf=(code)=>compositeItems.filter(ci=>String(ci.composite_code||'').toLowerCase()===String(code||'').toLowerCase());
+  const codeSet=new Set();
+  for(const it of items){
+    const comps=compsOf(it.product_code);
+    if(comps.length) comps.forEach(ci=>codeSet.add(String(ci.component_code||'')));
+    else codeSet.add(String(it.product_code||''));
+  }
+  let baseMap=null;
+  try{
+    const rows=await api('pos_stock',{qs:`?select=location_id,product_code,qty&location_id=eq.${encodeURIComponent(from)}&product_code=in.(${[...codeSet].map(encodeURIComponent).join(',')})`});
+    baseMap=new Map();
+    for(const r of rows||[]) baseMap.set(`${r.location_id}|${String(r.product_code||'').toLowerCase()}`, (baseMap.get(`${r.location_id}|${String(r.product_code||'').toLowerCase()}`)||0)+Number(r.qty||0));
+  }catch(err){
+    console.warn('فشل التحقق من مخزون التحويل لدى الخادم — قيم محلية:', err);
+    baseMap=new Map(stock.map(r=>[`${r.location_id}|${String(r.product_code).toLowerCase()}`, Number(r.qty||0)]));
+  }
+  if(editingTransferId && originalTransfer){
+    for(const it of originalTransferItems){
+      const c=String(it.product_code||'').toLowerCase();
+      const comps=compsOf(it.product_code);
+      const targets=comps.length?comps.map(ci=>[String(ci.component_code||'').toLowerCase(), Number(it.qty||0)*Number(ci.qty||1)]):[[c, Number(it.qty||0)]];
+      for(const [t,q2] of targets){
+        baseMap.set(`${originalTransfer.from_location_id}|${t}`, (baseMap.get(`${originalTransfer.from_location_id}|${t}`)||0)+q2);
+        baseMap.set(`${originalTransfer.to_location_id}|${t}`, (baseMap.get(`${originalTransfer.to_location_id}|${t}`)||0)-q2);
+      }
+    }
+  }
+  for(const it of items){
+    const c=String(it.product_code||'').toLowerCase();
+    const comps=compsOf(it.product_code);
+    let available;
+    if(comps.length){ let min=Infinity; for(const ci of comps){ const bs=baseMap.get(`${from}|${String(ci.component_code||'').toLowerCase()}`)||0; const possible=Math.floor(bs/Number(ci.qty||1)); if(possible<min) min=possible; } available=min===Infinity?0:min; }
+    else available=baseMap.get(`${from}|${c}`)||0;
+    if(available < it.qty) return {ok:false, product:it.product_code, available};
+  }
+  return {ok:true};
+}
 q('transferForm').addEventListener('submit', async e=>{
   e.preventDefault();
   if(window.__busy) return; window.__busy=true;
@@ -5725,19 +5767,10 @@ q('transferForm').addEventListener('submit', async e=>{
   if(from===to){toast('لا يمكن التحويل لنفس المكان','warn'); window.__busy=false; return;}
   let items=groupTransferItems(getTransferItems());
   if(!items.length){toast('أضف صنف واحد على الأقل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
-  // In edit mode, available stock should include the old transfer quantities reversed first.
-  const virtualStock = new Map(stock.map(r=>[`${r.location_id}|${String(r.product_code).toLowerCase()}`, Number(r.qty||0)]));
-  if(editingTransferId && originalTransfer){
-    for(const it of originalTransferItems){
-      const c=String(it.product_code||'').toLowerCase();
-      virtualStock.set(`${originalTransfer.from_location_id}|${c}`,(virtualStock.get(`${originalTransfer.from_location_id}|${c}`)||0)+Number(it.qty||0));
-      virtualStock.set(`${originalTransfer.to_location_id}|${c}`,(virtualStock.get(`${originalTransfer.to_location_id}|${c}`)||0)-Number(it.qty||0));
-    }
-  }
-  for(const it of items){
-    const available=virtualStock.get(`${from}|${String(it.product_code||'').toLowerCase()}`)||0;
-    if(available < it.qty){toast(`الكمية غير كافية للمنتج ${it.product_code}. المتوفر ${money(available)}`); window.__busy=false; return;}
-  }
+  /* 0420: التحقق ضد الخادم — المصدر نفسه الذي تعرضه الشاشة (0410) */
+  showLoading(true);
+  const v=await validateTransferStockServer(items, from);
+  if(!v.ok){toast(`الكمية غير كافية للمنتج ${v.product}. المتوفر ${money(v.available)}`); showLoading(false); window.__busy=false; return;}
   try{
     showLoading(true);
     const body={from_location_id:from,to_location_id:to,transfer_date:q('transferDate').value,status:'posted',notes:q('transferNotes').value.trim()};
