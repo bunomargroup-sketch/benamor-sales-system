@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0430';
+const APP_BUILD='b20260923-0440';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2429,9 +2429,25 @@ function transferServerRefresh(tr){
   api('pos_stock',{qs})
   .then(rows=>{
     if(tr.__avSeq!==seq) return; /* استجابة أقدم من أحدث نداء — تُهمل */
+    /* 0440: عند التعديل تُعاكس تأثيرات التحويل الأصلي أولاً (عند المواقع الأصلية بالضبط،
+       ولمستوى المكوّنات في المركّبات) ⇒ المصدر والوجهة كلاهما يعرض حالة ما قَبْل هذا التحويل —
+       نفس مرجع التحقق عند الحفظ (0420) بالضبط. في التحويل الجديد = الحالة الحالية (لم يُحرَّك شيء). */
+    const perLoc=new Map();
+    const addQ=(loc,code,q2)=>{ const lk=String(loc); let m=perLoc.get(lk); if(!m){m=new Map(); perLoc.set(lk,m);} const ck=String(code).toLowerCase(); m.set(ck,(m.get(ck)||0)+q2); };
+    for(const r of rows||[]) addQ(r.location_id, r.product_code, Number(r.qty||0));
+    if(editingTransferId && originalTransfer){
+      for(const it of originalTransferItems||[]){
+        const c=String(it.product_code||'').toLowerCase();
+        const oc=compositeItems.filter(ci=>String(ci.composite_code||'').toLowerCase()===c);
+        const targets=oc.length?oc.map(ci=>[String(ci.component_code||''), Number(it.qty||0)*Number(ci.qty||1)]):[[c, Number(it.qty||0)]];
+        for(const [t,q2] of targets){
+          addQ(originalTransfer.from_location_id, t, q2);
+          addQ(originalTransfer.to_location_id, t, -q2);
+        }
+      }
+    }
     const qtyAt=(loc)=>{
-      const m=new Map();
-      for(const r of rows||[]){ if(String(r.location_id)===String(loc)){ const k=String(r.product_code||'').toLowerCase(); m.set(k,(m.get(k)||0)+Number(r.qty||0)); } }
+      const m=perLoc.get(String(loc))||new Map();
       if(comps.length){
         let min=Infinity;
         for(const ci of comps){ const bs=m.get(String(ci.component_code||'').toLowerCase())||0; const possible=Math.floor(bs/Number(ci.qty||1)); if(possible<min) min=possible; }
@@ -2439,9 +2455,9 @@ function transferServerRefresh(tr){
       }
       return m.get(String(code).toLowerCase())||0;
     };
-    const addBack=editingTransferId?(originalTransferItems||[]).filter(x=>String(x.product_code||'').toLowerCase()===String(code).toLowerCase()).reduce((a,b)=>a+Number(b.qty||0),0):0;
-    const available=qtyAt(from)+addBack;
-    const destHtml=to?`<div class="mini" style="direction:rtl">بالوجهة: <b>${money(qtyAt(to))}</b></div>`:'';
+    const available=qtyAt(from);
+    const destLabel=to?`بالوجهة${editingTransferId?' (قبل التحويل)':''}`:'';
+    const destHtml=to?`<div class="mini" style="direction:rtl">${destLabel}: <b>${money(qtyAt(to))}</b></div>`:'';
     cell.innerHTML=`<b class="${available>0?'stock-positive':available<0?'stock-negative':''}" data-src="server">${money(available)}</b>${destHtml}`;
   })
   .catch(err=>{
