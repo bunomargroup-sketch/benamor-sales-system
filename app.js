@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260923-0440';
+const APP_BUILD='b20260924-0450';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2344,17 +2344,8 @@ function getStockQty(location_id, product_code){
   if(!m){m=new Map(); for(const x of stock){ if(String(x.location_id)===locKey){ const k=String(x.product_code||'').toLowerCase(); if(!m.has(k)) m.set(k,Number(x.qty)||0); } } _stockQtyCache.maps.set(locKey,m);}
   return m.get(String(product_code||'').toLowerCase())||0;
 }
-async function adjustStockOnly(location_id, item, qtyChange){
-  const code=encodeURIComponent(item.product_code);
-  const loc=encodeURIComponent(location_id);
-  const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
-  if(found && found.length){
-    const newQty=Number(found[0].qty||0)+Number(qtyChange||0);
-    await api('pos_stock',{method:'PATCH',qs:`?id=eq.${found[0].id}`,body:{qty:newQty,product_name:item.product_name,updated_at:new Date().toISOString()}});
-  }else{
-    await api('pos_stock',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,qty:qtyChange}});
-  }
-}
+/* 0450: adjustStockOnly أُزيل — كان قراء-عدّل-اكتب غير ذرّي (سبب جذري MC10647)؛
+   العكس يمر الآن عبر adjustStock (pos_adjust_stock_checked الذرّي). */
 async function deleteStockMovements(referenceTable, referenceId){
   await api('pos_stock_movements',{method:'DELETE',qs:`?reference_table=eq.${referenceTable}&reference_id=eq.${referenceId}`});
 }
@@ -4478,18 +4469,8 @@ function updatePurchaseTotal(){
   });
   const discount=moneyVal(q('purchaseDiscount').value); q('purchaseTotal').textContent=money(Math.max(0, subtotal-discount));
 }
-async function updateStock(location_id, item, purchaseId){
-  const code=encodeURIComponent(item.product_code);
-  const loc=encodeURIComponent(location_id);
-  const found=await api('pos_stock',{qs:`?select=*&location_id=eq.${loc}&product_code=eq.${code}&limit=1`});
-  if(found && found.length){
-    const newQty=Number(found[0].qty||0)+Number(item.qty||0);
-    await api('pos_stock',{method:'PATCH',qs:`?id=eq.${found[0].id}`,body:{qty:newQty,product_name:item.product_name,updated_at:new Date().toISOString()}});
-  }else{
-    await api('pos_stock',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,qty:item.qty}});
-  }
-  await api('pos_stock_movements',{method:'POST',body:{location_id,product_code:item.product_code,product_name:item.product_name,movement_type:'purchase',qty_change:item.qty,reference_table:'pos_purchases',reference_id:purchaseId,notes:'فاتورة شراء'}});
-}
+/* 0450: updateStock (الشراء) أُزيل — كود ميت غير ذرّي؛ حفظ الشراء يمر عبر
+   post_purchase_transaction الذرّي منذ 0047. */
 
 function openTab(tab){const btn=document.querySelector(`nav button[data-tab="${tab}"]`); if(btn && btn.style.display!=='none') btn.click();}
 
@@ -5725,10 +5706,14 @@ async function openTransferForEdit(id){
 }
 async function reverseTransferEffects(){
   if(!editingTransferId || !originalTransfer) return;
-  // نعكس التحويل القديم بدون تسجيل حركات وهمية، ثم نحذف حركات التحويل القديمة.
+  /* 0450 — إصلاح السبب الجذري (MC10647): العكس كان قراء-عدّل-اكتب بدون قفل
+     (adjustStockOnly) — تحديث ضائع يمسح أثر upsert السيرفر الذرّي ويترك
+     الحركة بلا رصيد. الآن العكس يمر عبر pos_adjust_stock_checked الذرّي
+     (قفل FOR UPDATE + upsert + حركة)؛ الحركات التعويضية تحمل مرجع التحويل
+     القديم فيُحذف مع الأصل التالي — الأثر الصافي كما كان، لكن كل خطوة ذرّية. */
   for(const it of originalTransferItems){
-    await adjustStockOnly(originalTransfer.from_location_id,it,Math.abs(Number(it.qty||0)));
-    await adjustStockOnly(originalTransfer.to_location_id,it,-Math.abs(Number(it.qty||0)));
+    await adjustStock(originalTransfer.from_location_id,it,Math.abs(Number(it.qty||0)),'adjustment',editingTransferId,'عكس تعديل تحويل');
+    await adjustStock(originalTransfer.to_location_id,it,-Math.abs(Number(it.qty||0)),'adjustment',editingTransferId,'عكس تعديل تحويل');
   }
   await deleteStockMovements('pos_stock_transfers', editingTransferId);
 }
