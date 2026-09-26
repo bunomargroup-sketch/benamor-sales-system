@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260926-1407';
+const APP_BUILD='b20260926-1437';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -144,6 +144,54 @@ function setupDecimalInputs(){
     const el=e.target;
     if(!el?.matches?.('input[inputmode="decimal"]')) return;
     if(String(el.value).trim()!=='') el.value=String(parseDecimal(el.value));
+  },true);
+}
+/* ═══ (0079) الزر الأيمن = لصق في أماكن الكتابة: ضغطة يمين (أو ضغطة طويلة على شاشة اللمس)
+   داخل أي حقل تُلصق الحافظة عند موضع المؤشر — أسرع من Ctrl+V على أجهزة البيع.
+   بقية المناطق (صفوف القوائم بقوائمها اليمنى المخصصة وغير القابل للكتابة) تعمل كما هي. ═══ */
+function isRightClickPasteTarget(el){
+  if(!el || el.disabled || el.readOnly) return false;
+  const tag=el.tagName;
+  if(tag==='TEXTAREA') return true;
+  if(tag==='INPUT'){
+    const t=String(el.type||'text').toLowerCase();
+    if(['checkbox','radio','range','file','button','submit','reset','image'].includes(t)) return false;
+    return true;
+  }
+  return el.isContentEditable===true;
+}
+async function rcpPaste(el){
+  let text=null;
+  try{ text=await navigator.clipboard.readText(); }catch(_e){ text=null; }
+  if(text==null){ /* متصفحات لا تسمح بالقراءة المباشرة — اللصق الكلاسيكي بديل */
+    try{ el.focus(); if(document.execCommand) document.execCommand('paste'); }catch(_e2){}
+    return;
+  }
+  if(text===''){ toast('الحافظة فارغة','warn'); return; }
+  if(el.isContentEditable){
+    el.focus();
+    const sel=window.getSelection();
+    if(sel && sel.rangeCount>0){
+      const r=sel.getRangeAt(0); r.deleteContents();
+      const node=document.createTextNode(text); r.insertNode(node); r.collapse(false);
+    }else if(el.insertAdjacentText){ el.insertAdjacentText('beforeend',text); }
+    else{ el.appendChild(document.createTextNode(text)); }
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+    return;
+  }
+  const s2=el.selectionStart??el.value.length, en=el.selectionEnd??el.value.length, v=el.value;
+  el.focus();
+  el.value=v.slice(0,s2)+text+v.slice(en);
+  try{ el.setSelectionRange(s2+text.length,s2+text.length); }catch(_e3){}
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.dispatchEvent(new Event('change',{bubbles:true}));
+}
+function setupRightClickPaste(){
+  document.addEventListener('contextmenu',e=>{
+    const el=e.target.closest?.('input,textarea,[contenteditable]');
+    if(!el || !isRightClickPasteTarget(el)) return; /* غير قابل للكتابة ⇒ نتركه كما هو */
+    e.preventDefault(); e.stopPropagation(); /* قبل قوائم الصفوف وقائمة المتصفح */
+    rcpPaste(el).catch(err=>{ console.warn('right-click paste',err); toast('تعذّر اللصق من الحافظة','warn'); });
   },true);
 }
 function setSyncState(state,msg){const el=q('syncState'); if(!el)return; el.classList.remove('sync-online','sync-syncing','sync-cache','sync-offline'); el.classList.add('sync-'+state); el.textContent=msg;}
@@ -7645,4 +7693,4 @@ function renderComposites(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDateFrom')) q('dailyCashDateFrom').value=d; if(q('dailyCashDateTo')) q('dailyCashDateTo').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
