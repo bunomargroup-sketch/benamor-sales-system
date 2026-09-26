@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260926-1437';
+const APP_BUILD='b20260926-1550';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -260,6 +260,13 @@ async function rpc(name, body){
   return fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:H,body:JSON.stringify(body)},null);
 }
 
+/* ⚠️ التصفيح بـRange يفترض ترتيباً **ثابتاً بين الطلبات**. أي ترتيب غير فريد
+   (updated_at / created_at وحدها — 365 صفاً في pos_stock يحملون نفس اللحظة)
+   يجعل الخادم حرّاً في ترتيب المتساويات، فتتكرر صفوف في صفحة وتسقط أخرى.
+   العدد الإجمالي يبقى صحيحاً فلا يُكتشف العطل (حادثة EL10702: 1,149 مكرراً
+   و1,149 مفقوداً، وصفّ السراج من المفقودة فظهر رصيده صفراً).
+   لذلك: كل ترتيب يُصفَّح يحمل مُرجِّحاً فريداً (id.asc)، وهذه الدالة تزيل
+   التكرار بالمعرّف كشبكة أمان وتُحذّر في الـconsole إن وُجد. */
 async function apiAll(table, qs='', batch=5000){
   let from=0, all=[], page=batch;
   while(true){
@@ -273,7 +280,19 @@ async function apiAll(table, qs='', batch=5000){
     }
     from += data.length;
   }
-  return all;
+  return dedupeById(all, table, qs);
+}
+/* شبكة أمان: تكرار المعرّف يعني ترتيباً غير مستقر ⇒ صفوف مفقودة بنفس العدد */
+function dedupeById(rows, table, qs){
+  if(!Array.isArray(rows) || rows.length < 2 || !rows[0] || rows[0].id === undefined) return rows;
+  const seen=new Set(), out=[];
+  for(const r of rows){ const k=r.id; if(k===undefined||k===null){ out.push(r); continue; } if(seen.has(k)) continue; seen.add(k); out.push(r); }
+  const dropped=rows.length-out.length;
+  if(dropped>0){
+    console.warn(`[apiAll] ${table}: ${dropped} صفاً مكرراً — الترتيب غير مستقر. أضف مُرجِّحاً فريداً (id.asc) إلى: ${qs}`);
+    try{ window.__apiAllDupWarn=(window.__apiAllDupWarn||[]).concat([{table, dropped, qs}]); }catch(_e){}
+  }
+  return out;
 }
 
 const ESSENTIAL_CACHE_KEY='posEssentialCacheV1';
@@ -852,10 +871,10 @@ async function loadCore(){
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []}),
       apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
-      apiAll('pos_stock','?select=*&order=updated_at.desc'),
+      apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc'),
       apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return []}),
       apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
-      apiAll('pos_composite_items','?select=*&order=created_at.asc').catch(e=>{return []}),
+      apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc').catch(e=>{return []}),
     ]);
     costViewRows=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}).catch(()=>[]);
   }
@@ -874,9 +893,9 @@ async function loadHeavy(){
     sales=bs.pos_sales||[]; saleItems=bs.pos_sale_items||[]; salePayments=bs.pos_sale_payments||[];
   } else {
     [sales,saleItems,salePayments]=await Promise.all([
-      apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(e=>{console.warn('sales not setup yet',e); return []}),
-      apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
-      apiAll('pos_sale_payments','?select=*&order=created_at.desc').catch(e=>{console.warn('sale payments not setup yet',e); return []}),
+      apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('sales not setup yet',e); return []}),
+      apiAll('pos_sale_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
+      apiAll('pos_sale_payments','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('sale payments not setup yet',e); return []}),
     ]);
   }
   if(br){
@@ -893,26 +912,26 @@ async function loadHeavy(){
     [ledger,payments,purchases,purchaseItems,transfers,proformas,proformaItems,saleReturns,saleReturnItems,stockCounts,stockMovements,customers,customerLedger,financeMovements,dailyCashClosings,expenses,employees,salaryPayments,purchaseReturns,purchaseReturnItems,stockWaste,stockWasteItems]=await Promise.all([
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
       api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
-      apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc'),
-      apiAll('pos_purchase_items','?select=*&order=created_at.desc').catch(e=>{console.warn('purchase items not setup yet',e); return []}),
+      apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc,id.asc'),
+      apiAll('pos_purchase_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('purchase items not setup yet',e); return []}),
       api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}),
-      apiAll('pos_proformas','?select=*&proforma_date=gte.'+cutoff60+'&order=proforma_date.desc,created_at.desc').catch(e=>{console.warn('proformas not setup yet',e); return []}),
-      apiAll('pos_proforma_items','?select=*&created_at=gte.'+cutoff60i+'&order=created_at.desc').catch(e=>{console.warn('proforma items not setup yet',e); return []}),
-      apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('sale returns not setup yet',e); return []}),
-      apiAll('pos_sale_return_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale return items not setup yet',e); return []}),
+      apiAll('pos_proformas','?select=*&proforma_date=gte.'+cutoff60+'&order=proforma_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('proformas not setup yet',e); return []}),
+      apiAll('pos_proforma_items','?select=*&created_at=gte.'+cutoff60i+'&order=created_at.desc,id.asc').catch(e=>{console.warn('proforma items not setup yet',e); return []}),
+      apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('sale returns not setup yet',e); return []}),
+      apiAll('pos_sale_return_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('sale return items not setup yet',e); return []}),
       apiAll('pos_stock_counts','?select=*&order=count_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('stock counts not setup yet — شغّل SQL 0061',e); return []}),
       apiAll('pos_stock_movements','?select=*&order=movement_date.desc&limit=50').catch(e=>{console.warn('stock movements not setup yet',e); return []}),
-      apiAll('pos_customer_balances','?select=*&order=name.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
-      apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
+      apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
+      apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
       apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(e=>{console.warn('finance movements not setup yet',e); return []}),
       apiAll('pos_daily_cash_closings','?select=*&order=closing_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('daily cash closings not setup yet',e); return []}),
-      apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc').catch(e=>{console.warn('expenses not setup yet',e); return []}),
+      apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('expenses not setup yet',e); return []}),
       apiAll('pos_employees','?select=*&order=name.asc').catch(e=>{console.warn('employees not setup yet',e); return []}),
-      apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc').catch(e=>{console.warn('salary payments not setup yet',e); return []}),
-      apiAll('pos_purchase_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('purchase returns not setup yet — شغّل SQL 0074',e); return []}),
-      apiAll('pos_purchase_return_items','?select=*&order=created_at.desc').catch(e=>{console.warn('purchase return items not setup yet — شغّل SQL 0074',e); return []}),
-      apiAll('pos_stock_waste','?select=*&order=waste_date.desc,created_at.desc').catch(e=>{console.warn('stock waste not setup yet — شغّل SQL 0074',e); return []}),
-      apiAll('pos_stock_waste_items','?select=*&order=created_at.desc').catch(e=>{console.warn('stock waste items not setup yet — شغّل SQL 0074',e); return []}),
+      apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('salary payments not setup yet',e); return []}),
+      apiAll('pos_purchase_returns','?select=*&order=return_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('purchase returns not setup yet — شغّل SQL 0074',e); return []}),
+      apiAll('pos_purchase_return_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('purchase return items not setup yet — شغّل SQL 0074',e); return []}),
+      apiAll('pos_stock_waste','?select=*&order=waste_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('stock waste not setup yet — شغّل SQL 0074',e); return []}),
+      apiAll('pos_stock_waste_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('stock waste items not setup yet — شغّل SQL 0074',e); return []}),
     ]);
   }
   await reapplyOfflineQueueLocally(); /* فواتير الطابور المحلي تبقى ظاهرة ومخصومة من المخزون بعد أي تحديث من الخادم */
@@ -2067,13 +2086,41 @@ function openMovementDocument(table,id){
 }
 
 let __movCode='',__movRows=[],__movLevels=[];
+/* الرصيد بمحاذاة كل حركة.
+   كان يُستنتج رجوعاً من pos_stock وحده، فإن غاب صفّ الفرع (ترتيب غير مستقر،
+   أو صنف بلا صفّ مخزون) ظهرت كل أسطر ذلك الفرع مزاحة أو صفراً بلا أي إشارة
+   (حادثة EL10702: السراج رصيده 2 في القاعدة وظهر 0 في الشاشة).
+   الآن: الرصيد يُحسب **من الحركات نفسها** (rows تأتي تنازلياً بالتاريخ)،
+   والمرساة = pos_stock إن كانت متّسقة معها، وإلا يُرفع تنبيه بدل رقم صامت خاطئ. */
 function computeMovementLevels(rows,code){
-  // الرصيد بمحاذاة كل حركة يُستنتج رجوعاً من الكمية الحالية في ذلك الفرع
-  // (الرصيد الحالي = مجموع كل الحركات بعد الترحيل، فالمستويات دقيقة بالكامل)
-  const acc=new Map();
-  stock.filter(st=>String(st.product_code)===String(code)).forEach(st=>acc.set(String(st.location_id),Number(st.qty||0)));
-  const lvls=new Array(rows.length);
-  for(let i=0;i<rows.length;i++){
+  const n=rows.length;
+  const lvls=new Array(n);
+  /* 1) مجموع حركات كل فرع من نفس القائمة المعروضة */
+  const sumByLoc=new Map();
+  for(const r of rows){
+    const lid=String(r.location_id||'');
+    sumByLoc.set(lid,(sumByLoc.get(lid)||0)+Number(r.qty_change||0));
+  }
+  /* 2) المرساة: pos_stock إن وُجد الصف، وإلا مجموع الحركات نفسه */
+  const anchor=new Map(), stockByLoc=new Map();
+  stock.filter(st=>String(st.product_code||'').toLowerCase()===String(code||'').toLowerCase())
+       .forEach(st=>stockByLoc.set(String(st.location_id),Number(st.qty||0)));
+  const mismatched=[];
+  for(const [lid,sum] of sumByLoc){
+    if(stockByLoc.has(lid)){
+      const s=stockByLoc.get(lid);
+      anchor.set(lid,s);
+      /* القائمة محدودة بـ300 حركة (limit=300 في openProductMovements)، فالاختلاف
+         طبيعي للأصناف كثيرة الحركة — لا يُنبَّه إلا إذا كانت القائمة كاملة (أقل من 300) */
+      if(n<300 && Math.abs(s-sum)>0.0005) mismatched.push({lid, stock:s, sum});
+    }else{
+      anchor.set(lid,sum);            /* لا صفّ مخزون ⇒ الحركات هي المرجع */
+      if(Math.abs(sum)>0.0005) mismatched.push({lid, stock:null, sum});
+    }
+  }
+  window.__movLevelWarn = mismatched;
+  const acc=new Map(anchor);
+  for(let i=0;i<n;i++){
     const lid=String(rows[i].location_id||'');
     const a=acc.has(lid)?acc.get(lid):0;
     lvls[i]=a;
@@ -2845,16 +2892,16 @@ async function refreshSalesDomain(o={}){
   if(!navigator.onLine) return false;
   const cutoff90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
   const r=await Promise.all([
-    apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(()=>null),
-    apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(()=>null),
-    apiAll('pos_sale_payments','?select=*&order=created_at.desc').catch(()=>null),
-    apiAll('pos_stock','?select=*&order=updated_at.desc').catch(()=>null),
-    apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc').catch(()=>null),
-    apiAll('pos_sale_return_items','?select=*&order=created_at.desc').catch(()=>null),
+    apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc,id.asc').catch(()=>null),
+    apiAll('pos_sale_items','?select=*&order=created_at.desc,id.asc').catch(()=>null),
+    apiAll('pos_sale_payments','?select=*&order=created_at.desc,id.asc').catch(()=>null),
+    apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc').catch(()=>null),
+    apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc,id.asc').catch(()=>null),
+    apiAll('pos_sale_return_items','?select=*&order=created_at.desc,id.asc').catch(()=>null),
     apiAll('pos_stock_movements','?select=*&order=movement_date.desc&limit=50').catch(()=>null),
-    apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc').catch(()=>null),
+    apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc,id.asc').catch(()=>null),
     apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(()=>null),
-    apiAll('pos_customer_balances','?select=*&order=name.asc').catch(()=>null),
+    apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc').catch(()=>null),
     apiAll('pos_stock_counts','?select=*&order=count_date.desc,created_at.desc&limit=100').catch(()=>null)
   ]);
   if(!r[0]||!r[3]) return false; /* الاتصال ساقط — لا نلمس البيانات الحالية */
@@ -5339,7 +5386,7 @@ function resetExpenseListFilters(){
 }
 async function fetchExpensesList(){
   initExpensesListTab();
-  const qs=['select=*&order=expense_date.desc,created_at.desc'];
+  const qs=['select=*&order=expense_date.desc,created_at.desc,id.asc'];
   const from=q('expenseListFrom')?.value, to=q('expenseListTo')?.value, cat=q('expenseListCategory')?.value, br=q('expenseListBranch')?.value, sr=q('expenseListSearch')?.value?.trim();
   if(from) qs.push('expense_date=gte.'+from);
   if(to) qs.push('expense_date=lte.'+to);
@@ -7462,7 +7509,7 @@ async function viewStockCount(id){
   const r=mergedStockCounts().find(x=>x.id===id); if(!r){toast('لم توجد قائمة الجرد (ربما حُذفت أو غابت عن التحميل — اضغط تحديث)','warn');return;}
   let items=r._items||null;
   if(!items){
-    try{showLoading(true);items=await apiAll('pos_stock_count_items','?select=*&count_id=eq.'+id+'&order=created_at.asc');}
+    try{showLoading(true);items=await apiAll('pos_stock_count_items','?select=*&count_id=eq.'+id+'&order=created_at.asc,id.asc');}
     catch(e){console.error(e);toast('تعذّر جلب أسطر الجرد: '+friendlyError(e),'error');return;}
     finally{showLoading(false);}
   }
