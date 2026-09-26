@@ -7,13 +7,14 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260926-1154';
+const APP_BUILD='b20260926-1259';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costViewRows=[];
+let costViewMap=null; /* (0076) تكلفة مرجعية من الخادم — أولوية على الحساب المحلي */
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), authSession=JSON.parse(localStorage.getItem('posAuthSession')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
@@ -407,7 +408,10 @@ function localMovement(account_id,direction,movement_type,amount,date,reference_
 }
 function refreshAfterLocalUpdate(){
   setTimeout(()=>{try{saveEssentialCache();}catch(e){}},800); /* مؤجلة — لا تعيق زمن ما بعد الحفظ */
-  renderAll();
+  /* (0076) لا نعيد رسم كل الشاشات بعد كل حفظ — الشاشة النشطة فقط، وبقية التواييب تُرسم عند فتحها */
+  markAllTabsDirty();
+  renderTab(activeTabId(), true);
+  renderStatusBar();
 }
 /* مرآة post_sale_transaction */
 function applySaleLocally(saleId, body, items, paymentsForRpc){
@@ -756,29 +760,94 @@ function initOfflineQueue(){
   updateOfflineQueueBadge().catch(()=>{});
 }
 
-async function loadAll(){
-  // نوافذ زمنية للعرض فقط (90 يوماً للقيود) — الكشوف التاريخية تُجلب عند الطلب من openCustomerLedger/openLedger
-  // ⚠️ sales/saleItems/purchases/purchaseItems تبقى كاملة: محرك التكلفة (المتوسط المتحرك) يحتاج كل التاريخ
+/* ══════ (0076) تحميل من مرحلتين: النواة أولاً (تستعمل المنظومة خلال ثوانٍ) ثم التاريخ الكامل بالخلفية ══════
+   النواة: جداول صغيرة تكفي للبيع والفوترة (مواقع/أصناف/مخزون/حسابات/أدوار/...).
+   الثقيل: المبيعات الكاملة + البنود + القيود (محرك التكلفة والتقارير) — بالخلفية بلا حجب.
+   الجلب الجماعي (pos_fetch_bulk / 0076): إن كان RPC موجوداً في الخادم تُجلب كل مجموعة بطلب واحد؛
+   وإلا يعود النمط الكلاسيكي تلقائياً (لا كسر قبل تشغيل SQL 0076). */
+const CORE_TABLES=['pos_locations','pos_supplier_balances','pos_user_roles','pos_product_stock_summary','pos_stock','pos_finance_account_balances','pos_expense_categories','pos_composite_items','pos_product_avg_cost'];
+const HEAVY_SALES=['pos_sales','pos_sale_items','pos_sale_payments'];
+const HEAVY_REST=['pos_supplier_ledger','pos_supplier_payments','pos_purchases','pos_purchase_items','pos_stock_transfers','pos_proformas','pos_proforma_items','pos_sale_returns','pos_sale_return_items','pos_stock_counts','pos_stock_movements','pos_customer_balances','pos_customer_ledger','pos_finance_movements','pos_daily_cash_closings','pos_expenses','pos_employees','pos_salary_payments','pos_purchase_returns','pos_purchase_return_items','pos_stock_waste','pos_stock_waste_items'];
+
+async function tryBulk(tables){
+  try{
+    const r=await rpc('pos_fetch_bulk', tables);
+    if(!r || typeof r!=='object' || Array.isArray(r)) throw new Error('bulk: شكل غير متوقع');
+    for(const t of tables){ if(!Array.isArray(r[t])) throw new Error('bulk: ناقص الجدول '+t); }
+    return r;
+  }catch(e){ console.warn('الجلب الجماعي غير متاح — النمط الكلاسيكي', e); return null; }
+}
+
+/* (0076) المرجعية الواحدة للتكلفة: وجهة نظر الخادم إن وُجدت، وإلا المحاكاة المحلية (متوسط متحرك) */
+function applyCostReference(){
+  if((costViewRows||[]).length){
+    costViewMap=new Map(costViewRows.map(r=>[String(r.code||'').trim().toLowerCase(), Number(r.avg_cost||0)]));
+    productCostCache=new Map();
+  } else {
+    costViewMap=null;
+    try{ buildProductCostIndex(); }catch(e){ console.warn('build product cost index', e); }
+  }
+}
+
+async function loadCore(){
+  // أولاً: بيانات الجلسة السابقة (تظهر فوراً ثم تتحدّث — stale-while-revalidate)
+  try{ const _c=loadEssentialCache(); if(_c) applyEssentialCache(_c); }catch(cacheErr){ console.warn('فشل عرض البيانات المحفوظة محليًا — سيتم التحديث من الخادم',cacheErr); }
+  const bulk=await tryBulk(CORE_TABLES);
+  if(bulk){
+    locations=bulk.pos_locations||[]; suppliers=bulk.pos_supplier_balances||[]; userRoles=bulk.pos_user_roles||[];
+    products=bulk.pos_product_stock_summary||[]; stock=bulk.pos_stock||[];
+    financeAccounts=bulk.pos_finance_account_balances||[]; expenseCategories=bulk.pos_expense_categories||[];
+    compositeItems=bulk.pos_composite_items||[]; costViewRows=bulk.pos_product_avg_cost||[];
+  } else {
+    [locations,suppliers,userRoles,products,stock,financeAccounts,expenseCategories,compositeItems]=await Promise.all([
+      api('pos_locations',{qs:'?select=*&order=name.asc'}),
+      api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
+      apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []}),
+      apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
+      apiAll('pos_stock','?select=*&order=updated_at.desc'),
+      apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return []}),
+      apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
+      apiAll('pos_composite_items','?select=*&order=created_at.asc').catch(e=>{return []}),
+    ]);
+    costViewRows=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}).catch(()=>[]);
+  }
+  buildProductSearchIndex();
+  applyCostReference();
+  renderProductDatalist(); fillSupplierSelects(); renderStatusBar(); applyPermissions();
+}
+
+async function loadHeavy(){
+  // نوافذ زمنية للنمط الكلاسيكي فقط (الجلب الجماعي يجلب الكامل — أدق للتقارير)
   const cutoff60=new Date(Date.now()-60*864e5).toISOString().slice(0,10);
   const cutoff60i=new Date(Date.now()-60*864e5).toISOString();
   const cutoff90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
-  // على الإنترنت الضعيف: اعرض آخر بيانات محفوظة فوراً ثم حدّث من الخادم بالخلفية
-  try{ if(!products.length){ const _c=loadEssentialCache(); if(_c) applyEssentialCache(_c); } }catch(cacheErr){ console.warn('فشل عرض البيانات المحفوظة محليًا — سيتم التحديث من الخادم',cacheErr); }
-  try{
-    showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, purchaseItems, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockCounts, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, dailyCashClosings, expenseCategories, expenses, employees, salaryPayments, compositeItems, purchaseReturns, purchaseReturnItems, stockWaste, stockWasteItems] = await Promise.all([
-      api('pos_locations',{qs:'?select=*&order=name.asc'}),
-      api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
-      api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
-      api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
-      apiAll('pos_stock','?select=*&order=updated_at.desc'),
-      apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc'),
-      apiAll('pos_purchase_items','?select=*&order=created_at.desc').catch(e=>{console.warn('purchase items not setup yet',e); return []}),
-      apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
-      api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}),
+  const [bs,br]=await Promise.all([tryBulk(HEAVY_SALES), tryBulk(HEAVY_REST)]);
+  if(bs){
+    sales=bs.pos_sales||[]; saleItems=bs.pos_sale_items||[]; salePayments=bs.pos_sale_payments||[];
+  } else {
+    [sales,saleItems,salePayments]=await Promise.all([
       apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc').catch(e=>{console.warn('sales not setup yet',e); return []}),
       apiAll('pos_sale_items','?select=*&order=created_at.desc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
       apiAll('pos_sale_payments','?select=*&order=created_at.desc').catch(e=>{console.warn('sale payments not setup yet',e); return []}),
+    ]);
+  }
+  if(br){
+    ledger=br.pos_supplier_ledger||[]; payments=br.pos_supplier_payments||[]; purchases=br.pos_purchases||[]; purchaseItems=br.pos_purchase_items||[];
+    transfers=br.pos_stock_transfers||[]; proformas=br.pos_proformas||[]; proformaItems=br.pos_proforma_items||[];
+    saleReturns=br.pos_sale_returns||[]; saleReturnItems=br.pos_sale_return_items||[];
+    stockCounts=br.pos_stock_counts||[]; stockMovements=br.pos_stock_movements||[];
+    customers=br.pos_customer_balances||[]; customerLedger=br.pos_customer_ledger||[];
+    financeMovements=br.pos_finance_movements||[]; dailyCashClosings=br.pos_daily_cash_closings||[];
+    expenses=br.pos_expenses||[]; employees=br.pos_employees||[]; salaryPayments=br.pos_salary_payments||[];
+    purchaseReturns=br.pos_purchase_returns||[]; purchaseReturnItems=br.pos_purchase_return_items||[];
+    stockWaste=br.pos_stock_waste||[]; stockWasteItems=br.pos_stock_waste_items||[];
+  } else {
+    [ledger,payments,purchases,purchaseItems,transfers,proformas,proformaItems,saleReturns,saleReturnItems,stockCounts,stockMovements,customers,customerLedger,financeMovements,dailyCashClosings,expenses,employees,salaryPayments,purchaseReturns,purchaseReturnItems,stockWaste,stockWasteItems]=await Promise.all([
+      api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
+      api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
+      apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc'),
+      apiAll('pos_purchase_items','?select=*&order=created_at.desc').catch(e=>{console.warn('purchase items not setup yet',e); return []}),
+      api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}),
       apiAll('pos_proformas','?select=*&proforma_date=gte.'+cutoff60+'&order=proforma_date.desc,created_at.desc').catch(e=>{console.warn('proformas not setup yet',e); return []}),
       apiAll('pos_proforma_items','?select=*&created_at=gte.'+cutoff60i+'&order=created_at.desc').catch(e=>{console.warn('proforma items not setup yet',e); return []}),
       apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('sale returns not setup yet',e); return []}),
@@ -787,28 +856,83 @@ async function loadAll(){
       apiAll('pos_stock_movements','?select=*&order=movement_date.desc&limit=50').catch(e=>{console.warn('stock movements not setup yet',e); return []}),
       apiAll('pos_customer_balances','?select=*&order=name.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
       apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
-      apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []}),
-      apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return []}),
       apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(e=>{console.warn('finance movements not setup yet',e); return []}),
       apiAll('pos_daily_cash_closings','?select=*&order=closing_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('daily cash closings not setup yet',e); return []}),
-      apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
       apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc').catch(e=>{console.warn('expenses not setup yet',e); return []}),
       apiAll('pos_employees','?select=*&order=name.asc').catch(e=>{console.warn('employees not setup yet',e); return []}),
       apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc').catch(e=>{console.warn('salary payments not setup yet',e); return []}),
-      apiAll('pos_composite_items','?select=*&order=created_at.asc').catch(e=>{console.warn('composite items not setup yet',e); return []}),
       apiAll('pos_purchase_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('purchase returns not setup yet — شغّل SQL 0074',e); return []}),
       apiAll('pos_purchase_return_items','?select=*&order=created_at.desc').catch(e=>{console.warn('purchase return items not setup yet — شغّل SQL 0074',e); return []}),
       apiAll('pos_stock_waste','?select=*&order=waste_date.desc,created_at.desc').catch(e=>{console.warn('stock waste not setup yet — شغّل SQL 0074',e); return []}),
-      apiAll('pos_stock_waste_items','?select=*&order=created_at.desc').catch(e=>{console.warn('stock waste items not setup yet — شغّل SQL 0074',e); return []})
+      apiAll('pos_stock_waste_items','?select=*&order=created_at.desc').catch(e=>{console.warn('stock waste items not setup yet — شغّل SQL 0074',e); return []}),
     ]);
-    ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter','stockCategoryFilter','stockBrandFilter','stockSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
-    await reapplyOfflineQueueLocally(); /* فواتير الطابور المحلي تبقى ظاهرة ومخصومة من المخزون بعد أي تحديث من الخادم */
-    buildProductCostIndex(); buildProductSearchIndex(); renderAll(); saveEssentialCache(); setSyncState('online','متصل - تم تحديث البيانات'); gDriveMaybeAuto();
+  }
+  await reapplyOfflineQueueLocally(); /* فواتير الطابور المحلي تبقى ظاهرة ومخصومة من المخزون بعد أي تحديث من الخادم */
+  if(!costViewMap) applyCostReference(); /* بلا وجهة نظر الخادم: إعادة بناء متوسط متحرك من التاريخ الكامل */
+  markAllTabsDirty();
+  renderTab(activeTabId(), true);
+  saveEssentialCache();
+  setSyncState('online','متصل - تم تحديث البيانات');
+  gDriveMaybeAuto();
+  /* شبكة أمان: فاتورة حُفظت أثناء التحميل الخلفي قد تضيع من الذاكرة عند إعادة إسناد المصفوفات —
+     إعادة جلب قصيرة لمجال المبيعات تعيدها (نفس ما يفعله التحديث الدوري) */
+  setTimeout(()=>{ refreshSalesDomain({silent:true}).catch(()=>{}); }, 2000);
+}
+
+async function loadAll(){
+  /* تحديث كامل صريح (زر تحديث): مرحلتان ثم إعادة رسم كل الشاشات */
+  showLoading(true);
+  try{
+    await loadCore();
+    await loadHeavy();
+    markAllTabsDirty();
+    renderAll();
   }catch(e){ console.error(e); const used=applyEssentialCache(loadEssentialCache()); if(used) toast('الاتصال ضعيف: تم استعمال آخر بيانات محفوظة','warn'); else toast('خطأ: '+e.message+' - لا توجد بيانات محفوظة محليًا'); reapplyOfflineQueueLocally().then(()=>{try{renderAll()}catch(_e){}}).catch(()=>{}); }
   finally{showLoading(false);window.__busy=false}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderCustomerPaymentsList();renderSales();renderReturns();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();renderProductOptionSettings();refreshAuditLog();renderComposites();renderStockCount();renderStockWaste();renderExpensesList();applyPermissions();setTimeout(setupTableSorting,0)}
+/* ══════ (0076) رسم كسول: كل تبويب يُرسم عند أول فتح ثم عند اتساخ بياناته فقط —
+   لا إعادة رسم لـ21 شاشة بعد كل حفظ (كانت سبب التجمّد بين الفواتير) ══════ */
+const TAB_RENDERERS={
+  dashboard:()=>renderDashboard(),
+  sales:()=>{},
+  salesList:()=>{renderSales(); renderReturns();},
+  proformas:()=>renderProformas(),
+  customers:()=>{renderCustomers(); renderCustomerLedger();},
+  products:()=>renderProducts(),
+  suppliers:()=>renderSuppliers(),
+  purchases:()=>{fillSupplierSelects(); renderPurchases();},
+  stock:()=>{renderStock(); renderStockWaste();},
+  stockCount:()=>renderStockCount(),
+  composites:()=>renderComposites(),
+  transfers:()=>{renderTransfers(); initSuggestionFilters();},
+  locations:()=>{renderLocations(); onLocationsTabOpen();},
+  expensesQuick:()=>{renderExpensesList(); onExpensesTabOpen();},
+  dailyCashClosing:()=>renderDailyCashReport(),
+  ledger:()=>renderLedger(),
+  payments:()=>{renderPayments(); renderCustomerPaymentsList();},
+  finance:()=>renderFinance(),
+  reports:()=>renderReports(),
+  auditLog:()=>refreshAuditLog(),
+  users:()=>renderRoles(),
+  settings:()=>{renderSettingsExpenseCategories(); renderProductOptionSettings();}
+};
+const tabDirty={};
+function activeTabId(){const a=document.querySelector('nav button.active'); return a?.dataset.tab||'dashboard';}
+function markAllTabsDirty(){Object.keys(TAB_RENDERERS).forEach(t=>{tabDirty[t]=true;});}
+function renderTab(tab, force=false){
+  const fn=TAB_RENDERERS[tab]; if(!fn) return;
+  if(!force && tabDirty[tab]===false) return; /* رُسِم من بعد آخر تغيير — لا عمل مكرر */
+  tabDirty[tab]=true;
+  try{ fn(); }catch(e){ console.error('render tab '+tab, e); }
+  tabDirty[tab]=false;
+  setTimeout(setupTableSorting,0); /* مرتبّ — آمن عند التكرار (dataset.sortReady) */
+}
+function renderAll(){
+  renderProductDatalist(); fillSupplierSelects(); renderStatusBar(); applyPermissions();
+  markAllTabsDirty();
+  Object.keys(TAB_RENDERERS).forEach(t=>renderTab(t,true));
+}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -932,11 +1056,16 @@ async function loginPOS(create=false){
     q('loginBtn')?.setAttribute('disabled','disabled');
     showLoading(true);
     let user; try{ user=await authSignIn(identifier,code); }catch(authErr){ authErr.isAuthError=true; throw authErr; }
-    await loadAll();
+    /* (0076) النواة أولاً: أصناف/مخزون/حسابات/أدوار — ثم التاريخ الكامل بالخلفية بلا حجب للشاشة */
+    await loadCore();
     const loc=resolveSelectedLoginBranch(selectedBranch, selectedBranchText);
     if(!loc){throw new Error('تعذر ربط الفرع المختار. حدّث الصفحة وحاول مرة أخرى.');}
     appUser={id:user.id,identifier,branch_id:loc.id,branch_name:loc.name}; localStorage.setItem('posUser',JSON.stringify(appUser));
-    await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); renderSales(); /* إعادة رسم بعد ضبط الدور — أزرار المرتجع (✏/🗑) كانت تُرسم قبل تحدّد الدور فلا تظهر إلا متأخراً */ renderStatusBar(); renderCustomers(); toast(create?'تم إنشاء المستخدم والدخول':'تم الدخول','success');
+    await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); renderStatusBar();
+    markAllTabsDirty(); renderTab(activeTabId(), true); /* إعادة رسم بعد ضبط الدور — أزرار المرتجع (✏/🗑) تظهر من أول رسم */
+    setSyncState('online','جاهز — جارٍ تحميل التفاصيل بالخلفية…');
+    toast(create?'تم إنشاء المستخدم والدخول':'تم الدخول','success');
+    loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);});
     notifyAdminOfSellerEdits();
     syncOfflineQueue().catch(console.warn); updateOfflineQueueBadge(); /* ارفع طابور هذا الجهاز فور الدخول */
   }catch(err){
@@ -1985,18 +2114,21 @@ function badgeCustomer(balance){
   if(balance<0) return `<span class="badge green">للزبون رصيد</span>`;
   return `<span class="badge gray">متوازن</span>`;
 }
+let customersListLimit=200; /* (0076) أول 200 زبون ثم «تحميل الأقدم» */
 function renderCustomers(){
   const term=(q('customerSearch')?.value||'').trim();
   const showInactive=q('customerShowInactive')?.checked;
   const isAdmin=currentRole?.role==='admin';
   const rows=customers.filter(c=>(!term || (c.name||'').includes(term) || (c.phone||'').includes(term)) && (showInactive || c.active!==false));
-  q('customersBody').innerHTML = rows.map(c=>{
+  const more=rows.length-customersListLimit;
+  q('customersBody').innerHTML = rows.slice(0,customersListLimit).map(c=>{
     const inactive=c.active===false;
     const actions=[`<button class="btn secondary" onclick="openCustomerLedger('${c.id}')">كشف الحساب</button>`,`<button class="btn secondary" onclick="editCustomer('${c.id}')">تعديل</button>`];
     if(inactive) actions.push(`<button class="btn" onclick="toggleCustomerActive('${c.id}',true)">تفعيل</button>`);
     else if(isAdmin) actions.push(`<button class="btn danger" onclick="deleteCustomer('${c.id}')">حذف</button>`);
     return `<tr${inactive?' style="opacity:.55"':''}><td class="ltr"><b>${esc(c.customer_no)}</b></td><td><b>${c.name}</b>${inactive?' <span class="badge gray">معطّل</span>':''}<div class="muted">${c.notes||''}</div></td><td class="ltr">${c.phone||''}${c.phone2?'<div class="mini ltr">'+c.phone2+'</div>':''}</td><td>${c.address||''}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td><td><div class="row">${actions.join('')}</div></td></tr>`;
-  }).join('') || '<tr><td colspan="7">لا يوجد زبائن بعد.</td></tr>';
+  }).join('')+(more>0?`<tr><td colspan="7" style="text-align:center;padding:10px"><button class="btn secondary" onclick="customersListLimit+=400;renderCustomers()">⬇ تحميل الأقدم (${more} زبون)</button></td></tr>`:'')
+    || '<tr><td colspan="7">لا يوجد زبائن بعد.</td></tr>';
 }
 async function openCustomerLedger(id){document.querySelector('[data-tab="customers"]').click(); q('customerLedgerCustomer').value=id;
   try{ const rows=await api('pos_customer_ledger',{qs:`?select=*&customer_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(customerLedger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) customerLedger.push(r); }); }catch(e){ console.warn('ledger history fetch failed — using loaded rows',e); }
@@ -2604,7 +2736,7 @@ async function refreshSalesDomain(o={}){
   sales=r[0]; saleItems=r[1]||saleItems; salePayments=r[2]||salePayments; stock=r[3];
   saleReturns=r[4]||saleReturns; saleReturnItems=r[5]||saleReturnItems; stockMovements=r[6]||stockMovements;
   customerLedger=r[7]||customerLedger; financeMovements=r[8]||financeMovements; customers=r[9]||customers; stockCounts=r[10]||stockCounts;
-  try{buildProductCostIndex();}catch(_e){}
+  if(!costViewMap){try{buildProductCostIndex();}catch(_e){}} /* (0076) وجهة نظر الخادم أولوية — لا محاكاة محلية بلا داعي */
   if(!o.skipRender){
     try{renderSales();}catch(_e){}
     try{renderStatusBar();}catch(_e){}
@@ -2630,6 +2762,7 @@ function startAutoRefresh(){
   },AUTO_REFRESH_SALES_MS);
 }
 
+let salesListLimit=150; /* (0076) عرض أول 150 فاتورة ثم «تحميل الأقدم» — كان يُرسم ~10,000 صف دفعة واحدة */
 function renderSales(){
   fillSaleListFilterOptions();
   const typ=q('saleFilterType')?.value||'';
@@ -2650,7 +2783,10 @@ function renderSales(){
   const entries=[...rows.map(sl=>({kind:'sale',date:String(sl.sale_date||''),key:String(sl.invoice_no||String(sl.id).slice(0,8)),sl})),
                  ...rets.map(r=>({kind:'ret',date:String(r.return_date||''),key:String(saleIdx.get(r.sale_id)?.invoice_no||String(r.id).slice(0,8)),r}))];
   entries.sort((a,b)=>{const d=b.date.localeCompare(a.date);return d||b.key.localeCompare(a.key,'ar',{numeric:true});});
-  q('salesBody').innerHTML=entries.map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('') || '<tr><td colspan="10">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
+  const more=entries.length-salesListLimit;
+  q('salesBody').innerHTML=(entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('')
+    +(more>0?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="salesListLimit+=300;renderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'')
+  ) || '<tr><td colspan="10">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
@@ -4553,6 +4689,7 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
   if(btn.dataset.tab==='expensesQuick'){setTimeout(()=>onExpensesTabOpen(),50);}
   if(btn.dataset.tab==='locations'){setTimeout(()=>onLocationsTabOpen(),50);}
   if(btn.dataset.tab==='transfers'){setTimeout(()=>initSuggestionFilters(),50);}
+  renderTab(btn.dataset.tab); /* (0076) رسم كسول: أول فتح أو بعد اتساخ البيانات فقط */
 }));
 window.addEventListener('beforeunload',e=>{ if(saleHasContent()){ e.preventDefault(); e.returnValue=''; } });
 document.addEventListener('keydown',e=>{
@@ -5251,6 +5388,7 @@ function editCustomer(id){
   editingCustomerId=id;
   openTab('customers');
   if(q('customerName')) q('customerName').value=c.name||'';
+  if(q('customerNo')) q('customerNo').value=c.customer_no||'';
   if(q('customerPhone')) q('customerPhone').value=c.phone||'';
   if(q('customerPhone2')) q('customerPhone2').value=c.phone2||'';
   if(q('customerAddress')) q('customerAddress').value=c.address||'';
@@ -5302,6 +5440,8 @@ q('customerForm').addEventListener('submit', async e=>{
   try{
     showLoading(true);
     const body={name:q('customerName').value.trim(),phone:q('customerPhone').value.trim()||null,phone2:q('customerPhone2')?.value.trim()||null,address:q('customerAddress').value.trim()||null,notes:q('customerNotes').value.trim()||null};
+    const cno=(q('customerNo')?.value||'').trim();
+    if(cno) body.customer_no=cno; /* فارغ = توليد تلقائي / لا نمس الرقم القائم عند التعديل */
     if(!body.name){toast('اكتب اسم الزبون','warn');return;}
     if(body.phone){
       const norm=normalizePhoneLY;
@@ -6041,6 +6181,7 @@ function buildProductCostIndex(){
 function productCost(code){
   const key=String(code||'').split('|')[0].trim().toLowerCase();
   if(!key) return 0;
+  if(costViewMap){ const v=costViewMap.get(key); if(v!==undefined) return v; } /* (0076) وجهة نظر الخادم مرجعية أولى */
   if(productCostCache.has(key)) return productCostCache.get(key);
   const hist=(saleItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===key && Number(x.unit_cost_at_sale||0)>0);
   let result=0;
@@ -7115,9 +7256,10 @@ async function postStockCountDoc(doc,status){
   const hdr={...doc.header,status,settled_at:status==='settled'?new Date().toISOString():null};
   try{
     const r=await api('pos_stock_counts',{method:'POST',body:hdr});
-    const id=r[0].id;
+    const saved=r[0];
+    const id=saved.id;
     await api('pos_stock_count_items',{method:'POST',body:doc.rows.map(x=>({...x,count_id:id}))});
-    stockCounts.unshift({...hdr,id,_items:doc.rows});
+    stockCounts.unshift({...saved,_items:doc.rows});
     if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
     return id;
   }catch(e){
@@ -7168,8 +7310,8 @@ function renderStockCountLists(){
     const l=locations.find(x=>x.id===r.location_id);
     const st=r.status==='settled'?'<span class="badge green">مسوّى</span>':'<span class="badge yellow">مسودة</span>';
     const safe=String(r.id).replace(/'/g,"\\\\'");
-    return `<tr><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(r.user_identifier||'—')}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${adm?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف قائمة الجرد (لا يغيّر المخزون ولا الحركات) — للمدير فقط" onclick="deleteStockCount('${safe}')">🗑</button>`:''}</td></tr>`;
-  }).join('')||'<tr><td colspan="9">لا توجد قوائم جرد محفوظة بعد — احفظها من تبويب «جرد جديد».</td></tr>';
+    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(r.user_identifier||'—')}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${adm?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف قائمة الجرد (لا يغيّر المخزون ولا الحركات) — للمدير فقط" onclick="deleteStockCount('${safe}')">🗑</button>`:''}</td></tr>`;
+  }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من تبويب «جرد جديد».</td></tr>';
 }
 async function deleteStockCount(id){
   if(currentRole?.role!=='admin'){toast('حذف قوائم الجرد للمدير فقط','warn');return;}
@@ -7200,7 +7342,7 @@ async function viewStockCount(id){
   if(!items||!items.length){toast('لا أسطر مسجلة لهذه القائمة','info');return;}
   ensureStockCountViewModal();
   const l=locations.find(x=>x.id===r.location_id);
-  q('scvListTitle').textContent='قائمة جرد — '+String(r.count_date||'').slice(0,10)+(l?(' · '+l.name):'');
+  q('scvListTitle').textContent='قائمة جرد'+(r.count_no?(' '+r.count_no):'')+' — '+String(r.count_date||'').slice(0,10)+(l?(' · '+l.name):'');
   q('scvListMeta').textContent=`المجرِّد: ${r.user_identifier||'—'} · ${money(r.counted_items||0)}/${money(r.items_count||0)} صنف · صافي كمية الفرق: ${money(r.diff_qty||0)} · صافي قيمة الفرق: ${money(r.diff_value||0)} ${APP_CONFIG.currency} · الحالة: ${r.status==='settled'?'مسوّى على المخزون':'مسودة لم تُسوَّ'}${r._local?' · (محفوظة محلياً مؤقتاً)':''}`;
   q('scvListBody').innerHTML=items.map(it=>{
     const cls=Number(it.diff_qty)>0?'stock-positive':Number(it.diff_qty)<0?'stock-negative':'';
@@ -7424,4 +7566,4 @@ function renderComposites(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDateFrom')) q('dailyCashDateFrom').value=d; if(q('dailyCashDateTo')) q('dailyCashDateTo').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadAll().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); renderSales(); /* نفس سياق الدخول: الدور بعدloadAll فنعيد رسم القائمة */ renderCustomers(); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); setupDecimalInputs(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}

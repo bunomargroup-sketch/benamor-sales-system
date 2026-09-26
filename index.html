@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260926-1154">
+<link rel="stylesheet" href="app.css?v=20260926-1259">
 </head>
 <body class="auth-locked">
   <header>
@@ -492,6 +492,7 @@
           <h2>إضافة زبون / رصيد افتتاحي</h2>
           <form class="form" id="customerForm">
             <div><label>اسم الزبون</label><input id="customerName" required placeholder="اسم الزبون"></div>
+            <div><label>رقم الزبون (كود المنظومة القديمة)</label><input id="customerNo" class="ltr" placeholder="يُولَّد تلقائياً إن تُرك فارغاً"></div>
             <div><label>الهاتف</label><input id="customerPhone" class="ltr" placeholder="+218..."></div>
             <div><label>هاتف ثاني</label><input id="customerPhone2" class="ltr" placeholder="اختياري"></div>
             <div><label>العنوان</label><input id="customerAddress" placeholder="اختياري"></div>
@@ -1051,7 +1052,7 @@
 
           <div id="stockCountLists" style="display:none">
             <p class="muted">كل الجردات المحفوظة: الفرق الكمي و<strong>قيمة الفرق بسعر التكلفة</strong>، والحالة (مسودة لم تُسوَّ بعد / مسوّى). زر الحذف للمدير فقط.</p>
-            <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>التصنيف</th><th>المجرِد</th><th>أصناف مجردة</th><th>كمية الفرق</th><th>قيمة الفرق</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="stockCountListsBody"></tbody></table></div>
+            <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>الرقم</th><th>التاريخ</th><th>الفرع</th><th>التصنيف</th><th>المجرِد</th><th>أصناف مجردة</th><th>كمية الفرق</th><th>قيمة الفرق</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="stockCountListsBody"></tbody></table></div>
           </div>
         </div>
 
@@ -1347,6 +1348,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260926-1154"></script>
+<script src="app.js?v=20260926-1259"></script>
 </body>
 </html>
