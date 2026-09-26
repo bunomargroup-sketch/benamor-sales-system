@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260926-1313';
+const APP_BUILD='b20260926-1407';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2142,7 +2142,11 @@ function renderCustomerLedger(){
     /* زر تعديل الرصيد الافتتاحي — جاء من المنظومة القديمة أو من نموذج الإضافة، طلب المالك إمكانية تعديله */
     const openBtn=(l.entry_type==='opening'&&isAdminL)
       ?` <button class="btn secondary" type="button" style="padding:2px 7px" title="تعديل الرصيد الافتتاحي" onclick="openOpeningEditModal('${l.customer_id}')">✏️</button>`:'';
-    return `<tr><td>${esc(l.entry_date)}</td><td>${esc(typeLabel(l.entry_type))}</td><td>${esc(l.description||'')}${openBtn}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
+    /* (0078) دفعة الزبون السريعة تُحرَّر من هنا: القيد + حركة الخزينة المرتبطة معاً (RPC ذرّي للمدير) */
+    const linkedPayMove=(l.entry_type==='payment')?findLedgerPaymentMove(l.id):null;
+    const payBtn=(l.entry_type==='payment'&&isAdminL&&linkedPayMove)
+      ?` <button class="btn secondary" type="button" style="padding:2px 7px" title="تعديل دفعة الزبون" onclick="openCustomerLedgerPaymentEdit('${l.id}')">✏️</button>`:'';
+    return `<tr><td>${esc(l.entry_date)}</td><td>${esc(typeLabel(l.entry_type))}</td><td>${esc(l.description||'')}${openBtn}${payBtn}</td><td>${money(l.debit)}</td><td>${money(l.credit)}</td><td><b>${money(running)}</b></td></tr>`}).reverse().join('');
   const bal=rows.reduce((a,l)=>a+Number(l.debit||0)-Number(l.credit||0),0);
   q('customerLedgerBalance').textContent=money(bal); q('customerLedgerStatus').innerHTML=badgeCustomer(bal);
   q('customerLedgerBody').innerHTML = cid ? (rendered || '<tr><td colspan="6">لا توجد حركات لهذا الزبون.</td></tr>') : '<tr><td colspan="6">اختر الزبون أولاً.</td></tr>';
@@ -2190,6 +2194,77 @@ async function saveOpeningBalance(){
     if(cid) openCustomerLedger(cid);
   }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
   finally{showLoading(false);}
+}
+
+/* ═══ (0078) تعديل دفعة زبون سريعة — قيد القيود + حركة الخزينة المرتبطة (RPC ذرّي، للمدير) ═══
+   الدفعات المسجلة من نموذج «تسجيل دفعة من زبون» لا تظهر في «دفعات الزبائن»
+   (قائمة دفعات الفواتير) — مصدرها الوحيد هو كشف حساب الزبون، وهذا هو مسار تعديلها. */
+let ledgerPaymentEditId=null;
+function findLedgerPaymentMove(entryId){
+  return (financeMovements||[]).find(m=>m.reference_table==='pos_customer_ledger'&&m.reference_id===entryId&&m.movement_type==='customer_payment')||null;
+}
+function ensureLedgerPaymentEditModal(){
+  if(q('ledgerPaymentEditModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='ledgerPaymentEditModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:460px">
+    <div class="modal-head"><div><h2 style="margin:0">✏️ تعديل دفعة زبون</h2><div class="mini" id="lpeSub">—</div></div><button class="btn secondary" type="button" onclick="q('ledgerPaymentEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="grid" style="gap:10px;margin-top:8px">
+      <div><label>المبلغ</label><input id="lpeAmount" type="text" inputmode="decimal" class="ltr" style="text-align:center"></div>
+      <div><label>الطريقة</label><select id="lpeMethod" onchange="lpeFillAccounts()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
+      <div><label>التاريخ</label><input id="lpeDate" type="date" class="ltr"></div>
+      <div><label>الحساب المالي</label><select id="lpeAccount"></select></div>
+      <div style="grid-column:1/-1"><label>ملاحظات</label><input id="lpeNotes" placeholder="اختياري"></div>
+      <div class="mini">يُحدَّث القيد وحركة الخزينة معاً في عملية ذرّية واحدة، ويُعاد حساب رصيد الزبون وخزينة الحساب تلقائياً، ويُدفَع التعديل إلى سجل التدقيق.</div>
+      <div class="row"><button class="btn" type="button" onclick="saveCustomerLedgerPaymentEdit()">💾 حفظ</button><button class="btn secondary" type="button" onclick="q('ledgerPaymentEditModal').classList.remove('show')">إلغاء</button></div>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
+function lpeFillAccounts(){
+  if(q('lpeAccount')) q('lpeAccount').innerHTML=financeAccountOptionsFor(q('lpeMethod')?.value||'cash','اختر الحساب');
+}
+function openCustomerLedgerPaymentEdit(entryId){
+  if(currentRole?.role!=='admin'){toast('تعديل الدفعات للمدير فقط','warn');return;}
+  const l=(customerLedger||[]).find(x=>x.id===entryId); if(!l){toast('القيد غير موجود','warn');return;}
+  if(l.entry_type!=='payment'){toast('يُعدَّل هنا قيد دفعة فقط','warn');return;}
+  const mv=findLedgerPaymentMove(entryId);
+  if(!mv){toast('لا توجد حركة خزينة مرتبطة بهذا القيد — لا يمكن تعديلها من هنا','error');return;}
+  ensureLedgerPaymentEditModal();
+  ledgerPaymentEditId=entryId;
+  const c=customers.find(x=>x.id===l.customer_id);
+  q('lpeSub').textContent=`${c?.customer_no?'[ '+c.customer_no+' ] ':''}${c?.name||'—'} — المبلغ الحالي ${money(l.credit)} — بتاريخ ${l.entry_date||'؟'}`;
+  q('lpeAmount').value=Number(l.credit||0);
+  const accType=(financeAccounts||[]).find(a=>a.id===mv.account_id)?.account_type;
+  q('lpeMethod').value= accType==='bank'?'bank_transfer': accType==='card'?'card':'cash';
+  lpeFillAccounts();
+  if([...q('lpeAccount').options].some(o=>o.value===mv.account_id)) q('lpeAccount').value=mv.account_id;
+  q('lpeDate').value=l.entry_date||'';
+  q('lpeNotes').value=(l.description&&String(l.description).startsWith('دفعة زبون -'))?'':(l.description||'');
+  q('ledgerPaymentEditModal').classList.add('show');
+}
+async function saveCustomerLedgerPaymentEdit(){
+  try{
+    if(window.__busy)return; window.__busy=true;
+    showLoading(true);
+    const amount=Number(parseDecimal(q('lpeAmount').value)||0);
+    const method=q('lpeMethod').value, accountId=q('lpeAccount').value||null, date=q('lpeDate').value||null, notes=q('lpeNotes').value||null;
+    const {ok,data}=await rpc('admin_update_customer_ledger_payment',{p_entry_id:ledgerPaymentEditId,p_amount:amount,p_method:method,p_account_id:accountId,p_entry_date:date,p_notes:notes,p_user_identifier:appUser?.identifier||null});
+    if(!ok)throw new Error(data||'فشل التعديل');
+    /* تحديث محلي فوري حتى لا ينتظر المستخدم إعادة تحميل */
+    const l=customerLedger.find(x=>x.id===ledgerPaymentEditId);
+    if(l){l.credit=amount; if(date)l.entry_date=date; l.description=notes||('دفعة زبون - '+{cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة'}[method]);}
+    const mv=findLedgerPaymentMove(ledgerPaymentEditId);
+    if(mv){mv.amount=amount; if(date)mv.movement_date=date; if(accountId)mv.account_id=accountId; if(notes)mv.notes=notes;}
+    toast('تم تعديل الدفعة وتحديث الخزينة ورصيد الزبون','success');
+    q('ledgerPaymentEditModal').classList.remove('show');
+    const cid=l?.customer_id;
+    markAllTabsDirty();
+    renderTab('customers',true); /* كشف الحساب + قائمة الزبائن (الأرصدة) */
+    renderTab('finance',true);   /* حركات الخزينة */
+    renderTab('payments',true);
+    if(cid) openCustomerLedger(cid);
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);window.__busy=false;}
 }
 
 /* ═══ منظف الدفعات المكررة (قديم/جديد): عرض مقترح فقط + حذف فردي عبر admin_delete_sale_payment ═══ */
@@ -2319,7 +2394,7 @@ function renderCustomerPaymentsList(){
   let rows=(salePayments||[]).slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||new Date(b.created_at||0)-new Date(a.created_at||0));
   if(term) rows=rows.filter(p=>{
     const sl=paymentSale(p), c=customers.find(x=>x.id===sl?.customer_id);
-    return [c?.name,String(sl?.invoice_no||''),('فاتورة '+String(sl?.invoice_no||''))].filter(Boolean).join(' ').toLowerCase().includes(term)
+    return [c?.customer_no,c?.name,String(sl?.invoice_no||''),('فاتورة '+String(sl?.invoice_no||''))].filter(Boolean).join(' ').toLowerCase().includes(term)
         || String(sl?.id||'').startsWith(term);
   });
   const capped=rows.slice(0,300);
@@ -2329,8 +2404,10 @@ function renderCustomerPaymentsList(){
     const tools=isAdmin
       ?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openCustomerPaymentEdit('${p.id}')">✏️</button>
         <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteCustomerPaymentAdmin('${p.id}')">🗑</button>`:'';
+    /* (0078) كود الزبون أمام الاسم — للتمييز السريع والبحث */
+    const cNo=c?.customer_no?`<span class="mini ltr" style="opacity:.75">${esc(c.customer_no)}</span> `:'';
     /* الطريقة بلا لون (قاعدة النظام) */
-    return `<tr><td>${esc(p.payment_date||'')}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${inv}</td><td>${esc(typeLabel(p.payment_method))}</td><td class="amount"><b>${money(p.amount)}</b></td><td class="mini">${esc(p.notes||'')}</td><td style="white-space:nowrap">${tools}</td></tr>`;
+    return `<tr><td>${esc(p.payment_date||'')}</td><td>${cNo}${esc(c?.name||'زبون نقدي')}</td><td>${inv}</td><td>${esc(typeLabel(p.payment_method))}</td><td class="amount"><b>${money(p.amount)}</b></td><td class="mini">${esc(p.notes||'')}</td><td style="white-space:nowrap">${tools}</td></tr>`;
   }).join('') || '<tr><td colspan="7">لا توجد دفعات زبائن مسجلة بعد.</td></tr>';
 }
 /* حساب الدفعة المالية القديم الناتج من الحركة (pos_finance_movements يحتفظ بالمرجع) */
