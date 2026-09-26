@@ -7,13 +7,13 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260924-0450';
+const APP_BUILD='b20260926-1154';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[];
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), authSession=JSON.parse(localStorage.getItem('posAuthSession')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
@@ -163,7 +163,7 @@ function friendlyError(err){
   return m||'حدث خطأ غير متوقع';
 }
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
-function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون',customer_refund:'استرداد للزبون'}[t]||t}
+function typeLabel(t){return {branch:'فرع بيع',warehouse:'مخزن',opening:'رصيد افتتاحي',purchase:'فاتورة شراء',payment:'دفعة',return:'مرتجع',adjustment:'تسوية',cash:'نقدي',bank_transfer:'تحويل مصرفي',card:'بطاقة',mixed:'مختلط',credit:'آجل / دين',posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة',transfer_in:'تحويل وارد',transfer_out:'تحويل صادر',sale:'بيع',return_supplier:'مرتجع مورد',return_customer:'مرتجع زبون',customer_refund:'استرداد للزبون',supplier_refund:'استرداد من مورد',waste:'بضاعة تالفة'}[t]||t}
 function branchChipByName(name){const n=String(name||'');if(n.includes('11')) return 'chip br-11';if(n.includes('سراج')) return 'chip br-sr';if(n.includes('جنزور')) return 'chip br-jz';return 'chip';}
 function branchChip(id){const l=locations.find(x=>x.id===id);return branchChipByName(l?.name);}
 /* الماركة لها لون والموديل له لون — كالفروع — وتُطبَّق في كل القوائم (طلب المالك).
@@ -766,7 +766,7 @@ async function loadAll(){
   try{ if(!products.length){ const _c=loadEssentialCache(); if(_c) applyEssentialCache(_c); } }catch(cacheErr){ console.warn('فشل عرض البيانات المحفوظة محليًا — سيتم التحديث من الخادم',cacheErr); }
   try{
     showLoading(true);
-    [locations, suppliers, ledger, payments, stock, purchases, purchaseItems, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockCounts, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, dailyCashClosings, expenseCategories, expenses, employees, salaryPayments, compositeItems] = await Promise.all([
+    [locations, suppliers, ledger, payments, stock, purchases, purchaseItems, products, transfers, sales, saleItems, salePayments, proformas, proformaItems, saleReturns, saleReturnItems, stockCounts, stockMovements, customers, customerLedger, userRoles, financeAccounts, financeMovements, dailyCashClosings, expenseCategories, expenses, employees, salaryPayments, compositeItems, purchaseReturns, purchaseReturnItems, stockWaste, stockWasteItems] = await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
@@ -795,7 +795,11 @@ async function loadAll(){
       apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc').catch(e=>{console.warn('expenses not setup yet',e); return []}),
       apiAll('pos_employees','?select=*&order=name.asc').catch(e=>{console.warn('employees not setup yet',e); return []}),
       apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc').catch(e=>{console.warn('salary payments not setup yet',e); return []}),
-      apiAll('pos_composite_items','?select=*&order=created_at.asc').catch(e=>{console.warn('composite items not setup yet',e); return []})
+      apiAll('pos_composite_items','?select=*&order=created_at.asc').catch(e=>{console.warn('composite items not setup yet',e); return []}),
+      apiAll('pos_purchase_returns','?select=*&order=return_date.desc,created_at.desc').catch(e=>{console.warn('purchase returns not setup yet — شغّل SQL 0074',e); return []}),
+      apiAll('pos_purchase_return_items','?select=*&order=created_at.desc').catch(e=>{console.warn('purchase return items not setup yet — شغّل SQL 0074',e); return []}),
+      apiAll('pos_stock_waste','?select=*&order=waste_date.desc,created_at.desc').catch(e=>{console.warn('stock waste not setup yet — شغّل SQL 0074',e); return []}),
+      apiAll('pos_stock_waste_items','?select=*&order=created_at.desc').catch(e=>{console.warn('stock waste items not setup yet — شغّل SQL 0074',e); return []})
     ]);
     ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter','stockCategoryFilter','stockBrandFilter','stockSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
     await reapplyOfflineQueueLocally(); /* فواتير الطابور المحلي تبقى ظاهرة ومخصومة من المخزون بعد أي تحديث من الخادم */
@@ -804,7 +808,7 @@ async function loadAll(){
   finally{showLoading(false);window.__busy=false}
 }
 
-function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderCustomerPaymentsList();renderSales();renderReturns();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();renderProductOptionSettings();refreshAuditLog();renderComposites();renderStockCount();renderExpensesList();applyPermissions();setTimeout(setupTableSorting,0)}
+function renderAll(){renderDashboard();renderLocations();renderProductDatalist();renderProducts();renderSuppliers();renderCustomers();fillSupplierSelects();renderLedger();renderCustomerLedger();renderPayments();renderCustomerPaymentsList();renderSales();renderReturns();renderProformas();renderPurchases();renderStock();renderTransfers();renderFinance();renderReports();renderRoles();renderStatusBar();renderSettingsExpenseCategories();renderProductOptionSettings();refreshAuditLog();renderComposites();renderStockCount();renderStockWaste();renderExpensesList();applyPermissions();setTimeout(setupTableSorting,0)}
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
   q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
@@ -2268,7 +2272,7 @@ function renderPayments(){
 function renderPurchases(){
   q('purchasesBody').innerHTML = purchases.map(p=>{
     const s=suppliers.find(x=>x.id===p.supplier_id); const l=locations.find(x=>x.id===p.location_id);
-    return `<tr><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td><td><button class="btn secondary" onclick="openPurchaseForEdit('${p.id}')">فتح / تعديل</button></td></tr>`;
+    return `<tr><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td><td><button class="btn secondary" onclick="openPurchaseForEdit('${p.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="openPurchaseReturn('${p.id}')" title="إرجاع بضاعة لهذه الفاتورة إلى المورد — يُخفّض المخزون ودين المورد">↩ إرجاع</button></td></tr>`;
   }).join('') || '<tr><td colspan="8">لا توجد فواتير شراء بعد.</td></tr>';
 }
 function fillStockFilters(){
@@ -4528,7 +4532,7 @@ function closeTopSaleLayer(){
   if(q('salePaymentScreen')?.classList.contains('payment-open')){closeSalePaymentScreen();return true;}
   return false;
 }
-function saleModalOpen(){return !!document.querySelector('#saleProductPickerModal.show,#productViewModal.show,#movementsModal.show,#printPreviewModal.show,#quickProductModal.show,#saleReturnModal.show,#shortcutsModal.show')}
+function saleModalOpen(){return !!document.querySelector('#saleProductPickerModal.show,#productViewModal.show,#movementsModal.show,#printPreviewModal.show,#quickProductModal.show,#saleReturnModal.show,#purchaseReturnModal.show,#shortcutsModal.show')}
 
 
 q('saleForm')?.addEventListener('input',saveActiveSaleDraft);
@@ -5615,6 +5619,188 @@ function resetPurchaseForm(){
   q('purchaseSubmitBtn').textContent='حفظ الفاتورة وزيادة المخزون';
   q('purchaseCancelEditBtn').classList.add('hidden');
 }
+
+/* ═══════════════ (0074) فاتورة إرجاع مشتريات — مرآة نمط مرتجع المبيعات (0007/0024) ═══════════════ */
+let returningPurchaseId=null, returningPurchase=null;
+function alreadyReturnedFor(purchaseItemId){
+  return purchaseReturnItems.filter(x=>x.purchase_item_id===purchaseItemId).reduce((a,x)=>a+Number(x.qty||0),0);
+}
+async function openPurchaseReturn(id){
+  if(purchases.find(x=>x.id===id)?.offline_pending){toast('فاتورة محلية بانتظار المزامنة — الإرجاع متاح بعد وصولها للخادم','warn');return;}
+  try{
+    showLoading(true);
+    returningPurchase=purchases.find(x=>x.id===id) || (await api('pos_purchases',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
+    if(!returningPurchase){toast('لم يتم العثور على فاتورة الشراء','warn'); return;}
+    returningPurchaseId=id;
+    const s=suppliers.find(x=>x.id===returningPurchase.supplier_id);
+    q('purchaseReturnSub').textContent=(returningPurchase.invoice_no||returningPurchase.id.slice(0,8))+' - '+returningPurchase.purchase_date+' — '+(s?.name||'');
+    q('purchaseReturnDate').value=new Date().toISOString().slice(0,10);
+    q('purchaseReturnSettlement').value='credit';
+    q('purchaseReturnNotes').value='';
+    refreshPurchaseReturnAccountOptions();
+    const rows=purchaseItems.filter(x=>x.purchase_id===id);
+    let anyLeft=false;
+    q('purchaseReturnItemsBody').innerHTML=rows.map(r=>{
+      const left=Number(r.qty||0)-alreadyReturnedFor(r.id);
+      if(left>0.0000001) anyLeft=true;
+      return `<tr class="${left<=0.0000001?'muted':''}"><td class="ltr">${esc(r.product_code)}</td><td>${esc(r.product_name)}</td><td>${money(r.qty)}</td><td>${alreadyReturnedFor(r.id)||0}</td><td><b>${left>0?left:0}</b></td><td>${money(r.unit_cost)}</td><td>${left>0.0000001?`<input class="pr-qty" data-pitem="${r.id}" type="number" min="0" max="${left}" step="any" value="0" style="width:90px" oninput="updatePurchaseReturnTotal()">`:'—'}</td></tr>`;
+    }).join('')||'<tr><td colspan="7">لا توجد بنود لهذه الفاتورة.</td></tr>';
+    updatePurchaseReturnTotal();
+    if(!anyLeft) toast('هذه الفاتورة مُرجعة بالكامل سابقاً','warn');
+    q('purchaseReturnModal').classList.add('show');
+  }catch(err){console.error(err);toast('خطأ: '+err.message,'error')}
+  finally{showLoading(false)}
+}
+function closePurchaseReturnModal(){q('purchaseReturnModal')?.classList.remove('show'); returningPurchaseId=null; returningPurchase=null;}
+function getPurchaseReturnItems(){
+  return [...q('purchaseReturnItemsBody').querySelectorAll('.pr-qty')].map(inp=>({purchase_item_id:inp.dataset.pitem, qty:Number(inp.value||0)})).filter(x=>x.qty>0.0000001);
+}
+function updatePurchaseReturnTotal(){
+  let total=0;
+  [...q('purchaseReturnItemsBody').querySelectorAll('.pr-qty')].forEach(inp=>{
+    const r=purchaseItems.find(x=>x.id===inp.dataset.pitem); if(!r) return;
+    const max=Number(r.qty||0)-alreadyReturnedFor(r.id);
+    if(Number(inp.value||0)>max) inp.value=max; /* قصّ صامت للحد القابل للإرجاع — والخادم يتحقق أيضاً */
+    total+=Math.min(Number(inp.value||0),max)*Number(r.unit_cost||0);
+  });
+  const t=q('purchaseReturnTotal'); if(t) t.textContent='الإجمالي: '+money(total)+' '+APP_CONFIG.currency;
+}
+function refreshPurchaseReturnAccountOptions(){
+  const sel=q('purchaseReturnAccount'); if(!sel) return;
+  const method=q('purchaseReturnSettlement')?.value;
+  const loc=returningPurchase?.location_id||appUser?.branch_id||null;
+  if(!['cash','bank_transfer','card'].includes(method)){ sel.innerHTML='<option value="">—</option>'; sel.value=''; sel.disabled=true; return; }
+  sel.disabled=false;
+  const compat=financeAccounts.filter(a=>{
+    if(method==='cash') return a.account_type==='cash';
+    if(method==='bank_transfer') return a.account_type==='bank'||a.account_type==='card';
+    return a.account_type==='card'||a.account_type==='bank';
+  });
+  const sorted=[...compat].sort((a,b)=>((a.location_id===loc)?0:1)-((b.location_id===loc)?0:1));
+  sel.innerHTML=sorted.map(a=>`<option value="${a.id}">${esc(a.name)}${a.location_id===loc?' (فرع الفاتورة)':''}</option>`).join('');
+  const def=defaultFinanceAccountFor(method, loc);
+  if(def && sorted.some(a=>a.id===def)) sel.value=def;
+  else if(sorted.length) sel.value=sorted[0].id;
+}
+q('purchaseReturnSettlement')?.addEventListener('change',refreshPurchaseReturnAccountOptions);
+q('purchaseReturnForm')?.addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(window.__busy) return; window.__busy=true;
+  const items=getPurchaseReturnItems();
+  if(!items.length){toast('أدخل كميات الإرجاع أولاً','warn'); window.__busy=false; return;}
+  try{
+    showLoading(true);
+    const method=q('purchaseReturnSettlement').value;
+    const account_id=['cash','bank_transfer','card'].includes(method)?(q('purchaseReturnAccount')?.value||defaultFinanceAccountFor(method, returningPurchase?.location_id)):null;
+    if(['cash','bank_transfer','card'].includes(method)&&!account_id){toast('اختر الحساب الذي يُستلم فيه المبلغ المسترد','warn'); window.__busy=false; return;}
+    const invNo=returningPurchase?.invoice_no||'';
+    const body={purchase_id:returningPurchaseId, return_date:q('purchaseReturnDate').value, location_id:returningPurchase.location_id, settlement_method:method, account_id, notes:q('purchaseReturnNotes').value.trim()||null};
+    const idem=getDraftKey('purchaseReturn');
+    const ret=await rpc('post_purchase_return_transaction',{p_return:body, p_items:items, p_idempotency_key:idem, p_user_identifier:appUser?.identifier||''});
+    logAction('purchase_return','pos_purchase_returns',ret.id, `${items.length} صنف - ${money(ret.total)} ${APP_CONFIG.currency}`);
+    clearDraftKey('purchaseReturn');
+    closePurchaseReturnModal();
+    toast('تم حفظ فاتورة إرجاع المشتريات — حُدّث المخزون وذمة المورد','success');
+    applyPurchaseReturnLocally(ret, body, items, invNo);
+    refreshAfterLocalUpdate();
+  }catch(err){console.error(err);toast('خطأ في حفظ إرجاع المشتريات: '+friendlyError(err),'error')}
+  finally{showLoading(false);window.__busy=false}
+});
+/* مرآة post_purchase_return_transaction (0074) */
+function applyPurchaseReturnLocally(ret, body, items, invNo){
+  purchaseReturns.unshift({...body, id:ret.id, purchase_id:ret.purchase_id, supplier_id:ret.supplier_id, total:Number(ret.total||0), return_date:ret.return_date||body.return_date, location_id:body.location_id, settlement_method:body.settlement_method, created_at:new Date().toISOString()});
+  const pitems=purchaseItems.filter(x=>x.purchase_id===ret.purchase_id);
+  let total=0;
+  items.forEach(it=>{
+    const src=pitems.find(x=>x.id===it.purchase_item_id); if(!src) return;
+    total+=Number(it.qty)*Number(src.unit_cost||0);
+    purchaseReturnItems.push({return_id:ret.id, purchase_item_id:src.id, product_code:src.product_code, product_name:src.product_name, qty:Number(it.qty), unit_cost:Number(src.unit_cost||0), line_total:Number(it.qty)*Number(src.unit_cost||0), created_at:new Date().toISOString()});
+    localAdjustStock(body.location_id, src.product_code, src.product_name, -Number(it.qty), 'return_supplier', 'pos_purchase_returns', ret.id, 'مرتجع مورد');
+  });
+  if(total>0){
+    ledger.unshift({supplier_id:ret.supplier_id, entry_date:ret.return_date||body.return_date, entry_type:'return', description:'مرتجع فاتورة شراء رقم '+(invNo||''), debit:total, credit:0, reference_table:'pos_purchase_returns', reference_id:ret.id, created_at:new Date().toISOString()});
+    const sp=suppliers.find(x=>x.id===ret.supplier_id); if(sp) sp.balance=Number(sp.balance||0)-Number(total);
+  }
+  if(['cash','bank_transfer','card'].includes(body.settlement_method)&&body.account_id){
+    localMovement(body.account_id,'in','supplier_refund',total,ret.return_date||body.return_date,'pos_purchase_returns',ret.id,'استرداد من مورد / مرتجع فاتورة شراء');
+  }
+}
+
+/* ═══════════════ (0074) بضاعة تالفة / غير صالحة — تُخصم قيمتها من الأرباح ═══════════════ */
+function renderStockWaste(){
+  const sel=q('wasteLocation');
+  if(sel && sel.options.length<=1) sel.innerHTML='<option value="">كل المواقع</option>'+locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+  if(sel && !sel.value) sel.value=appUser?.branch_id||'';
+  const dt=q('wasteDate'); if(dt && !dt.value) dt.value=new Date().toISOString().slice(0,10);
+  const body=q('stockWasteBody'); if(!body) return;
+  const rows=stockWaste.slice(0,50);
+  body.innerHTML=rows.map(w=>{
+    const l=locations.find(x=>x.id===w.location_id);
+    const items=stockWasteItems.filter(it=>it.waste_id===w.id);
+    const summary=items.slice(0,3).map(it=>esc(it.product_code)+' ×'+Number(it.qty)).join(', ')+(items.length>3?` (+${items.length-3})`:'');
+    return `<tr><td>${esc(w.waste_date)}</td><td>${esc(l?.name||'')}</td><td class="mini">${summary||'—'}</td><td>${esc(w.reason||'')}</td><td><b class="stock-negative">−${money(w.total_value)}</b></td><td>${esc(w.user_identifier||'')}</td></tr>`;
+  }).join('')||'<tr><td colspan="6">لا توجد سجلات بضاعة تالفة بعد.</td></tr>';
+}
+function addWasteRow(){
+  const tbody=q('wasteItemsBody'); if(!tbody) return;
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><input class="wi-code" list="productsDatalist" placeholder="كود الصنف" autocomplete="off" style="width:140px"></td><td class="wi-name mini">—</td><td><input class="wi-qty" type="number" min="0" step="any" value="1" style="width:80px" oninput="updateWasteTotal()"></td><td class="wi-cost mini">—</td><td class="wi-line mini">—</td><td><button class="btn secondary" type="button" onclick="this.closest('tr').remove();updateWasteTotal()">✕</button></td>`;
+  tbody.appendChild(tr);
+  tr.querySelector('.wi-code').addEventListener('change',()=>{fillWasteRow(tr);updateWasteTotal();});
+  updateWasteTotal();
+}
+function fillWasteRow(tr){
+  const code=tr.querySelector('.wi-code')?.value.trim(); if(!code) return;
+  const p=productByCode(code);
+  const nameEl=tr.querySelector('.wi-name'); if(nameEl) nameEl.textContent=p?.name||code;
+}
+function updateWasteTotal(){
+  let total=0;
+  [...q('wasteItemsBody')?.querySelectorAll('tr')||[]].forEach(tr=>{
+    fillWasteRow(tr);
+    const code=tr.querySelector('.wi-code')?.value.trim()||'';
+    const qty=Number(tr.querySelector('.wi-qty')?.value||0);
+    const cost=productCost(code);
+    const line=qty*cost;
+    const costEl=tr.querySelector('.wi-cost'); if(costEl) costEl.textContent=money(cost);
+    const lineEl=tr.querySelector('.wi-line'); if(lineEl) lineEl.textContent=money(line);
+    total+=line;
+  });
+  const t=q('wasteTotal'); if(t) t.textContent=money(total);
+}
+q('wasteForm')?.addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(window.__busy) return; window.__busy=true;
+  try{
+    showLoading(true);
+    const items=[...q('wasteItemsBody').querySelectorAll('tr')].map(tr=>{
+      const nm=tr.querySelector('.wi-name')?.textContent?.trim()||'';
+      return {product_code:tr.querySelector('.wi-code')?.value.trim()||'', product_name:(nm&&nm!=='—')?nm:null, qty:Number(tr.querySelector('.wi-qty')?.value||0)};
+    }).filter(x=>x.product_code && x.qty>0.0000001);
+    if(!items.length){toast('أضف صنفاً واحداً على الأقل بكمية','warn'); window.__busy=false; return;}
+    const body={waste_date:q('wasteDate').value, location_id:q('wasteLocation')?.value||appUser?.branch_id||null, reason:q('wasteReason').value.trim()||null, notes:q('wasteNotes').value.trim()||null};
+    if(!body.location_id) throw new Error('لا يوجد فرع مرتبط بالمستخدم');
+    const idem=getDraftKey('stockWaste');
+    const w=await rpc('post_stock_waste_transaction',{p_waste:body, p_items:items, p_idempotency_key:idem, p_user_identifier:appUser?.identifier||''});
+    logAction('stock_waste','pos_stock_waste',w.id, `${items.length} صنف - ${money(w.total_value)} ${APP_CONFIG.currency}${body.reason?' — '+body.reason:''}`);
+    clearDraftKey('stockWaste');
+    applyWasteLocally(w, body, items);
+    toast('تم تسجيل البضاعة التالفة — حُدّث المخزون ووُزعت قيمتها على الأرباح','success');
+    e.target.reset(); q('wasteItemsBody').innerHTML=''; addWasteRow(); setToday();
+    refreshAfterLocalUpdate();
+  }catch(err){console.error(err);toast('خطأ في حفظ البضاعة التالفة: '+err.message,'error')}
+  finally{showLoading(false);window.__busy=false}
+});
+/* مرآة post_stock_waste_transaction (0074) */
+function applyWasteLocally(w, body, items){
+  stockWaste.unshift({...body, id:w.id, total_value:Number(w.total_value||0), waste_date:w.waste_date||body.waste_date, created_at:new Date().toISOString()});
+  items.forEach(it=>{
+    const cost=productCost(it.product_code);
+    stockWasteItems.push({waste_id:w.id, product_code:it.product_code, product_name:it.product_name||it.product_code, qty:Number(it.qty), unit_cost:cost, line_value:Number(it.qty)*cost, created_at:new Date().toISOString()});
+    localAdjustStock(body.location_id, it.product_code, it.product_name||it.product_code, -Number(it.qty), 'waste', 'pos_stock_waste', w.id, 'بضاعة تالفة'+(body.reason?' ('+body.reason+')':''));
+  });
+}
+
 async function openPurchaseForEdit(id){
   try{
     showLoading(true);
@@ -5882,7 +6068,7 @@ function bucketKey(date, period){
 }
 function repScopeData(){
   const d=reportContext();
-  return {from:d.from,to:d.to,loc:d.loc,fSales:d.filteredSales,fItems:d.filteredItems,fReturns:d.filteredReturns,fRetItems:d.filteredReturnItems,fExpenses:d.filteredExpenses,fSalaries:d.filteredSalaries};
+  return {from:d.from,to:d.to,loc:d.loc,fSales:d.filteredSales,fItems:d.filteredItems,fReturns:d.filteredReturns,fRetItems:d.filteredReturnItems,fExpenses:d.filteredExpenses,fSalaries:d.filteredSalaries,fWaste:d.filteredWaste};
 }
 function emptyRow(cols,msg='لا توجد بيانات.'){return `<tr><td colspan="${cols}">${esc(msg)}</td></tr>`}
 function profitClass(n){return Number(n||0)>=0?'stock-positive':'stock-negative'}
@@ -6364,7 +6550,8 @@ function reportContext(){
   const filteredReturnItems=saleReturnItems.filter(it=>filteredReturnIds.has(it.return_id));
   const filteredExpenses=expenses.filter(e=>inDateRange(e.expense_date,from,to));
   const filteredSalaries=salaryPayments.filter(e=>inDateRange(e.payment_date,from,to));
-  return {from,to,loc,filteredSales,saleIds,filteredItems,filteredReturns,filteredReturnItems,filteredExpenses,filteredSalaries};
+  const filteredWaste=stockWaste.filter(w=>inDateRange(w.waste_date,from,to)&&(!loc||w.location_id===loc));
+  return {from,to,loc,filteredSales,saleIds,filteredItems,filteredReturns,filteredReturnItems,filteredExpenses,filteredSalaries,filteredWaste};
 }
 function aggregateItemProfit(items, returnItems=[]){
   const map={};
@@ -6383,8 +6570,10 @@ function renderReportsDetail(){
   const grossProfit=(salesTotal-returnsTotal)-cogs;
   const expenseTotal=ctx.filteredExpenses.reduce((a,e)=>a+Number(e.amount||0),0);
   const salaryTotal=ctx.filteredSalaries.reduce((a,e)=>a+Number(e.amount||0),0);
-  const netProfit=grossProfit-expenseTotal-salaryTotal;
-  if(q('repIncomeBody')) q('repIncomeBody').innerHTML=`<div class="report-kpi"><div class="card"><h3>صافي المبيعات</h3><div class="num">${money(salesTotal-returnsTotal)}</div></div><div class="card"><h3>تكلفة البضاعة</h3><div class="num">${money(cogs)}</div></div><div class="card"><h3>مجمل الربح</h3><div class="num ${grossProfit>=0?'profit-positive':'profit-negative'}">${money(grossProfit)}</div></div><div class="card"><h3>صافي الربح</h3><div class="num ${netProfit>=0?'profit-positive':'profit-negative'}">${money(netProfit)}</div></div></div><table><tbody><tr><td>إجمالي المبيعات</td><td>${money(salesTotal)}</td></tr><tr><td>المرتجعات</td><td>${money(returnsTotal)}</td></tr><tr><td>صافي المبيعات</td><td>${money(salesTotal-returnsTotal)}</td></tr><tr><td>تكلفة البضاعة المباعة</td><td>${money(cogs)}</td></tr><tr><td>مجمل الربح</td><td>${money(grossProfit)}</td></tr><tr><td>المصاريف</td><td>${money(expenseTotal)}</td></tr><tr><td>المرتبات</td><td>${money(salaryTotal)}</td></tr><tr><td><b>صافي الربح</b></td><td><b>${money(netProfit)}</b></td></tr></tbody></table>`;
+  /* (0074) البضاعة التالفة/غير الصالحة: تكلفة مخزون خرج بلا بيع — تُخصم من الأرباح */
+  const wasteTotal=ctx.filteredWaste.reduce((a,w)=>a+Number(w.total_value||0),0);
+  const netProfit=grossProfit-expenseTotal-salaryTotal-wasteTotal;
+  if(q('repIncomeBody')) q('repIncomeBody').innerHTML=`<div class="report-kpi"><div class="card"><h3>صافي المبيعات</h3><div class="num">${money(salesTotal-returnsTotal)}</div></div><div class="card"><h3>تكلفة البضاعة</h3><div class="num">${money(cogs)}</div></div><div class="card"><h3>بضاعة تالفة</h3><div class="num">${wasteTotal?('-'+money(wasteTotal)):'0'}</div></div><div class="card"><h3>مجمل الربح</h3><div class="num ${grossProfit>=0?'profit-positive':'profit-negative'}">${money(grossProfit)}</div></div><div class="card"><h3>صافي الربح</h3><div class="num ${netProfit>=0?'profit-positive':'profit-negative'}">${money(netProfit)}</div></div></div><table><tbody><tr><td>إجمالي المبيعات</td><td>${money(salesTotal)}</td></tr><tr><td>المرتجعات</td><td>${money(returnsTotal)}</td></tr><tr><td>صافي المبيعات</td><td>${money(salesTotal-returnsTotal)}</td></tr><tr><td>تكلفة البضاعة المباعة</td><td>${money(cogs)}</td></tr><tr><td>مجمل الربح</td><td>${money(grossProfit)}</td></tr><tr><td>المصاريف</td><td>${money(expenseTotal)}</td></tr><tr><td>المرتبات</td><td>${money(salaryTotal)}</td></tr><tr><td>بضاعة تالفة / غير صالحة (0074)</td><td>${wasteTotal?('-'+money(wasteTotal)):'0'}</td></tr><tr><td><b>صافي الربح</b></td><td><b>${money(netProfit)}</b></td></tr></tbody></table>`;
   const term=(q('repItemSearch')?.value||'').trim().toLowerCase();
   if(q('repItemProfitBody')) q('repItemProfitBody').innerHTML=itemAgg.filter(r=>!term||[r.code,r.name].join(' ').toLowerCase().includes(term)).sort((a,b)=>b.profit-a.profit).slice(0,200).map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="${r.profit>=0?'profit-positive':'profit-negative'}">${money(r.profit)}</td><td>${money(r.margin)}%</td></tr>`).join('')||'<tr><td colspan="7">لا توجد بيانات.</td></tr>';
   const byCustomer={};
@@ -6395,11 +6584,13 @@ function renderReportsDetail(){
   if(q('repExpenseTotal')){q('repExpenseTotal').textContent=money(expenseTotal); q('repSalaryTotal').textContent=money(salaryTotal); q('repExpenseSalaryTotal').textContent=money(expenseTotal+salaryTotal)}
   if(q('repExpensesBody')) q('repExpensesBody').innerHTML=[...ctx.filteredExpenses.map(e=>({date:e.expense_date,type:'مصروف',title:e.title,account:e.account_id,amount:e.amount})),...ctx.filteredSalaries.map(e=>({date:e.payment_date,type:'مرتب',title:e.period||'مرتب',account:e.account_id,amount:e.amount}))].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.title)}</td><td>${esc(financeAccountName(r.account))}</td><td>${money(r.amount)}</td></tr>`).join('')||'<tr><td colspan="5">لا توجد مصاريف أو مرتبات.</td></tr>';
   const months={};
-  ctx.filteredSales.forEach(s=>{const m=(s.sale_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].sales+=Number(s.total||0); saleItems.filter(it=>it.sale_id===s.id).forEach(it=>months[m].cost+=Number(it.qty||0)*saleLineCost(it));});
-  ctx.filteredReturns.forEach(r=>{const m=(r.return_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].returns+=Number(r.total||0);});
-  ctx.filteredExpenses.forEach(e=>{const m=(e.expense_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].expenses+=Number(e.amount||0);});
-  ctx.filteredSalaries.forEach(e=>{const m=(e.payment_date||'').slice(0,7); if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0}; months[m].expenses+=Number(e.amount||0);});
-  if(q('repMonthlyBody')) q('repMonthlyBody').innerHTML=Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,r])=>{const net=r.sales-r.returns-r.cost-r.expenses; return `<tr><td>${esc(m)}</td><td>${money(r.sales)}</td><td>${money(r.returns)}</td><td>${money(r.cost)}</td><td>${money(r.expenses)}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(6,'لا توجد بيانات شهرية.');
+  const mInit=m=>{if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0,waste:0};};
+  ctx.filteredSales.forEach(s=>{const m=(s.sale_date||'').slice(0,7); mInit(m); months[m].sales+=Number(s.total||0); saleItems.filter(it=>it.sale_id===s.id).forEach(it=>months[m].cost+=Number(it.qty||0)*saleLineCost(it));});
+  ctx.filteredReturns.forEach(r=>{const m=(r.return_date||'').slice(0,7); mInit(m); months[m].returns+=Number(r.total||0);});
+  ctx.filteredExpenses.forEach(e=>{const m=(e.expense_date||'').slice(0,7); mInit(m); months[m].expenses+=Number(e.amount||0);});
+  ctx.filteredSalaries.forEach(e=>{const m=(e.payment_date||'').slice(0,7); mInit(m); months[m].expenses+=Number(e.amount||0);});
+  ctx.filteredWaste.forEach(w=>{const m=(w.waste_date||'').slice(0,7); mInit(m); months[m].waste+=Number(w.total_value||0);});
+  if(q('repMonthlyBody')) q('repMonthlyBody').innerHTML=Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,r])=>{const net=r.sales-r.returns-r.cost-r.expenses-r.waste; return `<tr><td>${esc(m)}</td><td>${money(r.sales)}</td><td>${money(r.returns)}</td><td>${money(r.cost)}</td><td>${money(r.expenses)}</td><td>${r.waste?('−'+money(r.waste)):'0'}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(7,'لا توجد بيانات شهرية.');
 
   const d=repScopeData();
   if(currentReport==='branchprofit' && q('repBranchProfitBody')){
@@ -6439,11 +6630,12 @@ function renderReportsDetail(){
     else{const saleById={}; d.fSales.forEach(s=>saleById[s.id]=s); const m={}; d.fItems.filter(it=>saleById[it.sale_id]?.customer_id===cid).forEach(it=>{const k=bucketKey(saleById[it.sale_id]?.sale_date,period); if(!k)return; const o=m[k]||(m[k]={k,rev:0,cost:0}); o.rev+=Number(it.line_total||0); o.cost+=Number(it.qty||0)*saleLineCost(it);}); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost})).sort((a,b)=>a.k.localeCompare(b.k)); q('repCustomerHistoryBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td></tr>`).join('')||emptyRow(4,'لا توجد حركة لهذا الزبون.');}
   }
   if(currentReport==='compare' && q('repCompareBody')){
-    const period=q('repComparePeriod')?.value||'month'; const m={}; const ensure=k=>m[k]||(m[k]={k,count:0,rev:0,cost:0,expenses:0});
+    const period=q('repComparePeriod')?.value||'month'; const m={}; const ensure=k=>m[k]||(m[k]={k,count:0,rev:0,cost:0,expenses:0,waste:0});
     d.fSales.forEach(sl=>{const k=bucketKey(sl.sale_date,period), o=ensure(k); o.count++; o.rev+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
     d.fReturns.forEach(r=>{const k=bucketKey(r.return_date,period), o=ensure(k); o.rev-=Number(r.total||0); saleReturnItems.filter(it=>it.return_id===r.id).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));});
     d.fExpenses.forEach(e=>ensure(bucketKey(e.expense_date,period)).expenses+=Number(e.amount||0)); d.fSalaries.forEach(e=>ensure(bucketKey(e.payment_date,period)).expenses+=Number(e.amount||0));
-    const rows=Object.values(m).filter(r=>r.k).sort((a,b)=>b.k.localeCompare(a.k)); q('repCompareBody').innerHTML=rows.map(r=>{const gp=r.rev-r.cost, net=gp-r.expenses; return `<tr><td>${esc(r.k)}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(gp)}">${money(gp)}</td><td>${money(r.expenses)}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(7);
+    (d.fWaste||[]).forEach(w=>ensure(bucketKey(w.waste_date,period)).waste+=Number(w.total_value||0));
+    const rows=Object.values(m).filter(r=>r.k).sort((a,b)=>b.k.localeCompare(a.k)); q('repCompareBody').innerHTML=rows.map(r=>{const gp=r.rev-r.cost, net=gp-r.expenses-r.waste; return `<tr><td>${esc(r.k)}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(gp)}">${money(gp)}</td><td>${money(r.expenses)}</td><td>${r.waste?('−'+money(r.waste)):'0'}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(8);
   }
 }
 

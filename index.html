@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260924-0450">
+<link rel="stylesheet" href="app.css?v=20260926-1154">
 </head>
 <body class="auth-locked">
   <header>
@@ -921,10 +921,10 @@
           <div class="panel"><h2>المصاريف والمرتبات</h2><div class="report-kpi"><div class="card"><h3>المصاريف</h3><div class="num" id="repExpenseTotal">0</div></div><div class="card"><h3>المرتبات</h3><div class="num" id="repSalaryTotal">0</div></div><div class="card"><h3>الإجمالي</h3><div class="num" id="repExpenseSalaryTotal">0</div></div></div><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>الحساب</th><th>المبلغ</th></tr></thead><tbody id="repExpensesBody"></tbody></table></div></div>
         </div>
         <div id="rep-monthly" class="rep-view hidden">
-          <div class="panel"><h2>الأداء الشهري</h2><div class="table-scroll"><table><thead><tr><th>الشهر</th><th>المبيعات</th><th>المرتجعات</th><th>التكلفة</th><th>المصاريف</th><th>الربح الصافي</th></tr></thead><tbody id="repMonthlyBody"></tbody></table></div></div>
+          <div class="panel"><h2>الأداء الشهري</h2><div class="table-scroll"><table><thead><tr><th>الشهر</th><th>المبيعات</th><th>المرتجعات</th><th>التكلفة</th><th>المصاريف</th><th>التالف</th><th>الربح الصافي</th></tr></thead><tbody id="repMonthlyBody"></tbody></table></div></div>
         </div>
         <div id="rep-compare" class="rep-view hidden">
-          <div class="panel"><div class="tools"><h2>مقارنة قائمة الدخل حسب الفترة</h2><select id="repComparePeriod" onchange="renderReportsDetail()"><option value="month">شهري</option><option value="quarter">ربع سنوي</option><option value="year">سنوي</option></select></div><div class="table-scroll"><table><thead><tr><th>الفترة</th><th>عدد الفواتير</th><th>الإيرادات</th><th>التكلفة</th><th>مجمل الربح</th><th>المصاريف</th><th>صافي الربح</th></tr></thead><tbody id="repCompareBody"></tbody></table></div></div>
+          <div class="panel"><div class="tools"><h2>مقارنة قائمة الدخل حسب الفترة</h2><select id="repComparePeriod" onchange="renderReportsDetail()"><option value="month">شهري</option><option value="quarter">ربع سنوي</option><option value="year">سنوي</option></select></div><div class="table-scroll"><table><thead><tr><th>الفترة</th><th>عدد الفواتير</th><th>الإيرادات</th><th>التكلفة</th><th>مجمل الربح</th><th>المصاريف</th><th>التالف</th><th>صافي الربح</th></tr></thead><tbody id="repCompareBody"></tbody></table></div></div>
         </div>
         <div id="rep-branchprofit" class="rep-view hidden">
           <div class="panel"><h2>أرباح الفروع</h2><p class="muted">يعرض مجمل الربح قبل المصاريف المشتركة.</p><div class="table-scroll"><table><thead><tr><th>الفرع</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repBranchProfitBody"></tbody></table></div></div>
@@ -1053,6 +1053,32 @@
             <p class="muted">كل الجردات المحفوظة: الفرق الكمي و<strong>قيمة الفرق بسعر التكلفة</strong>، والحالة (مسودة لم تُسوَّ بعد / مسوّى). زر الحذف للمدير فقط.</p>
             <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>التصنيف</th><th>المجرِد</th><th>أصناف مجردة</th><th>كمية الفرق</th><th>قيمة الفرق</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="stockCountListsBody"></tbody></table></div>
           </div>
+        </div>
+
+        <div class="panel">
+          <div class="tools"><h2>بضاعة تالفة / غير صالحة (0074)</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <p class="muted">سجّل البضاعة التالفة أو غير الصالحة: تخرج من المخزون فوراً، و<strong>تُخصم قيمتها (بالتكلفة) من الأرباح</strong> في التقارير — لا تُسجَّل كمصروف نقدي. التكلفة تُحتسب تلقائياً: متوسط تكلفة المبيعات ← آخر فاتورة شراء ← سعر التكلفة على بطاقة الصنف.</p>
+          <form id="wasteForm" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+            <div><label>التاريخ</label><input id="wasteDate" type="date" required></div>
+            <div><label>الموقع</label><select id="wasteLocation" style="min-width:180px"></select></div>
+            <div><label>السبب</label><select id="wasteReason">
+              <option value="">— اختر —</option>
+              <option>تلف أثناء التخزين</option>
+              <option>انتهاء الصلاحية</option>
+              <option>كسر أثناء النقل</option>
+              <option>عيب من المورد</option>
+              <option>أخرى</option>
+            </select></div>
+            <div style="flex:1;min-width:180px"><label>ملاحظات</label><input id="wasteNotes" placeholder="اختياري"></div>
+          </form>
+          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>التكلفة</th><th>القيمة</th><th></th></tr></thead><tbody id="wasteItemsBody"></tbody></table></div>
+          <div class="row" style="margin-top:10px;gap:8px;align-items:center">
+            <button class="btn secondary" type="button" onclick="addWasteRow()">+ إضافة صنف</button>
+            <button class="btn" type="button" onclick="document.getElementById('wasteForm').requestSubmit()">✓ تسجيل البضاعة التالفة</button>
+            <span class="mini">الإجمالي: <b id="wasteTotal">0</b> — تُخصم من الأرباح</span>
+          </div>
+          <h3 style="margin:16px 0 6px;font-size:15px">آخر السجلات</h3>
+          <div class="table-scroll" style="max-height:32vh"><table><thead><tr><th>التاريخ</th><th>الموقع</th><th>الأصناف</th><th>السبب</th><th>القيمة</th><th>بواسطة</th></tr></thead><tbody id="stockWasteBody"></tbody></table></div>
         </div>
       </section>
 
@@ -1242,6 +1268,25 @@
     </div>
   </div>
 
+  <div class="modal" id="purchaseReturnModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><h2 id="purchaseReturnTitle" style="margin:0">فاتورة إرجاع مشتريات</h2><div class="mini" id="purchaseReturnSub"></div></div>
+        <button class="btn secondary" onclick="closePurchaseReturnModal()">إغلاق</button>
+      </div>
+      <form id="purchaseReturnForm">
+        <div class="form">
+          <div><label>التاريخ</label><input id="purchaseReturnDate" type="date" required></div>
+          <div><label>طريقة تسوية الحساب مع المورد</label><select id="purchaseReturnSettlement"><option value="credit" selected>خصم من ذمة المورد (دين)</option><option value="cash">استرداد نقدي من المورد</option><option value="bank_transfer">تحويل مصرفي من المورد</option><option value="card">بطاقة من المورد</option></select></div>
+          <div><label>الحساب الذي يُستلم فيه المبلغ</label><select id="purchaseReturnAccount" disabled></select></div>
+          <div style="grid-column:1/-1"><label>ملاحظات</label><input id="purchaseReturnNotes" placeholder="اختياري"></div>
+        </div>
+        <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المشترى</th><th>المُرجَع سابقاً</th><th>المتبقي القابل للإرجاع</th><th>التكلفة</th><th>كمية الإرجاع</th></tr></thead><tbody id="purchaseReturnItemsBody"></tbody></table></div>
+        <div class="row" style="margin-top:12px"><button class="btn" type="submit" id="purchaseReturnSubmitBtn">حفظ فاتورة الإرجاع</button><span class="mini" id="purchaseReturnTotal">الإجمالي: 0</span></div>
+      </form>
+    </div>
+  </div>
+
   <div class="modal" id="priceCheckerCartsModal">
     <div class="modal-card" style="max-width:860px">
       <div class="modal-head">
@@ -1302,6 +1347,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260924-0450"></script>
+<script src="app.js?v=20260926-1154"></script>
 </body>
 </html>
