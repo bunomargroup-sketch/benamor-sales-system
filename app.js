@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260926-1259';
+const APP_BUILD='b20260926-1313';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4501,7 +4501,9 @@ async function deleteSale(id){
   if(window.__busy)return; window.__busy=true;
   try{
     showLoading(true);
-    await rpc('admin_delete_sale',{p_sale_id:id});
+    /* (0077) p_user_identifier: يزيل غموض اختيار نسخة الدالة (النسختان الوحيدة/الثنائية كانتا معاً ⇒ 42725)
+       ويسجَّل في pos_audit_log ليعرف المراقب مَن حذف */
+    await rpc('admin_delete_sale',{p_sale_id:id,p_user_identifier:appUser?.identifier||null});
     await logAction('sale_delete','pos_sales',null,`حذف فاتورة ${inv} — ${money(sl.total)} ${APP_CONFIG.currency}`);
     await refreshSalesDomain();
     toast('تم حذف الفاتورة وإرجاع المخزون','success');
