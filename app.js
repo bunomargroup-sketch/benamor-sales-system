@@ -7,13 +7,13 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260926-1550';
+const APP_BUILD='b20260927-1111';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costViewRows=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], stockCounts=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costViewRows=[];
 let costViewMap=null; /* (0076) تكلفة مرجعية من الخادم — أولوية على الحساب المحلي */
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), authSession=JSON.parse(localStorage.getItem('posAuthSession')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
@@ -268,21 +268,43 @@ async function rpc(name, body){
    لذلك: كل ترتيب يُصفَّح يحمل مُرجِّحاً فريداً (id.asc)، وهذه الدالة تزيل
    التكرار بالمعرّف كشبكة أمان وتُحذّر في الـconsole إن وُجد. */
 async function apiAll(table, qs='', batch=5000){
-  let from=0, all=[], page=batch;
+  let from=0, page=batch, dropped=0, loops=0, lastFp=null;
+  const seen=new Set(), out=[];
   while(true){
+    /* (0077) حدّ أقصى صلب: لا حلقة لا نهائية مهما تصرّف الخادم */
+    if(++loops > 5000){ console.warn(`[apiAll] ${table}: تجاوز حدّ الصفحات — قُطع الجلب`); break; }
     const data = await fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/${table}${qs}`, { method:'GET', headers:{...H, Range:`${from}-${from+page-1}`} }, []);
-    all = all.concat(data||[]);
-    if(!data || data.length === 0) break;
-    if(data.length < page){
+    const got = data ? data.length : 0;
+    if(!got) break;
+    /* (0077) بصمة الصفحة: خادم لا يحترم Range يعيد النافذة نفسها حرفياً.
+       بلا هذا الفحص كانت الحلقة تتراكم صفوفاً وهمية بلا نهاية (الصفوف بلا id لا تُكشف بالمعرّف). */
+    const fp = got + '|' + JSON.stringify(data[0]) + '|' + JSON.stringify(data[got-1]);
+    if(fp === lastFp) break;
+    lastFp = fp;
+    /* إزالة التكرار أثناء الجلب لا بعده: تكشف أيضاً خادماً لا يحترم Range */
+    let added=0;
+    for(const r of data){
+      const k = r ? r.id : undefined;
+      if(k!==undefined && k!==null){ if(seen.has(k)){ dropped++; continue; } seen.add(k); }
+      out.push(r); added++;
+    }
+    /* (0077) صفحة لم تضف صفاً جديداً ⇒ الخادم يعيد نفس النافذة ولا يحترم Range.
+       الاستمرار هنا كان حلقة لا نهائية (تجمّد كامل بلا رسالة خطأ). */
+    if(added===0) break;
+    if(got < page){
       /* صفحة أقصر من المطلوب: إمّا جدول صغير أو سقف خادم أصغر (db-max-rows — حادثة 1000 منتج).
          نتبنى الحجم حجم صفحة، ثم تُقطع عند أول صفحة أقصر من السقف (أو صفراً). */
-      if(page === batch){ page = data.length; } else break;
+      if(page === batch){ page = got; } else break;
     }
-    from += data.length;
+    from += got;
   }
-  return dedupeById(all, table, qs);
+  if(dropped>0){
+    console.warn(`[apiAll] ${table}: ${dropped} صفاً مكرراً — الترتيب غير مستقر. أضف مُرجِّحاً فريداً (id.asc) إلى: ${qs}`);
+    try{ window.__apiAllDupWarn=(window.__apiAllDupWarn||[]).concat([{table, dropped, qs}]); }catch(_e){}
+  }
+  return out;
 }
-/* شبكة أمان: تكرار المعرّف يعني ترتيباً غير مستقر ⇒ صفوف مفقودة بنفس العدد */
+/* شبكة أمان لمن يستدعيها مباشرة: تكرار المعرّف يعني ترتيباً غير مستقر ⇒ صفوف مفقودة بنفس العدد */
 function dedupeById(rows, table, qs){
   if(!Array.isArray(rows) || rows.length < 2 || !rows[0] || rows[0].id === undefined) return rows;
   const seen=new Set(), out=[];
@@ -296,12 +318,34 @@ function dedupeById(rows, table, qs){
 }
 
 const ESSENTIAL_CACHE_KEY='posEssentialCacheV1';
-function saveEssentialCache(){
+/* ══════ (0077) كتابة الذخيرة المحلية مؤجّلة ══════
+   JSON.stringify للذخيرة (~10.6 ميجابايت على بيانات الإنتاج) + localStorage.setItem
+   عمليتان متزامنتان تحجزان الواجهة ~117 مللي ثانية. كانت تُستدعى بعد كل حفظ وكل
+   تحديث دوري (كل 60 ثانية) — أي تجمّد ملموس بين الفاتورة والتالية.
+   الآن: الاستدعاءات المتلاحقة تُدمج في كتابة واحدة عند خمول المتصفح، بمهلة قصوى
+   4 ثوانٍ حتى لا تتأخر أبداً. وتُفرَغ فوراً عند إغلاق الصفحة أو إخفائها. */
+function saveEssentialCacheNow(){
   try{
     const data={saved_at:new Date().toISOString(),locations,suppliers,stock,purchases,purchaseItems,products,transfers,sales,saleItems,salePayments,customers,customerLedger,userRoles,financeAccounts,financeMovements,expenseCategories,expenses,dailyCashClosings};
     localStorage.setItem(ESSENTIAL_CACHE_KEY,JSON.stringify(data));
   }catch(e){console.warn('essential cache save failed',e)}
 }
+let __cacheHandle=null, __cacheIsIdle=false;
+function saveEssentialCache(){
+  if(__cacheHandle!==null) return;                 /* كتابة مجدولة أصلاً — تكفي واحدة */
+  const run=()=>{ __cacheHandle=null; saveEssentialCacheNow(); };
+  if(typeof requestIdleCallback==='function'){ __cacheIsIdle=true;  __cacheHandle=requestIdleCallback(run,{timeout:4000}); }
+  else                                       { __cacheIsIdle=false; __cacheHandle=setTimeout(run,1200); try{ __cacheHandle.unref&&__cacheHandle.unref(); }catch(_e){} } /* unref: لا يحجز المؤقّت بيئة الاختبار عن الخروج */
+}
+function flushEssentialCache(){
+  if(__cacheHandle!==null){
+    try{ __cacheIsIdle ? cancelIdleCallback(__cacheHandle) : clearTimeout(__cacheHandle); }catch(_e){}
+    __cacheHandle=null;
+  }
+  saveEssentialCacheNow();
+}
+window.addEventListener('pagehide',()=>{ try{flushEssentialCache();}catch(_e){} });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden){ try{flushEssentialCache();}catch(_e){} } });
 function loadEssentialCache(){
   try{return JSON.parse(localStorage.getItem(ESSENTIAL_CACHE_KEY)||'null')}catch(e){return null}
 }
@@ -832,17 +876,31 @@ function initOfflineQueue(){
    الثقيل: المبيعات الكاملة + البنود + القيود (محرك التكلفة والتقارير) — بالخلفية بلا حجب.
    الجلب الجماعي (pos_fetch_bulk / 0076): إن كان RPC موجوداً في الخادم تُجلب كل مجموعة بطلب واحد؛
    وإلا يعود النمط الكلاسيكي تلقائياً (لا كسر قبل تشغيل SQL 0076). */
-const CORE_TABLES=['pos_locations','pos_supplier_balances','pos_user_roles','pos_product_stock_summary','pos_stock','pos_finance_account_balances','pos_expense_categories','pos_composite_items','pos_product_avg_cost'];
+/* (0077) pos_finance_account_balances خارج هذه القائمة: الخادم يرفضه (TABLE_NOT_ALLOWED)
+   ووجوده هنا كان يُسقط الجلب الجماعي للنواة كلها. يُجلب وحده بطلب كلاسيكي واحد. */
+const CORE_TABLES=['pos_locations','pos_supplier_balances','pos_user_roles','pos_product_stock_summary','pos_stock','pos_expense_categories','pos_composite_items','pos_product_avg_cost'];
 const HEAVY_SALES=['pos_sales','pos_sale_items','pos_sale_payments'];
 const HEAVY_REST=['pos_supplier_ledger','pos_supplier_payments','pos_purchases','pos_purchase_items','pos_stock_transfers','pos_proformas','pos_proforma_items','pos_sale_returns','pos_sale_return_items','pos_stock_counts','pos_stock_movements','pos_customer_balances','pos_customer_ledger','pos_finance_movements','pos_daily_cash_closings','pos_expenses','pos_employees','pos_salary_payments','pos_purchase_returns','pos_purchase_return_items','pos_stock_waste','pos_stock_waste_items'];
 
-async function tryBulk(tables){
+async function tryBulk(tables, depth=0){
+  if(!tables||!tables.length) return {};
   try{
-    const r=await rpc('pos_fetch_bulk', tables);
+    /* (0077) الدالة تأخذ وسيطاً مسمّى p_tables. إرسال المصفوفة جرداء كان يرد 400 (PGRST102)
+       فيُبتلع الخطأ صامتاً ويعود النمط الكلاسيكي دائماً — فلم يعمل الجلب الجماعي ولا مرة على الإنتاج. */
+    const r=await rpc('pos_fetch_bulk', {p_tables:tables});
     if(!r || typeof r!=='object' || Array.isArray(r)) throw new Error('bulk: شكل غير متوقع');
     for(const t of tables){ if(!Array.isArray(r[t])) throw new Error('bulk: ناقص الجدول '+t); }
     return r;
-  }catch(e){ console.warn('الجلب الجماعي غير متاح — النمط الكلاسيكي', e); return null; }
+  }catch(e){
+    /* (0077) 22 جدولاً في نداء واحد تتجاوز مهلة الجملة على الخادم (canceling statement due to
+       statement timeout) فيسقط الجلب الجماعي كله. القسمة نصفين تُبقيه عاملاً بلا تغيير في الخادم. */
+    if(/statement timeout/i.test(String(e&&e.message||e)) && tables.length>1 && depth<2){
+      const mid=Math.ceil(tables.length/2);
+      const [a,b]=await Promise.all([tryBulk(tables.slice(0,mid),depth+1), tryBulk(tables.slice(mid),depth+1)]);
+      return (a&&b)?{...a,...b}:null;
+    }
+    console.warn('الجلب الجماعي غير متاح — النمط الكلاسيكي', e); return null;
+  }
 }
 
 /* (0076) المرجعية الواحدة للتكلفة: وجهة نظر الخادم إن وُجدت، وإلا المحاكاة المحلية (متوسط متحرك) */
@@ -859,11 +917,14 @@ function applyCostReference(){
 async function loadCore(){
   // أولاً: بيانات الجلسة السابقة (تظهر فوراً ثم تتحدّث — stale-while-revalidate)
   try{ const _c=loadEssentialCache(); if(_c) applyEssentialCache(_c); }catch(cacheErr){ console.warn('فشل عرض البيانات المحفوظة محليًا — سيتم التحديث من الخادم',cacheErr); }
-  const bulk=await tryBulk(CORE_TABLES);
+  const [bulk,finAcc]=await Promise.all([
+    tryBulk(CORE_TABLES),
+    apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return null})
+  ]);
   if(bulk){
     locations=bulk.pos_locations||[]; suppliers=bulk.pos_supplier_balances||[]; userRoles=bulk.pos_user_roles||[];
     products=bulk.pos_product_stock_summary||[]; stock=bulk.pos_stock||[];
-    financeAccounts=bulk.pos_finance_account_balances||[]; expenseCategories=bulk.pos_expense_categories||[];
+    financeAccounts=finAcc||financeAccounts; expenseCategories=bulk.pos_expense_categories||[];
     compositeItems=bulk.pos_composite_items||[]; costViewRows=bulk.pos_product_avg_cost||[];
   } else {
     [locations,suppliers,userRoles,products,stock,financeAccounts,expenseCategories,compositeItems]=await Promise.all([
@@ -872,7 +933,7 @@ async function loadCore(){
       apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []}),
       apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
       apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc'),
-      apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return []}),
+      Promise.resolve(finAcc||[]),   /* جُلب أعلاه بالتوازي — لا تكرار */
       apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
       apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc').catch(e=>{return []}),
     ]);
@@ -888,7 +949,12 @@ async function loadHeavy(){
   const cutoff60=new Date(Date.now()-60*864e5).toISOString().slice(0,10);
   const cutoff60i=new Date(Date.now()-60*864e5).toISOString();
   const cutoff90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
-  const [bs,br]=await Promise.all([tryBulk(HEAVY_SALES), tryBulk(HEAVY_REST)]);
+  /* (0077) المبيعات تُجلب جماعياً (ثلاثة جداول ⇒ نداء واحد). أما HEAVY_REST فلا:
+     22 جدولاً كاملة في نداء واحد تتجاوز مهلة الجملة على الخادم دائماً، ومحاولة القسمة
+     تدفع ثمن المهلة مرتين قبل السقوط — قِسناها 76 ثانية مقابل 70 بالنمط الكلاسيكي.
+     تبقى كلاسيكية بنوافذها الزمنية (limit / 60-90 يوماً) حتى يُقسَّم الـRPC في الخادم. */
+  const bs=await tryBulk(HEAVY_SALES);
+  const br=null;
   if(bs){
     sales=bs.pos_sales||[]; saleItems=bs.pos_sale_items||[]; salePayments=bs.pos_sale_payments||[];
   } else {
@@ -919,12 +985,12 @@ async function loadHeavy(){
       apiAll('pos_proforma_items','?select=*&created_at=gte.'+cutoff60i+'&order=created_at.desc,id.asc').catch(e=>{console.warn('proforma items not setup yet',e); return []}),
       apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('sale returns not setup yet',e); return []}),
       apiAll('pos_sale_return_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('sale return items not setup yet',e); return []}),
-      apiAll('pos_stock_counts','?select=*&order=count_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('stock counts not setup yet — شغّل SQL 0061',e); return []}),
-      apiAll('pos_stock_movements','?select=*&order=movement_date.desc&limit=50').catch(e=>{console.warn('stock movements not setup yet',e); return []}),
+      api('pos_stock_counts',{qs:'?select=*&order=count_date.desc,created_at.desc&limit=100'}).catch(e=>{console.warn('stock counts not setup yet — شغّل SQL 0061',e); return []}),
+      api('pos_stock_movements',{qs:'?select=*&order=movement_date.desc&limit=50'}).catch(e=>{console.warn('stock movements not setup yet',e); return []}),
       apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc').catch(e=>{console.warn('customers not setup yet',e); return []}),
       apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('customer ledger not setup yet',e); return []}),
-      apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(e=>{console.warn('finance movements not setup yet',e); return []}),
-      apiAll('pos_daily_cash_closings','?select=*&order=closing_date.desc,created_at.desc&limit=100').catch(e=>{console.warn('daily cash closings not setup yet',e); return []}),
+      api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc&limit=200'}).catch(e=>{console.warn('finance movements not setup yet',e); return []}),
+      api('pos_daily_cash_closings',{qs:'?select=*&order=closing_date.desc,created_at.desc&limit=100'}).catch(e=>{console.warn('daily cash closings not setup yet',e); return []}),
       apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('expenses not setup yet',e); return []}),
       apiAll('pos_employees','?select=*&order=name.asc').catch(e=>{console.warn('employees not setup yet',e); return []}),
       apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('salary payments not setup yet',e); return []}),
@@ -943,7 +1009,7 @@ async function loadHeavy(){
   gDriveMaybeAuto();
   /* شبكة أمان: فاتورة حُفظت أثناء التحميل الخلفي قد تضيع من الذاكرة عند إعادة إسناد المصفوفات —
      إعادة جلب قصيرة لمجال المبيعات تعيدها (نفس ما يفعله التحديث الدوري) */
-  setTimeout(()=>{ refreshSalesDomain({silent:true}).catch(()=>{}); }, 2000);
+  setTimeout(()=>{ refreshSalesDomain({silent:true}).then(()=>markDomainStampFresh()).catch(()=>{}); }, 2000);
 }
 
 async function loadAll(){
@@ -999,6 +1065,71 @@ function renderAll(){
   renderProductDatalist(); fillSupplierSelects(); renderStatusBar(); applyPermissions();
   markAllTabsDirty();
   Object.keys(TAB_RENDERERS).forEach(t=>renderTab(t,true));
+}
+
+/* ══════ (0077) تحديث مُوجَّه بعد الحفظ — بديل loadAll الكامل ══════
+   loadAll يجلب 33 جدولاً (81 طلباً، ~26 ثانية على بيانات الإنتاج) ثم يرسم 21 شاشة.
+   بعد حفظ مورّد أو موظّف لا معنى لجلب كل المبيعات والبنود والقيود. هذا السجل يربط
+   كل «مصدر» بجداوله وبالتبويبات التي تعتمد عليه، فيجلب الحفظ ما يخصّه فقط.
+
+   ⚠️ كل جلب هنا يمرّ بـapiAll/api بترتيب فريد (id.asc كمفتاح أخير) — انظر تحذير
+   التصفيح أعلى الملف. وأي فشل شبكة يترك المصفوفة الحالية كما هي ولا يُفرغها. */
+const REFRESH_SOURCES={
+  locations:        {tabs:['locations','stock','transfers','dailyCashClosing'], run:async()=>{ const r=await apiAll('pos_locations','?select=*&order=name.asc,id.asc'); if(r) locations=r; }},
+  products:         {tabs:['products','stock','composites','sales'],            run:async()=>{ const r=await apiAll('pos_product_stock_summary','?select=*&order=code.asc'); if(r){ products=r; buildProductSearchIndex(); renderProductDatalist(); } }},
+  stock:            {tabs:['stock','products','stockCount','transfers'],        run:async()=>{ const r=await apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc'); if(r) stock=r; }},
+  composites:       {tabs:['composites','products'],                            run:async()=>{ const r=await apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc'); if(r) compositeItems=r; }},
+  cost:             {tabs:['reports','products'],                               run:async()=>{ const r=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}); if(r){ costViewRows=r; applyCostReference(); } }},
+  suppliers:        {tabs:['suppliers','purchases','ledger','payments'],        run:async()=>{ const r=await api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}); if(r){ suppliers=r; fillSupplierSelects(); } }},
+  supplierLedger:   {tabs:['ledger','suppliers'],                               run:async()=>{ const r=await api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}); if(r) ledger=r; }},
+  supplierPayments: {tabs:['payments','ledger'],                                run:async()=>{ const r=await api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}); if(r) payments=r; }},
+  purchases:        {tabs:['purchases','stock','ledger'],                       run:async()=>{ const [a,b]=await Promise.all([apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc,id.asc'),apiAll('pos_purchase_items','?select=*&order=created_at.desc,id.asc')]); if(a) purchases=a; if(b) purchaseItems=b; }},
+  transfers:        {tabs:['transfers','stock'],                                run:async()=>{ const r=await api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}); if(r) transfers=r; }},
+  proformas:        {tabs:['proformas'],                                        run:async()=>{ const c60=new Date(Date.now()-60*864e5).toISOString().slice(0,10), c60i=new Date(Date.now()-60*864e5).toISOString(); const [a,b]=await Promise.all([apiAll('pos_proformas','?select=*&proforma_date=gte.'+c60+'&order=proforma_date.desc,created_at.desc,id.asc'),apiAll('pos_proforma_items','?select=*&created_at=gte.'+c60i+'&order=created_at.desc,id.asc')]); if(a) proformas=a; if(b) proformaItems=b; }},
+  customers:        {tabs:['customers','salesList','payments','sales'],         run:async()=>{ const r=await apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc'); if(r){ customers=r; try{rebuildSaleCustomerOptions();}catch(_e){} } }},
+  customerLedger:   {tabs:['customers','payments'],                             run:async()=>{ const c90=new Date(Date.now()-90*864e5).toISOString().slice(0,10); const r=await apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+c90+'&order=entry_date.desc,created_at.desc,id.asc'); if(r) customerLedger=r; }},
+  financeAccounts:  {tabs:['finance','dailyCashClosing','expensesQuick'],       run:async()=>{ const r=await apiAll('pos_finance_account_balances','?select=*&order=name.asc'); if(r) financeAccounts=r; }},
+  financeMovements: {tabs:['finance','dailyCashClosing'],                       run:async()=>{ const r=await api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc,id.asc&limit=200'}); if(r) financeMovements=r; }},
+  dailyCash:        {tabs:['dailyCashClosing'],                                 run:async()=>{ const r=await api('pos_daily_cash_closings',{qs:'?select=*&order=closing_date.desc,created_at.desc,id.asc&limit=100'}); if(r) dailyCashClosings=r; }},
+  expenses:         {tabs:['expensesQuick','finance'],                          run:async()=>{ const r=await apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc,id.asc'); if(r) expenses=r; }},
+  expenseCategories:{tabs:['expensesQuick','settings'],                         run:async()=>{ const r=await apiAll('pos_expense_categories','?select=*&order=name.asc'); if(r) expenseCategories=r; }},
+  employees:        {tabs:['finance'],                                          run:async()=>{ const r=await apiAll('pos_employees','?select=*&order=name.asc'); if(r) employees=r; }},
+  salaryPayments:   {tabs:['finance'],                                          run:async()=>{ const r=await apiAll('pos_salary_payments','?select=*&order=payment_date.desc,created_at.desc,id.asc'); if(r) salaryPayments=r; }},
+  userRoles:        {tabs:['users'],                                            run:async()=>{ const r=await apiAll('pos_user_roles','?select=*&order=identifier.asc'); if(r){ userRoles=r; try{applyPermissions();}catch(_e){} } }},
+  stockCounts:      {tabs:['stockCount'],                                       run:async()=>{ const r=await api('pos_stock_counts',{qs:'?select=*&order=count_date.desc,created_at.desc,id.asc&limit=100'}); if(r) stockCounts=r; }},
+  stockMovements:   {tabs:['stock'],                                            run:async()=>{ const r=await api('pos_stock_movements',{qs:'?select=*&order=movement_date.desc,id.asc&limit=50'}); if(r) stockMovements=r; }},
+  stockWaste:       {tabs:['stock'],                                            run:async()=>{ const [a,b]=await Promise.all([apiAll('pos_stock_waste','?select=*&order=waste_date.desc,created_at.desc,id.asc'),apiAll('pos_stock_waste_items','?select=*&order=created_at.desc,id.asc')]); if(a) stockWaste=a; if(b) stockWasteItems=b; }},
+  /* مجال البيع كاملاً (فواتير/بنود/دفعات/مخزون/قيود/حركات مالية) — نفس ما يجلبه التحديث الدوري */
+  salesDomain:      {tabs:['salesList','sales','stock','stockCount','customers','payments','finance'], run:async()=>{ const ok=await refreshSalesDomain({skipRender:true}); if(!ok) throw new Error('تعذّر تحديث مجال البيع'); }}
+};
+
+/* الشاشات التي تجمع كل شيء: تُعلَّم «متّسخة» بعد أي تحديث فتُرسم عند فتحها */
+const ALWAYS_DIRTY_TABS=['dashboard','reports'];
+
+function markRefreshTabsDirty(list){
+  const tabs=new Set(ALWAYS_DIRTY_TABS);
+  list.forEach(n=>(REFRESH_SOURCES[n]?.tabs||[]).forEach(t=>tabs.add(t)));
+  tabs.forEach(t=>{ if(TAB_RENDERERS[t]) tabDirty[t]=true; });
+}
+
+/* refreshParts(['suppliers','supplierLedger']) — يجلب هذه المصادر فقط ثم يرسم التبويب المفتوح.
+   بقية التبويبات تُعلَّم متّسخة وتُرسم عند فتحها (الرسم الكسول 0076).
+   لا يرمي أبداً: الحفظ نجح فعلاً على الخادم، والفشل هنا تحديث عرض لا أكثر. */
+async function refreshParts(names, o={}){
+  const list=[...new Set(Array.isArray(names)?names:[names])].filter(n=>REFRESH_SOURCES[n]);
+  if(!list.length) return true;
+  if(!navigator.onLine){ markRefreshTabsDirty(list); try{renderTab(activeTabId(),true);}catch(_e){} return false; }
+  const res=await Promise.allSettled(list.map(n=>REFRESH_SOURCES[n].run()));
+  const failed=list.filter((n,i)=>res[i].status==='rejected');
+  if(failed.length){
+    console.warn('[refreshParts] تعذّر تحديث: '+failed.join('، '), res.filter(x=>x.status==='rejected').map(x=>x.reason));
+    if(!o.silent) toast('حُفظ بنجاح — لكن تعذّر تحديث العرض. اضغط «تحديث».','warn');
+  }
+  markRefreshTabsDirty(list);
+  try{ renderStatusBar(); }catch(_e){}
+  if(!o.skipRender){ try{ renderTab(activeTabId(),true); }catch(_e){} }
+  saveEssentialCache();
+  return failed.length===0;
 }
 function renderDashboard(){
   q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
@@ -1225,7 +1356,7 @@ async function changeUserCredentials(oldId){
     showLoading(true);
     await rpc('update_app_user_credentials',{p_old_identifier:oldId,p_new_identifier:idChanged?newId:null,p_new_code:newCode||null});
     toast('تم تحديث بيانات الدخول بنجاح ✔ يسري من الدخول القادم','success');
-    await loadAll();
+    await refreshParts(['userRoles']);
   }catch(e){
     console.error('update credentials failed',e);
     const m=String(e&&e.message||'');
@@ -2285,7 +2416,7 @@ async function saveOpeningBalance(){
     if(!ok)throw new Error(data||'فشل التعديل');
     toast('تم حفظ الرصيد الافتتاحي','success');
     q('openingEditModal').classList.remove('show');
-    const cid=openingEditCustomerId; await loadAll();
+    const cid=openingEditCustomerId; await refreshParts(['customers','customerLedger']);
     if(cid) openCustomerLedger(cid);
   }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
   finally{showLoading(false);}
@@ -2425,7 +2556,7 @@ async function deleteDupePayment(i,side){
     const {ok,data}=await rpc('admin_delete_sale_payment',{p_payment_id:r.p.id,p_user_identifier:appUser?.identifier||''});
     if(!ok)throw new Error(data||'فشل الحذف');
     toast('حُذفت الدفعة وعُكسَت آثارها بالكامل','success');
-    await loadAll();
+    await refreshParts(['salesDomain','financeAccounts']);
     dupPaymentsCache=detectDuplicatePayments(); renderDupPaymentsList();
   }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
   finally{showLoading(false);}
@@ -2551,7 +2682,7 @@ async function saveCustomerPaymentEdit(){
     const res=await rpc('admin_update_sale_payment',body);
     toast('تم تعديل الدفعة وعكس آثارها','success');
     q('customerPaymentEditModal').classList.remove('show');
-    await loadAll(); renderCustomerPaymentsList();
+    await refreshParts(['salesDomain','financeAccounts']); renderCustomerPaymentsList();
   }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
   finally{showLoading(false);}
 }
@@ -2564,7 +2695,7 @@ async function deleteCustomerPaymentAdmin(paymentId){
     showLoading(true);
     await rpc('admin_delete_sale_payment',{p_payment_id:paymentId,p_user_identifier:appUser?.identifier||''});
     toast('حُذفت الدفعة وعُكسَت آثارها','success');
-    await loadAll(); renderCustomerPaymentsList();
+    await refreshParts(['salesDomain','financeAccounts']); renderCustomerPaymentsList();
   }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
   finally{showLoading(false);}
 }
@@ -2898,11 +3029,11 @@ async function refreshSalesDomain(o={}){
     apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc').catch(()=>null),
     apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc,id.asc').catch(()=>null),
     apiAll('pos_sale_return_items','?select=*&order=created_at.desc,id.asc').catch(()=>null),
-    apiAll('pos_stock_movements','?select=*&order=movement_date.desc&limit=50').catch(()=>null),
+    api('pos_stock_movements',{qs:'?select=*&order=movement_date.desc&limit=50'}).catch(()=>null),
     apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc,id.asc').catch(()=>null),
-    apiAll('pos_finance_movements','?select=*&order=movement_date.desc,created_at.desc&limit=200').catch(()=>null),
+    api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc&limit=200'}).catch(()=>null),
     apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc').catch(()=>null),
-    apiAll('pos_stock_counts','?select=*&order=count_date.desc,created_at.desc&limit=100').catch(()=>null)
+    api('pos_stock_counts',{qs:'?select=*&order=count_date.desc,created_at.desc&limit=100'}).catch(()=>null)
   ]);
   if(!r[0]||!r[3]) return false; /* الاتصال ساقط — لا نلمس البيانات الحالية */
   sales=r[0]; saleItems=r[1]||saleItems; salePayments=r[2]||salePayments; stock=r[3];
@@ -2918,6 +3049,31 @@ async function refreshSalesDomain(o={}){
   saveEssentialCache?.();
   return true;
 }
+/* ══════ (0077) مجسّ التغيير قبل التحديث الدوري ══════
+   refreshSalesDomain يكلّف 33 طلباً و~14.5 ثانية على بيانات الإنتاج، وكان يعمل
+   كل دقيقة سواء تغيّر شيء أم لا — وهو السبب الأول لـ«جاري التحميل» الدائم.
+   المجسّ ثلاثة طلبات صغيرة (صف واحد لكل جدول، ~0.5 ثانية) تقرأ آخر لحظة تغيير.
+   إن لم تتغيّر ⇒ لا تحديث إطلاقاً. إن تغيّرت ⇒ التحديث الكامل كما كان.
+   أسوأ حالة ممكنة: تحديث كامل زائد — لا نقص بيانات أبداً. */
+let __domainStamp=null;
+async function salesDomainStamp(){
+  const one=(t,col)=>api(t,{qs:`?select=${col}&order=${col}.desc.nullslast&limit=1`})
+                       .then(r=>(r&&r[0]&&r[0][col])||'')
+                       .catch(()=>null);
+  const r=await Promise.all([
+    one('pos_sales','updated_at'),        /* بيع جديد أو تعديل فاتورة */
+    one('pos_stock','updated_at'),        /* شراء/تحويل/جرد من جهاز آخر */
+    one('pos_customer_ledger','created_at'), /* دفعة زبون أو قيد */
+    one('pos_sale_returns','created_at'),   /* (مراجعة) مرتجع من جهاز آخر */
+    one('pos_finance_movements','created_at'), /* (مراجعة) مصروف/تحويل/مرتب من جهاز آخر */
+    one('pos_stock_counts','created_at'),     /* (مراجعة) ورقة إحصاء من جهاز آخر */
+    one('pos_customers','updated_at')          /* (مراجعة) زبون جديد/تعديل من جهاز آخر */
+  ]);
+  if(r.every(x=>x===null)) return null;   /* الشبكة ساقطة — لا تبنِ قراراً عليها */
+  return r.join('|');
+}
+/* تُستدعى بعد كل تحديث كامل حتى لا يُعاد على نفس الحالة */
+function markDomainStampFresh(){ salesDomainStamp().then(s=>{ if(s) __domainStamp=s; }).catch(()=>{}); }
 const AUTO_REFRESH_SALES_MS=60000;
 let __autoRefreshTimer=null;
 function startAutoRefresh(){
@@ -2929,9 +3085,22 @@ function startAutoRefresh(){
       if(q('salePaymentScreen')?.classList.contains('show')) return; /* أثناء شاشة الدفع */
       if(document.querySelector('.modal.show')) return; /* أثناء أي نافذة مفتوحة — لا نهزّ ما بين يدي المستخدم */
       if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) return; /* المستخدم يكتب الآن */
-      refreshSalesDomain({silent:true}).catch(()=>{});
+      autoRefreshTick();
     }catch(_e){}
   },AUTO_REFRESH_SALES_MS);
+}
+/* نبضة التحديث الدوري: مجسّ أولاً، والتحديث الكامل فقط عند تغيّر فعلي */
+let __autoRefreshRunning=false;
+async function autoRefreshTick(){
+  if(__autoRefreshRunning) return; __autoRefreshRunning=true;
+  try{
+    const st=await salesDomainStamp();
+    if(st===null) return;                       /* الشبكة ساقطة */
+    if(__domainStamp!==null && st===__domainStamp) return;  /* لا جديد منذ آخر تحديث */
+    const ok=await refreshSalesDomain({silent:true});
+    if(ok) __domainStamp=st;
+  }catch(_e){}
+  finally{ __autoRefreshRunning=false; }
 }
 
 let salesListLimit=150; /* (0076) عرض أول 150 فاتورة ثم «تحميل الأقدم» — كان يُرسم ~10,000 صف دفعة واحدة */
@@ -4736,7 +4905,7 @@ function renderProformas(){
 async function openProformaForEdit(id){
   try{showLoading(true); const rows=await api('pos_proforma_items',{qs:`?select=*&proforma_id=eq.${id}&order=created_at.asc`}); const pr=proformas.find(x=>x.id===id)||(await api('pos_proformas',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; if(!pr){toast('لم يتم العثور على الفاتورة');return;} editingProformaId=id; openTab('proformas'); q('proformaLocation').value=pr.location_id||''; q('proformaDate').value=pr.proforma_date||''; q('proformaNo').value=pr.proforma_no||''; q('proformaCustomer').value=pr.customer_id||''; q('proformaCustomerName').value=pr.customer_name||''; q('proformaCustomerPhone').value=pr.customer_phone||''; q('proformaNotes').value=pr.notes||''; q('proformaDiscount').value=Number(pr.discount||0); q('proformaItemsBody').innerHTML=''; rows.forEach(it=>addProformaRow(it)); updateProformaTotal(); q('proformaSubmitBtn').textContent='حفظ تعديل المبدئية'; q('proformaCancelEditBtn').classList.remove('hidden');}catch(e){console.error(e);toast('خطأ في فتح المبدئية: '+e.message)}finally{showLoading(false);window.__busy=false}}
 async function convertSaleToProforma(id){
-  try{showLoading(true); const sl=sales.find(x=>x.id===id)||(await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`}); const c=customers.find(x=>x.id===sl.customer_id); const subtotal=rows.reduce((a,x)=>a+Number(x.line_total||0),0); const pr=await api('pos_proformas',{method:'POST',body:{proforma_date:sl.sale_date,location_id:sl.location_id,customer_id:sl.customer_id,customer_name:c?.name||null,customer_phone:c?.phone||null,subtotal,discount:Number(sl.discount||0),total:Number(sl.total||subtotal),status:'draft',source_sale_id:id,notes:'تم إنشاؤها من فاتورة بيع'}}); await api('pos_proforma_items',{method:'POST',body:rows.map(it=>({proforma_id:pr[0].id,product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount||0,discount_text:it.discount_text||'',line_total:it.line_total}))}); toast('تم تحويل فاتورة البيع إلى مبدئية'); await loadAll(); openTab('proformas');}catch(e){console.error(e);toast('خطأ في التحويل: '+e.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}}
+  try{showLoading(true); const sl=sales.find(x=>x.id===id)||(await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`}); const c=customers.find(x=>x.id===sl.customer_id); const subtotal=rows.reduce((a,x)=>a+Number(x.line_total||0),0); const pr=await api('pos_proformas',{method:'POST',body:{proforma_date:sl.sale_date,location_id:sl.location_id,customer_id:sl.customer_id,customer_name:c?.name||null,customer_phone:c?.phone||null,subtotal,discount:Number(sl.discount||0),total:Number(sl.total||subtotal),status:'draft',source_sale_id:id,notes:'تم إنشاؤها من فاتورة بيع'}}); await api('pos_proforma_items',{method:'POST',body:rows.map(it=>({proforma_id:pr[0].id,product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount||0,discount_text:it.discount_text||'',line_total:it.line_total}))}); toast('تم تحويل فاتورة البيع إلى مبدئية'); await refreshParts(['proformas']); openTab('proformas');}catch(e){console.error(e);toast('خطأ في التحويل: '+e.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}}
 async function convertProformaToSale(id){
   try{showLoading(true); const pr=proformas.find(x=>x.id===id)||(await api('pos_proformas',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_proforma_items',{qs:`?select=*&proforma_id=eq.${id}&order=created_at.asc`}); openTab('sales'); resetSaleForm(); q('saleLocation').value=pr.location_id||''; q('saleCustomer').value=pr.customer_id||''; q('saleNewCustomerName').value=pr.customer_name||''; q('saleNewCustomerPhone').value=pr.customer_phone||''; q('saleNotes').value='من فاتورة مبدئية '+(pr.proforma_no||pr.id.slice(0,8)); q('saleDiscount').value=Number(pr.discount||0); q('saleItemsBody').innerHTML=''; rows.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount,discount_text:it.discount_text})); updateSaleTotal(); await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{status:'converted'}}).catch(()=>{}); toast('تم فتح الفاتورة في شاشة البيع، راجع الدفع ثم احفظ البيع');}catch(e){console.error(e);toast('خطأ في تحويل المبدئية إلى بيع: '+e.message)}finally{showLoading(false);window.__busy=false}}
 
@@ -5077,7 +5246,7 @@ async function saveQuickProduct(){
     let p=products.find(x=>String(x.code)===String(code));
     if(!p){
       await api('pos_products',{method:'POST',body:{code,name,retail_price:moneyVal(q('quickProductRetail').value),purchase_price:moneyVal(q('quickProductCost').value),barcode:q('quickProductBarcode').value.trim()||null,category:q('quickProductCategory').value.trim()||null,active:true,updated_at:new Date().toISOString()}});
-      await loadAll(); p=products.find(x=>String(x.code)===String(code));
+      await refreshParts(['products','stock']); p=products.find(x=>String(x.code)===String(code));
       toast('تم إنشاء الصنف وإضافته للفاتورة');
     }else toast('الكود موجود مسبقًا، تمت إضافته للفاتورة');
     if(p) addOrIncrementSaleProduct(p,1);
@@ -5334,8 +5503,8 @@ q('saleReturnForm').addEventListener('submit', async e=>{
 
 
 
-q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:moneyVal(q('financeOpeningBalance').value),notes:q('financeAccountNotes').value.trim()||null}; if(editingFinanceAccountId){await api('pos_finance_accounts',{method:'PATCH',qs:`?id=eq.${editingFinanceAccountId}`,body:{...body,updated_at:new Date().toISOString()}}); toast('تم تعديل الحساب');}else{await api('pos_finance_accounts',{method:'POST',body}); toast('تم حفظ الحساب');} resetFinanceAccountForm(); await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message+' - تأكد من تشغيل SQL طرق الدفع للحسابات')}finally{showLoading(false);window.__busy=false}});
-q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=moneyVal(q('financeTransferAmount').value),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}validateAccountingTransfer(amount);await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await loadAll();}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:moneyVal(q('financeOpeningBalance').value),notes:q('financeAccountNotes').value.trim()||null}; if(editingFinanceAccountId){await api('pos_finance_accounts',{method:'PATCH',qs:`?id=eq.${editingFinanceAccountId}`,body:{...body,updated_at:new Date().toISOString()}}); toast('تم تعديل الحساب');}else{await api('pos_finance_accounts',{method:'POST',body}); toast('تم حفظ الحساب');} resetFinanceAccountForm(); await refreshParts(['financeAccounts']);}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message+' - تأكد من تشغيل SQL طرق الدفع للحسابات')}finally{showLoading(false);window.__busy=false}});
+q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=moneyVal(q('financeTransferAmount').value),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}validateAccountingTransfer(amount);await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await refreshParts(['financeAccounts','financeMovements']);}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
 q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const method=q('expensePaymentMethod')?.value||'cash'; if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; if(method==='cash') selectDefaultExpenseAccount(); const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null,created_by:appUser?.identifier||''}; if(!body.location_id)throw new Error('لا يوجد فرع مرتبط بالمستخدم'); if(!body.account_id)throw new Error('اختر الخزينة / الحساب'); validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await logAction('expense','pos_expenses',r[0].id,`${body.title} - ${money(body.amount)} ${APP_CONFIG.currency}`);await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset(); if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; selectDefaultExpenseAccount(); setToday();toast('تم حفظ المصروف'); expenses.unshift(r[0]); if(expensesListInit && expenseMatchesListFilters(r[0])){ expensesListCache.unshift(r[0]); renderExpensesList(); } localMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title); refreshAfterLocalUpdate();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 /* ═════════════ سجل المصاريف: قائمة + فلاتر + تعديل/حذف ذرّي عبر RPC ═════════════
@@ -5487,8 +5656,8 @@ function mirrorExpenseDeletedLocally(x){
   const j=expenses.findIndex(e=>e.id===x.id); if(j>-1) expenses.splice(j,1);
   renderExpensesList(); refreshAfterLocalUpdate();
 }
-q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_employees',{method:'POST',body:{name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:moneyVal(q('employeeMonthlySalary').value)}});e.target.reset();toast('تم حفظ الموظف');await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message)}finally{showLoading(false);window.__busy=false}});
-q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:moneyVal(q('salaryAmount').value),notes:q('salaryNotes').value.trim()||null};validateAccountingOutflow('salary',body.amount);const r=await api('pos_salary_payments',{method:'POST',body});await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب موظف');e.target.reset();setToday();toast('تم دفع المرتب');await loadAll();}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);await api('pos_employees',{method:'POST',body:{name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:moneyVal(q('employeeMonthlySalary').value)}});e.target.reset();toast('تم حفظ الموظف');await refreshParts(['employees']);}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:moneyVal(q('salaryAmount').value),notes:q('salaryNotes').value.trim()||null};validateAccountingOutflow('salary',body.amount);const r=await api('pos_salary_payments',{method:'POST',body});await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب موظف');e.target.reset();setToday();toast('تم دفع المرتب');await refreshParts(['salaryPayments','financeAccounts','financeMovements']);}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 q('settingsForm')?.addEventListener('submit',e=>{
   e.preventDefault();
@@ -5510,7 +5679,7 @@ q('expenseCategoryForm')?.addEventListener('submit',async e=>{
   e.preventDefault();
   const name=q('newExpenseCategoryName').value.trim(); if(!name)return;
   if(window.__busy)return; window.__busy=true;
-  try{showLoading(true); await api('pos_expense_categories',{method:'POST',body:{name,active:true}}); q('newExpenseCategoryName').value=''; toast('تم إضافة تصنيف المصروف'); await loadAll();}
+  try{showLoading(true); await api('pos_expense_categories',{method:'POST',body:{name,active:true}}); q('newExpenseCategoryName').value=''; toast('تم إضافة تصنيف المصروف'); await refreshParts(['expenseCategories']);}
   catch(err){console.error(err);toast('خطأ في إضافة التصنيف: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false}
 });
@@ -5544,7 +5713,7 @@ q('roleForm').addEventListener('submit', async e=>{
     }
     await rpc('upsert_pos_user_role',{p_identifier:identifier,p_display_name:body.display_name,p_role:body.role,p_notes:body.notes,p_active:true});
     toast(found?'تم تعديل الصلاحية':'تم حفظ الصلاحية وإنشاء مستخدم الدخول','success');
-    e.target.reset(); await loadAll();
+    e.target.reset(); await refreshParts(['userRoles']);
   }catch(err){console.error(err);toast('خطأ في حفظ الصلاحية: '+err.message+' - تأكد من تشغيل ملف users SQL')}
   finally{showLoading(false);window.__busy=false}
 });
@@ -5579,7 +5748,7 @@ async function toggleCustomerActive(id, makeActive){
     await api('pos_customers',{method:'PATCH',qs:`?id=eq.${id}`,body:{active:!!makeActive,updated_at:new Date().toISOString()}});
     toast(makeActive?'تم تفعيل الزبون':'تم تعطيل الزبون','success');
     if(editingCustomerId===id && !makeActive) resetCustomerForm();
-    await loadAll();
+    await refreshParts(['customers']);
   }catch(err){console.error(err);toast('تعذر تغيير حالة الزبون: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false}
 }
@@ -5604,7 +5773,7 @@ async function deleteCustomer(id){
       toast('تم حذف الزبون نهائيًا','success');
     }
     if(editingCustomerId===id) resetCustomerForm();
-    await loadAll();
+    await refreshParts(['customers','customerLedger']);
   }catch(err){console.error(err);toast('تعذر حذف الزبون: '+friendlyError(err)+' — تأكد من تشغيل ملف صلاحية حذف الزبائن للمدير','error')}
   finally{showLoading(false);window.__busy=false}
 }
@@ -5806,7 +5975,7 @@ q('productForm').addEventListener('submit', async e=>{
       await api('pos_products',{method:'POST',body});
       toast(productFormMode==='duplicate'?'تم إنشاء المنتج المنسوخ':'تم إنشاء المنتج');
     }
-    await saveProductComponents(code); resetProductForm(); await loadAll();
+    await saveProductComponents(code); resetProductForm(); await refreshParts(['products','stock','composites','cost']);
   }catch(err){console.error(err);toast('خطأ في حفظ المنتج: '+err.message+' - إذا ظهر pos_products غير موجود شغل ملف إعداد المنتجات')}
   finally{showLoading(false);window.__busy=false}
 });
@@ -5828,7 +5997,7 @@ q('supplierForm').addEventListener('submit', async e=>{
       const isCredit=q('openingType').value==='credit';
       await api('pos_supplier_ledger',{method:'POST',body:{supplier_id:s.id,entry_type:'opening',description:'رصيد افتتاحي',credit:isCredit?opening:0,debit:isCredit?0:opening}});
     }
-    e.target.reset(); q('supplierOpening').value=0; toast('تم حفظ المورد'); await loadAll();
+    e.target.reset(); q('supplierOpening').value=0; toast('تم حفظ المورد'); await refreshParts(['suppliers','supplierLedger']);
   }catch(err){console.error(err);toast('خطأ في حفظ المورد: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
 
@@ -6138,7 +6307,7 @@ async function openPurchaseForEdit(id){
 
 q('proformaForm')?.addEventListener('submit',async e=>{
   e.preventDefault(); const items=getProformaItems(); if(!items.length){toast('أضف صنف واحد على الأقل');return;}
-  try{showLoading(true); const subtotal=items.reduce((a,x)=>a+Number(x.line_total||0),0), discount=moneyVal(q('proformaDiscount').value), total=Math.max(0,subtotal-discount); const body={proforma_no:q('proformaNo').value.trim()||null,proforma_date:q('proformaDate').value,location_id:q('proformaLocation').value,customer_id:q('proformaCustomer').value||null,customer_name:q('proformaCustomerName').value.trim()||null,customer_phone:q('proformaCustomerPhone').value.trim()||null,subtotal,discount,total,status:'draft',notes:q('proformaNotes').value.trim()||null}; let id=editingProformaId; if(id){await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{...body,updated_at:new Date().toISOString()}}); await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});}else{const pr=await api('pos_proformas',{method:'POST',body}); id=pr[0].id;} await api('pos_proforma_items',{method:'POST',body:items.map(it=>({...it,proforma_id:id}))}); resetProformaForm(); toast('تم حفظ الفاتورة المبدئية'); await loadAll();}catch(err){console.error(err);toast('خطأ في حفظ المبدئية: '+err.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}
+  try{showLoading(true); const subtotal=items.reduce((a,x)=>a+Number(x.line_total||0),0), discount=moneyVal(q('proformaDiscount').value), total=Math.max(0,subtotal-discount); const body={proforma_no:q('proformaNo').value.trim()||null,proforma_date:q('proformaDate').value,location_id:q('proformaLocation').value,customer_id:q('proformaCustomer').value||null,customer_name:q('proformaCustomerName').value.trim()||null,customer_phone:q('proformaCustomerPhone').value.trim()||null,subtotal,discount,total,status:'draft',notes:q('proformaNotes').value.trim()||null}; let id=editingProformaId; if(id){await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{...body,updated_at:new Date().toISOString()}}); await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});}else{const pr=await api('pos_proformas',{method:'POST',body}); id=pr[0].id;} await api('pos_proforma_items',{method:'POST',body:items.map(it=>({...it,proforma_id:id}))}); resetProformaForm(); toast('تم حفظ الفاتورة المبدئية'); await refreshParts(['proformas']);}catch(err){console.error(err);toast('خطأ في حفظ المبدئية: '+err.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}
 });
 
 q('purchaseForm').addEventListener('submit', async e=>{
@@ -6176,7 +6345,7 @@ q('purchaseForm').addEventListener('submit', async e=>{
     });
     purchaseId=editingPurchaseId;
     const msg='تم تعديل فاتورة الشراء وتحديث المخزون';
-    resetPurchaseForm(); toast(msg); await loadAll();
+    resetPurchaseForm(); toast(msg); await refreshParts(['purchases','stock','suppliers','supplierLedger','financeAccounts','financeMovements','cost']);
   }catch(err){console.error(err);toast('خطأ في حفظ فاتورة الشراء: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
 
@@ -6299,7 +6468,7 @@ q('transferForm').addEventListener('submit', async e=>{
       await adjustStock(to,it,Math.abs(it.qty),'transfer_in',transferId,'تحويل مخزون وارد');
     }
     const msg=editingTransferId?'تم تعديل التحويل وتحديث المخزون':'تم حفظ التحويل وتحديث المخزون';
-    resetTransferForm(); toast(msg); await loadAll();
+    resetTransferForm(); toast(msg); await refreshParts(['transfers','stock','stockMovements']);
   }catch(err){console.error(err);toast('خطأ في حفظ التحويل: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
 
@@ -6780,7 +6949,7 @@ async function saveDailyCashClosing(){
     showLoading(true);
     if(existing){await api('pos_daily_cash_closings',{method:'PATCH',qs:`?id=eq.${existing.id}`,body}); await logAction('closing_update','pos_daily_cash_closings',existing.id,`${d.branchName} - ${d.date} - كاش ${money(d.cashRemaining)}`); toast('تم تحديث إغلاق اليوم','success');}
     else {await api('pos_daily_cash_closings',{method:'POST',body}); toast('تم حفظ إغلاق اليوم','success');}
-    dailyCashClosings=await apiAll('pos_daily_cash_closings','?select=*&order=closing_date.desc,created_at.desc&limit=100');
+    dailyCashClosings=await api('pos_daily_cash_closings',{qs:'?select=*&order=closing_date.desc,created_at.desc&limit=100'});
     renderDailyCashReport();
   }catch(e){console.error(e);toast('تعذر حفظ إغلاق الخزينة: '+friendlyError(e),'error')}
   finally{showLoading(false);window.__busy=false}
@@ -6826,7 +6995,7 @@ async function settleDailyCashDifference(){
       await logAction('settle_surplus','pos_finance_movements',null,`زيادة ${money(amt)} ${APP_CONFIG.currency} - ${reason.trim()}`);
       toast(`تمت تسوية الزيادة ${money(amt)} ${APP_CONFIG.currency} كإيراد في الخزينة`,'success');
     }
-    await loadAll();
+    await refreshParts(['financeAccounts','financeMovements','dailyCash','customers','customerLedger']);
     renderDailyCashReport();
   }catch(e){console.error(e);toast('تعذرت تسوية الفرق: '+friendlyError(e),'error')}
   finally{showLoading(false);window.__busy=false}
@@ -7283,7 +7452,7 @@ function renderStatusBar(){
 setInterval(renderStatusBar,60000);
 
 let auditLog=[];
-async function refreshAuditLog(){try{auditLog=await apiAll('pos_audit_log','?order=created_at.desc&limit=200');renderAuditLog();}catch(e){console.warn('audit load failed',e);}}
+async function refreshAuditLog(){try{auditLog=await api('pos_audit_log',{qs:'?order=created_at.desc&limit=200'});renderAuditLog();}catch(e){console.warn('audit load failed',e);}}
 function renderAuditLog(){
   const body=q('auditLogBody'); if(!body)return;
   const term=(q('auditLogSearch')?.value||'').trim().toLowerCase();
@@ -7660,7 +7829,7 @@ async function ceSave(){
     await logAction('composite_update','pos_products',sb.id,
       becamePlain?`تفكيك مركّب ${sb.id} («${name}») — أصبح منتجاً عادياً`
                  :`تعديل مركّب ${sb.id} («${name}») — ${sb.comps.length} مكوّناً — سعر ${retail}`);
-    await loadAll();
+    await refreshParts(['products','composites','stock']);
     q('compositeEditModal').classList.remove('show');
     toast(becamePlain?'تم الحفظ — أصبح منتجاً عادياً بلا مكوّنات':'تم حفظ تعديل المنتج المركّب','success');
   }catch(e){console.error(e);toast('تعذّر الحفظ: '+friendlyError(e),'error');}
