@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260927-1241';
+const APP_BUILD='b20260927-2300';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -194,7 +194,11 @@ function setupRightClickPaste(){
     rcpPaste(el).catch(err=>{ console.warn('right-click paste',err); toast('تعذّر اللصق من الحافظة','warn'); });
   },true);
 }
-function setSyncState(state,msg){const el=q('syncState'); if(!el)return; el.classList.remove('sync-online','sync-syncing','sync-cache','sync-offline'); el.classList.add('sync-'+state); el.textContent=msg;}
+function setSyncState(state,msg){const el=q('syncState'); if(!el)return;
+  el.classList.remove('sync-online','sync-syncing','sync-cache','sync-offline'); el.classList.add('sync-'+state);
+  /* (العمل دون اتصال) وقت آخر بيانات صحيحة — لا يكفي «متصل» وحدها */
+  let extra=''; try{ if(state!=='syncing' && typeof lastSyncText==='function' && __lastSyncAt) extra=' · آخر تحديث '+lastSyncText(); }catch(_e){}
+  el.textContent=msg+extra; el.title=msg+extra;}
 function showLoading(v){q('loading').style.display=v?'block':'none'; setSyncState(v?'syncing':(navigator.onLine?'online':'offline'), v?'جاري المزامنة...':(navigator.onLine?'متصل مع Supabase':'غير متصل'))}
 function toast(msg,type='info'){
   const t=q('toast'); const colors={success:'var(--good)',error:'var(--bad)',warn:'var(--warn)',info:'var(--blue)'};
@@ -359,9 +363,12 @@ function applyEssentialCache(c){
   return true;
 }
 function initConnectivity(){
-  window.addEventListener('online',()=>setSyncState('online','عاد الاتصال - يمكنك التحديث'));
-  window.addEventListener('offline',()=>setSyncState('offline','غير متصل - تعمل من البيانات المحفوظة'));
+  window.addEventListener('online',()=>{ setSyncState('online','عاد الاتصال - يمكنك التحديث'); renderOfflineBanner();
+    /* عودة الاتصال: ارفع ما في الطابور فوراً بلا انتظار نبضة الدقيقة */
+    syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)); });
+  window.addEventListener('offline',()=>{ setSyncState('offline','غير متصل - تعمل من البيانات المحفوظة'); renderOfflineBanner(); });
   setSyncState(navigator.onLine?'online':'offline',navigator.onLine?'متصل مع Supabase':'غير متصل');
+  renderOfflineBanner();
 }
 
 function downloadBackup(){
@@ -1006,6 +1013,7 @@ async function loadHeavy(){
   renderTab(activeTabId(), true);
   saveEssentialCache();
   setSyncState('online','متصل - تم تحديث البيانات');
+  markSynced();   /* (العمل دون اتصال) لحظة آخر بيانات صحيحة من الخادم */
   gDriveMaybeAuto();
   /* شبكة أمان: فاتورة حُفظت أثناء التحميل الخلفي قد تضيع من الذاكرة عند إعادة إسناد المصفوفات —
      إعادة جلب قصيرة لمجال المبيعات تعيدها (نفس ما يفعله التحديث الدوري) */
@@ -1126,6 +1134,7 @@ async function refreshParts(names, o={}){
     if(!o.silent) toast('حُفظ بنجاح — لكن تعذّر تحديث العرض. اضغط «تحديث».','warn');
   }
   markRefreshTabsDirty(list);
+  if(!failed.length) markSynced();   /* (العمل دون اتصال) */
   try{ renderStatusBar(); }catch(_e){}
   if(!o.skipRender){ try{ renderTab(activeTabId(),true); }catch(_e){} }
   saveEssentialCache();
@@ -1644,13 +1653,13 @@ function showProductColMenu(ev){
   const items=PRODUCT_COLS.map(c=>{
     const isChecked=!hidden.includes(c.id);
     return `<button type="button" class="ctx-item" onclick="toggleProductCol('${c.id}');hideCtxMenu()">
-      <i class="ti ${isChecked?'ti-checkbox-checked':'ti-checkbox-blank'}" style="color:${isChecked?'var(--blue)':'var(--muted)'}"></i>
+      <i class="ti ${isChecked?'ti-square-check':'ti-square'}" style="color:${isChecked?'var(--blue)':'var(--muted)'}"></i>
       <span>${c.label}</span>
     </button>`;
   }).join('');
   showCtxMenu(ev.clientX,ev.clientY,[{head:'إظهار / إخفاء الأعمدة'},...PRODUCT_COLS.map(c=>({
     label:`${!hidden.includes(c.id)?'✓ ':'    '}${c.label}`,
-    icon:!hidden.includes(c.id)?'ti-checkbox-checked':'ti-checkbox-blank',
+    icon:!hidden.includes(c.id)?'ti-square-check':'ti-square',
     action:()=>toggleProductCol(c.id)
   }))]);
 }
@@ -2275,7 +2284,14 @@ async function openProductMovements(code){
     __movCode=code;
     q('movementsTitle').textContent='حركات الصنف: '+code;
     q('movementsSub').textContent=p ? pLabel(p.code,p.name||'') : '';
-    const rows=await api('pos_stock_movements',{qs:`?select=*&product_code=eq.${encodeURIComponent(code)}&order=movement_date.desc&limit=300`});
+    /* ⚠ الترتيب داخل اليوم الواحد: movement_date للحركات المهاجَرة
+       تاريخ بلا وقت، فعدة حركات تتساوى فيه والخادم حرّ في ترتيبها،
+       وعمود «الرصيد» يُحسب بالسير في القائمة ─ فترتيب خاطئ يعطي أرصدة وسطية خاطئة.
+       legacy_seq (SQL 0059) يحمل تسلسل النظام القديم؛ والرجوع تلقائي إن لم تُشغّل بعد. */
+    const __mvSel=`?select=*&product_code=eq.${encodeURIComponent(code)}`;
+    const rows=await api('pos_stock_movements',{qs:`${__mvSel}&order=movement_date.desc,legacy_seq.desc.nullslast,created_at.desc,id.desc&limit=300`})
+      .catch(e=>{ console.warn('legacy_seq غير موجود — شغّل SQL 0059', e);
+        return api('pos_stock_movements',{qs:`${__mvSel}&order=movement_date.desc,created_at.desc,id.desc&limit=300`}); });
     __movRows=rows;
     __movLevels=computeMovementLevels(rows,code);
     const lb=q('movFilterBranch'), lt=q('movFilterType');
@@ -3024,7 +3040,7 @@ function saleListRowHtml(sl){
   const badge=st==='paid'?'<span class="chip paid">مدفوعة</span>':(st==='partial'?'<span class="chip partial">مدفوعة جزئيًا</span>':'<span class="chip due">غير مدفوعة</span>');
   const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
   const sellerTd=sellerCell(sl.created_by);   /* (المهمة ٥) */
-  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(ctx.payMap?.get(sl.id)||paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td class="amount total">${(()=>{const c=ctx.costBySale?.get(sl.id);return c===undefined?'—':money(Number(sl.total||0)-c);})()}</td>${sellerTd}<td style="white-space:nowrap">${!sl.offline_pending?`<button class="btn secondary" type="button" style="padding:4px 8px" title="إرجاع على هذه الفاتورة — يفتح فاتورة إرجاع جديدة لها" onclick="event.stopPropagation();openSaleReturn('${safe}')">↩ إرجاع</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
+  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(payCellText(sl,ctx))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td class="amount total">${(()=>{const c=ctx.costBySale?.get(sl.id);return c===undefined?'—':money(Number(sl.total||0)-c);})()}</td>${sellerTd}</tr>`;
 }
 function returnListRowHtml(r){
   /* (المهمة ٥) المرتجعات تُعرض داخل نفس جدول الفواتير — تحتاج خلية بائع
@@ -3041,7 +3057,7 @@ function returnListRowHtml(r){
   if(isAdm) act+=` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف فاتورة الإرجاع نهائياً — للمدير فقط" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')">🗑</button>`;
   const osafe=orig?String(orig.id).replace(/'/g,"\\'"):'';
   const noOrig=r.sale_id?'':' <span class="chip due" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
-  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>—</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}<td style="white-space:nowrap">${act||'—'}</td></tr>`;
+  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>—</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}</tr>`;
 }
 /**** تحديث خفيف بعد الحفظ/التعديل: يجلب جداول «البيع والمخزون» المتحركة فقط بدل loadAll الكامل الثقيل — ويُعاد رسم القوائم فوراً — ويشتغل أيضاً كل 60 ثانية آلياً فتظهر فواتير وتعديلات الأجهزة الأخرى دون تحديث الصفحة يدوياً ****/
 async function refreshSalesDomain(o={}){
@@ -3072,6 +3088,7 @@ async function refreshSalesDomain(o={}){
     if(q('stockCount')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{ if(q('stockCountLists')?.style.display!=='none') renderStockCountLists(); else renderStockCount(); }catch(_e){} }
   }
   saveEssentialCache?.();
+  markSynced();   /* (العمل دون اتصال) */
   return true;
 }
 /* ══════ (0077) مجسّ التغيير قبل التحديث الدوري ══════
@@ -3152,7 +3169,7 @@ function renderSales(){
   const more=entries.length-salesListLimit;
   q('salesBody').innerHTML=(entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('')
     +(more>0?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="salesListLimit+=300;renderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'')
-  ) || '<tr><td colspan="11">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
+  ) || '<tr><td colspan="10">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
@@ -3954,6 +3971,22 @@ function getSelectedSaleId(){if(!selectedSaleId){toast('اختر فاتورة م
 function openSelectedSaleForEdit(){const id=getSelectedSaleId(); if(id) openSaleForEdit(id)}
 function printSelectedSale(){const id=getSelectedSaleId(); if(id) printSale(id)}
 function openSelectedSaleReturn(){const id=getSelectedSaleId(); if(id) openSaleReturn(id)}
+/* «تحصيل» كان زراً داخل عمود «إجراء» في كل صف. أُلغي العمود (القائمة صارت
+   مضغوطة) وزر «إرجاع» فيه كان مكرراً مع «مرتجع» في الشريط أصلاً — أما
+   «تحصيل» فلم يكن له نظير فوق، فانتقل إلى هنا. */
+function collectSelectedSale(){const id=getSelectedSaleId(); if(id) openInvoicePayment(id)}
+/* «نقدي — نقدي: 30.00 د.ل»: طريقة الدفع تتكرر حين تكون الفاتورة بدفعة
+   واحدة. تُعرض مرة واحدة ويبقى التفصيل للمختلط. */
+function payCellText(sl,ctx){
+  const head=typeLabel(sl.payment_method);
+  const detail=(ctx&&ctx.payMap&&ctx.payMap.get(sl.id)) || paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id));
+  if(!detail) return head;                       /* آجل: لا دفعات ⇒ بلا شرطة معلّقة */
+  if(detail.indexOf('|')<0){                     /* دفعة واحدة */
+    const i=detail.indexOf(':');
+    if(i>0 && detail.slice(0,i).trim()===head) return head+' — '+detail.slice(i+1).trim();
+  }
+  return head+' — '+detail;
+}
 function convertSelectedSaleToProforma(){const id=getSelectedSaleId(); if(id) convertSaleToProforma(id)}
 async function adjustStockDoc(location_id, item, qtyChange, movementType, referenceTable, referenceId, notes){
   await rpc('pos_adjust_stock_checked',{
@@ -8130,3 +8163,86 @@ function pickListTbody(sec){
   const pool=lists.length?lists:all;
   return pool.find(t=>t.offsetParent && t.rows.length) || pool.find(t=>t.offsetParent) || pool[0];
 }
+
+/* ══════════════════ (العمل دون اتصال) شريط الحالة ووقت آخر مزامنة ══════════════════
+   ما كان ناقصاً: المستخدم لا يعرف متى تحدّثت البيانات آخر مرة، ولا يرى بوضوح
+   أنه يعمل دون اتصال — فقط رقاقة صغيرة في الترويسة قد لا تُلاحَظ، ومصفوفات
+   قد تكون من ذخيرة الأمس. البيع لا يتوقف دون اتصال (الطابور المحلي يعمل)،
+   لكن **المعرفة** بأن الأرقام قديمة ضرورية قبل أي قرار.
+
+   لا يُغيَّر أي منطق حفظ — عرضٌ فقط. */
+/* var لا let: هذه الكتلة في آخر الملف، وinitConnectivity يناديها عند الإقلاع
+   قبل أن يصل التنفيذ إلى هنا — وlet ترمي ReferenceError في المنطقة الميتة. */
+var __lastSyncAt = (()=>{ try{ return localStorage.getItem('posLastSyncAt')||null; }catch(_e){ return null; } })();
+
+function markSynced(){
+  __lastSyncAt = new Date().toISOString();
+  try{ localStorage.setItem('posLastSyncAt', __lastSyncAt); }catch(_e){}
+  renderOfflineBanner();
+}
+
+/* «قبل 3 دقائق» ما دام قريباً، ثم الساعة، ثم التاريخ — أرقام غربية */
+function lastSyncText(){
+  if(!__lastSyncAt) return 'لم تتم مزامنة بعد';
+  const d=new Date(__lastSyncAt); if(isNaN(d)) return 'لم تتم مزامنة بعد';
+  const mins=Math.floor((Date.now()-d.getTime())/60000);
+  const ar=(n,one,two,few)=> n===1?one : n===2?two : (n<=10? n+' '+few : n+' '+one);
+  if(mins < 1)   return 'الآن';
+  if(mins < 60)  return 'قبل '+ar(mins,'دقيقة','دقيقتين','دقائق');
+  const hrs=Math.floor(mins/60);
+  if(hrs < 24)   return 'قبل '+ar(hrs,'ساعة','ساعتين','ساعات')+' — '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+       +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+
+async function offlinePendingCount(){
+  try{ const items=await offQueueAll(); return items.filter(x=>x.status!=='review').length; }
+  catch(_e){ return 0; }
+}
+
+var __bannerBusy=false;   /* var: نفس سبب المنطقة الميتة أعلاه */
+async function renderOfflineBanner(){
+  const el=q('offlineBanner'); if(!el) return;
+  if(__bannerBusy) return; __bannerBusy=true;
+  try{
+    const off = !navigator.onLine;
+    el.classList.toggle('hidden', !off);
+    if(!off) return;
+    const pending=await offlinePendingCount();
+    el.innerHTML =
+      '<i class="ti ti-plug-connected-x"></i>'
+      + '<div class="ob-text">'
+      +   '<b>تعمل دون اتصال</b>'
+      +   '<span class="ob-sub">البيع والطباعة يعملان — الفواتير تُحفظ على هذا الجهاز وتُرفع تلقائياً عند عودة الاتصال.</span>'
+      +   '<span class="ob-sub">آخر تحديث للبيانات: <b>'+esc(lastSyncText())+'</b>'
+      +     (pending? ' · بانتظار الرفع: <b>'+pending+'</b>' : '')
+      +   '</span>'
+      + '</div>'
+      + '<button class="btn secondary ob-btn" type="button" onclick="retryConnection()">حاول الآن</button>';
+  } finally { __bannerBusy=false; }
+}
+
+/* زر «حاول الآن»: لا يفترض أن navigator.onLine صادق — يجرّب الخادم فعلاً */
+async function retryConnection(){
+  const btn=document.querySelector('#offlineBanner .ob-btn');
+  if(btn){ btn.disabled=true; btn.textContent='جارٍ المحاولة…'; }
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/pos_locations?select=id&limit=1`,{headers:H,cache:'no-store'});
+    if(r && r.ok){
+      toast('عاد الاتصال — يجري التحديث','success');
+      await refreshSalesDomain({silent:true}).catch(()=>{});
+      markSynced();
+      syncOfflineQueue().catch(e=>console.warn('offline queue sync',e));
+      renderOfflineBanner();
+      return;
+    }
+    toast('الخادم لا يستجيب بعد','warn');
+  }catch(_e){
+    toast('ما زال الاتصال منقطعاً','warn');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='حاول الآن'; }
+  }
+}
+
+/* الوقت النسبي يشيخ: تحديث خفيف كل نصف دقيقة (نصّ فقط، بلا أي طلب شبكة) */
+setInterval(()=>{ try{ if(!navigator.onLine) renderOfflineBanner(); renderStatusBar(); }catch(_e){} }, 30000);

@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>نظام البيع</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <!-- الخطوط محليّة بالكامل: المنظومة تفتح دون اتصال بخطّها وأيقوناتها كاملة.
+       كانت تُجلب من fonts.googleapis.com و cdn.jsdelivr.net، والعامل الخدمي
+       يتجاهل كل ما هو خارج النطاق ⇒ خطّ نظام ومربّعات فارغة مكان الأيقونات. -->
+  <link rel="preload" href="assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/app-fonts.css?v=20260927-2300">
   
   
   
@@ -19,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260927-1241">
+<link rel="stylesheet" href="app.css?v=20260927-2300">
 </head>
 <body class="auth-locked">
   <header>
@@ -68,6 +69,8 @@
     <main>
       <!-- (المهمة ٤) ترويسة الطباعة: مخفية على الشاشة، تُملأ لحظة الطباعة -->
       <div id="printHead" class="print-only"></div>
+      <!-- (العمل دون اتصال) شريط ظاهر لا رقاقة صغيرة: يظهر فقط عند انقطاع الاتصال -->
+      <div id="offlineBanner" class="offline-banner hidden"></div>
       <section id="dashboard" class="section active">
         <div class="launcher">
           <button class="launch-tile lt-orange" type="button" onclick="openTab('sales')"><i class="ti ti-shopping-cart"></i><span>فاتورة مبيعات</span></button>
@@ -420,7 +423,7 @@
       </section>
       <section id="salesList" class="section">
         <div class="panel">
-          <div class="tools"><h2>فواتير البيع</h2><span class="mini">القائمة تجمع كل النماذج: فاتورة بيع ↩ وفاتورة إرجاع — التفريق المختصر بعمود طريقة الدفع</span><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="tools"><h2>فواتير البيع</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
           <div id="salesInvoicesPanel">
           <div class="grid sales-filter-grid" style="margin:10px 0">
             <div><label>بحث الفواتير</label><input id="saleListSearch" placeholder="رقم، زبون، هاتف، صنف، باركود..." oninput="renderSales()"></div>
@@ -440,13 +443,13 @@
             <button class="btn secondary" type="button" onclick="viewSelectedSale()" title="عرض الفاتورة للقراءة فقط (أو بالضغط مرتين على سطرها)">👁 مشاهدة</button>
             <button class="btn secondary" type="button" onclick="openSelectedSaleForEdit()">فتح / تعديل</button>
             <button class="btn secondary" type="button" onclick="printSelectedSale()">طباعة</button>
-            <button class="btn secondary" type="button" onclick="openSelectedSaleReturn()">مرتجع</button>
+            <button class="btn secondary" type="button" onclick="openSelectedSaleReturn()">مرتجع</button><button class="btn secondary" type="button" onclick="collectSelectedSale()" title="تحصيل دفعة على الفاتورة المحددة (للفواتير التي عليها دين)">💵 تحصيل</button>
             <button class="btn secondary" type="button" onclick="openNoInvoiceReturn()" title="بضاعة بيعت قبل دخول المنظومة تعود اليوم — رجوع مستقل غير مرتبط بفاتورة">↩ مرتجع بدون فاتورة</button>
             <button class="btn secondary" type="button" onclick="convertSelectedSaleToProforma()">تحويل لمبدئية</button>
             <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
           </div>
-          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>هامش</th><th>البائع</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>هامش</th><th>البائع</th></tr></thead><tbody id="salesBody"></tbody></table></div>
           <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
           </div>
 
@@ -1350,6 +1353,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260927-1241"></script>
+<script src="app.js?v=20260927-2300"></script>
 </body>
 </html>

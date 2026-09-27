@@ -886,3 +886,23 @@ html[data-theme="light"]{--text:#0f172a;--text-2:#334155;--muted:#64748b;}
   .mini,.muted{color:#333 !important}
   * {text-shadow:none !important}
 }
+
+/* ══════════════════ (العمل دون اتصال) شريط «تعمل دون اتصال» ══════════════════ */
+.offline-banner{
+  display:flex;align-items:center;gap:12px;
+  margin:0 0 14px;padding:11px 14px;border-radius:12px;
+  background:color-mix(in srgb,var(--warn) 12%,var(--card));
+  border:1px solid color-mix(in srgb,var(--warn) 40%,var(--border));
+  border-inline-start:4px solid var(--warn);
+  color:var(--text);font-size:14px;
+}
+.offline-banner.hidden{display:none}
+.offline-banner > i{font-size:26px;color:var(--warn);flex:0 0 auto}
+.offline-banner .ob-text{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.offline-banner .ob-sub{font-size:12.5px;color:var(--text-2)}
+.offline-banner .ob-btn{flex:0 0 auto}
+@media(max-width:700px){
+  .offline-banner{flex-wrap:wrap}
+  .offline-banner .ob-btn{width:100%}
+}
+@media print{ .offline-banner{display:none!important} }

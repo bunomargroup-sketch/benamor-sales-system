@@ -13,9 +13,14 @@
      الحالي + clients.claim + إبلاغ الصفحات «صدر تحديث» لتعرض شريط
      إعادة التحميل (بلا إعادة تحميل تلقائية — الفاتورة المفتوحة أغلى).
    ═══════════════════════════════════════════════════════════════════ */
-const BUILD='20260927-1241'; /* يُستبدل بسكربت النشر */
+const BUILD='20260927-2300'; /* يُستبدل بسكربت النشر */
 const CACHE='benamor-pos-'+BUILD;
-const CORE=['./','./index.html','./app.css','./app.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+/* (العمل دون اتصال) الخطوط ضمن التخزين المسبق: أول فتح دون اتصال
+   يجب أن يعرض الخط والأيقونات، لا أن ينتظر زيارة سابقة تملأ الكاش. */
+const CORE=['./','./index.html','./app.css','./app.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
+  './assets/app-fonts.css',
+  './assets/fonts/cairo-arabic.woff2','./assets/fonts/cairo-latin.woff2','./assets/fonts/cairo-latin-ext.woff2',
+  './assets/fonts/tabler-icons.woff2'];
 const NETWORK_FIRST_PATHS=['/app.js','/app.css','/index.html','/manifest.webmanifest']; /* + كل طلب تنقل */
 
 self.addEventListener('install',e=>{
