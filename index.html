@@ -19,7 +19,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260927-1111">
+<link rel="stylesheet" href="app.css?v=20260927-1241">
 </head>
 <body class="auth-locked">
   <header>
@@ -33,13 +33,13 @@
     <nav>
       <button class="active" data-tab="dashboard"><i class="ti ti-layout-dashboard"></i><span>الرئيسية</span></button>
 
-      <div class="nav-group">المبيعات</div>
+      <div class="nav-group" data-sec="sales">المبيعات</div>
       <button data-tab="sales"><i class="ti ti-shopping-cart"></i><span>فاتورة جديدة</span></button>
       <button data-tab="salesList"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
       <button data-tab="proformas"><i class="ti ti-file-description"></i><span>الفواتير المبدئية</span></button>
       <button data-tab="customers"><i class="ti ti-users"></i><span>الزبائن والديون</span></button>
 
-      <div class="nav-group">المشتريات والمخزون</div>
+      <div class="nav-group" data-sec="stock">المشتريات والمخزون</div>
       <button data-tab="products"><i class="ti ti-box"></i><span>قاعدة المنتجات</span></button>
       <button data-tab="suppliers"><i class="ti ti-truck"></i><span>الموردون</span></button>
       <button data-tab="purchases"><i class="ti ti-receipt"></i><span>فواتير الشراء</span></button>
@@ -49,23 +49,25 @@
       <button data-tab="transfers"><i class="ti ti-arrows-exchange"></i><span>تحويلات المخزون</span></button>
       <button data-tab="locations"><i class="ti ti-building-warehouse"></i><span>الفروع والمخازن</span></button>
 
-      <div class="nav-group">العمليات اليومية</div>
+      <div class="nav-group" data-sec="daily">العمليات اليومية</div>
       <button data-tab="expensesQuick"><i class="ti ti-receipt"></i><span>المصاريف</span></button>
       <button data-tab="dailyCashClosing"><i class="ti ti-cash-banknote"></i><span>إغلاق الخزينة اليومي</span></button>
 
-      <div class="nav-group">المالية والتقارير</div>
+      <div class="nav-group" data-sec="finance">المالية والتقارير</div>
       <button data-tab="ledger"><i class="ti ti-file-invoice"></i><span>كشف حساب المورد</span></button>
       <button data-tab="payments"><i class="ti ti-cash"></i><span>دفعات الموردين</span></button>
       <button data-tab="finance"><i class="ti ti-building-bank"></i><span>الخزائن والمصارف</span></button>
       <button data-tab="reports"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
 
-      <div class="nav-group">النظام</div>
+      <div class="nav-group" data-sec="system">النظام</div>
       <button data-tab="auditLog"><i class="ti ti-history"></i><span>سجل التدقيق</span></button>
       <button data-tab="users"><i class="ti ti-shield-lock"></i><span>المستخدمون والصلاحيات</span></button>
       <button data-tab="settings"><i class="ti ti-settings"></i><span>الإعدادات</span></button>
     </nav>
 
     <main>
+      <!-- (المهمة ٤) ترويسة الطباعة: مخفية على الشاشة، تُملأ لحظة الطباعة -->
+      <div id="printHead" class="print-only"></div>
       <section id="dashboard" class="section active">
         <div class="launcher">
           <button class="launch-tile lt-orange" type="button" onclick="openTab('sales')"><i class="ti ti-shopping-cart"></i><span>فاتورة مبيعات</span></button>
@@ -444,7 +446,7 @@
             <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
           </div>
-          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>هامش</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>هامش</th><th>البائع</th><th>إجراء</th></tr></thead><tbody id="salesBody"></tbody></table></div>
           <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
           </div>
 
@@ -633,7 +635,7 @@
         </div>
         <div class="panel">
           <div class="tools"><h2>آخر تحويلات المخزون</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
-          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>من</th><th>إلى</th><th>الحالة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="transfersBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>من</th><th>إلى</th><th>الحالة</th><th>ملاحظات</th><th>المنفِّذ</th><th>إجراء</th></tr></thead><tbody id="transfersBody"></tbody></table></div>
         </div>
         </div>
 
@@ -1348,6 +1350,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260927-1111"></script>
+<script src="app.js?v=20260927-1241"></script>
 </body>
 </html>

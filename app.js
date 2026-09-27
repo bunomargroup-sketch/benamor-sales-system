@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260927-1111';
+const APP_BUILD='b20260927-1241';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2804,8 +2804,9 @@ function renderTransfers(){
   const scope=sellerBranchScope(); const list=scope?transfers.filter(t=>t.from_location_id===scope||t.to_location_id===scope):transfers;
   q('transfersBody').innerHTML = list.map(t=>{
     const from=locations.find(x=>x.id===t.from_location_id); const to=locations.find(x=>x.id===t.to_location_id);
-    return `<tr><td class="ltr"><span class="code">${esc(t.transfer_no||t.id.slice(0,8))}</span></td><td>${t.transfer_date}</td><td><span class="${branchChip(t.from_location_id)}">${esc(from?.name||'')}</span></td><td><span class="${branchChip(t.to_location_id)}">${esc(to?.name||'')}</span></td><td><span class="chip paid">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td><td><button class="btn secondary" onclick="openTransferForEdit('${t.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="printTransfer('${t.id}')">🖨️ طباعة</button></td></tr>`;
-  }).join('') || '<tr><td colspan="7">لا توجد تحويلات مخزون بعد.</td></tr>';
+    const doerTd=sellerCell(t.created_by);   /* (المهمة ٥) منفّذ التحويل */
+    return `<tr><td class="ltr"><span class="code">${esc(t.transfer_no||t.id.slice(0,8))}</span></td><td>${t.transfer_date}</td><td><span class="${branchChip(t.from_location_id)}">${esc(from?.name||'')}</span></td><td><span class="${branchChip(t.to_location_id)}">${esc(to?.name||'')}</span></td><td><span class="chip paid">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td>${doerTd}<td><button class="btn secondary" onclick="openTransferForEdit('${t.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="printTransfer('${t.id}')">🖨️ طباعة</button></td></tr>`;
+  }).join('') || '<tr><td colspan="8">لا توجد تحويلات مخزون بعد.</td></tr>';
 }
 function addOrIncrementTransferProduct(p, qty=1){
   const rows=[...q('transferItemsBody').querySelectorAll('tr')];
@@ -2994,6 +2995,27 @@ function retListMatchesFilters(r){
   }
   return true;
 }
+/* ══════ (المهمة ٥) اسم البائع ══════
+   الجداول تخزّن **معرّف** الدخول (created_by / user_identifier)، والمستخدم يريد الاسم.
+   pos_user_roles تربط identifier بـdisplay_name. وإن لم يوجد اسم معروض يُعرض المعرّف
+   نفسه — أفضل من شرطة فارغة تُخفي أن العملية مسجَّلة فعلاً. */
+let __sellerNameIdx=null;
+function sellerName(identifier){
+  const id=String(identifier||'').trim();
+  if(!id) return '—';
+  if(!__sellerNameIdx || __sellerNameIdx.size!==(userRoles||[]).length){
+    __sellerNameIdx=new Map((userRoles||[]).map(u=>[String(u.identifier||'').trim(), (u.display_name||'').trim()]));
+  }
+  return __sellerNameIdx.get(id) || id;
+}
+/* خلية البائع: الاسم، ومعه المعرّف كتلميح حتى يُميَّز المتشابهون */
+function sellerCell(identifier){
+  const id=String(identifier||'').trim();
+  if(!id) return '<td class="mini">—</td>';
+  const nm=sellerName(id);
+  return '<td title="'+esc('معرّف الدخول: '+id)+'">'+esc(nm)+'</td>';
+}
+
 function saleListRowHtml(sl){
   const ctx=window.__salesRenderCtx||{};
   const l=(ctx.locIdx?.get(sl.location_id))||locations.find(x=>x.id===sl.location_id);
@@ -3001,9 +3023,12 @@ function saleListRowHtml(sl){
   const safe=String(sl.id).replace(/'/g,"\\'"); const st=salePaymentStatus(sl);
   const badge=st==='paid'?'<span class="chip paid">مدفوعة</span>':(st==='partial'?'<span class="chip partial">مدفوعة جزئيًا</span>':'<span class="chip due">غير مدفوعة</span>');
   const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
-  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(ctx.payMap?.get(sl.id)||paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td class="amount total">${(()=>{const c=ctx.costBySale?.get(sl.id);return c===undefined?'—':money(Number(sl.total||0)-c);})()}</td><td style="white-space:nowrap">${!sl.offline_pending?`<button class="btn secondary" type="button" style="padding:4px 8px" title="إرجاع على هذه الفاتورة — يفتح فاتورة إرجاع جديدة لها" onclick="event.stopPropagation();openSaleReturn('${safe}')">↩ إرجاع</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
+  const sellerTd=sellerCell(sl.created_by);   /* (المهمة ٥) */
+  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(typeLabel(sl.payment_method))} — ${esc(ctx.payMap?.get(sl.id)||paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id)))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td class="amount total">${(()=>{const c=ctx.costBySale?.get(sl.id);return c===undefined?'—':money(Number(sl.total||0)-c);})()}</td>${sellerTd}<td style="white-space:nowrap">${!sl.offline_pending?`<button class="btn secondary" type="button" style="padding:4px 8px" title="إرجاع على هذه الفاتورة — يفتح فاتورة إرجاع جديدة لها" onclick="event.stopPropagation();openSaleReturn('${safe}')">↩ إرجاع</button>`:''}${canCollect?` <button class="btn" type="button" onclick="event.stopPropagation();openInvoicePayment('${safe}')">💵 تحصيل</button>`:''}</td></tr>`;
 }
 function returnListRowHtml(r){
+  /* (المهمة ٥) المرتجعات تُعرض داخل نفس جدول الفواتير — تحتاج خلية بائع
+     مطابقة وإلا انزاحت كل الأعمدة بعدها. pos_sale_returns بلا created_by بعد. */
   const ctx=window.__salesRenderCtx||{};
   const cust=(ctx.custIdx?.get(r.customer_id))||customers.find(c=>c.id===r.customer_id), l=(ctx.locIdx?.get(r.location_id))||locations.find(x=>x.id===r.location_id);
   const orig=(ctx.saleIdx?.get(r.sale_id))||sales.find(x=>x.id===r.sale_id);
@@ -3016,7 +3041,7 @@ function returnListRowHtml(r){
   if(isAdm) act+=` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف فاتورة الإرجاع نهائياً — للمدير فقط" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')">🗑</button>`;
   const osafe=orig?String(orig.id).replace(/'/g,"\\'"):'';
   const noOrig=r.sale_id?'':' <span class="chip due" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
-  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>—</td><td style="white-space:nowrap">${act||'—'}</td></tr>`;
+  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>—</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}<td style="white-space:nowrap">${act||'—'}</td></tr>`;
 }
 /**** تحديث خفيف بعد الحفظ/التعديل: يجلب جداول «البيع والمخزون» المتحركة فقط بدل loadAll الكامل الثقيل — ويُعاد رسم القوائم فوراً — ويشتغل أيضاً كل 60 ثانية آلياً فتظهر فواتير وتعديلات الأجهزة الأخرى دون تحديث الصفحة يدوياً ****/
 async function refreshSalesDomain(o={}){
@@ -3064,10 +3089,10 @@ async function salesDomainStamp(){
     one('pos_sales','updated_at'),        /* بيع جديد أو تعديل فاتورة */
     one('pos_stock','updated_at'),        /* شراء/تحويل/جرد من جهاز آخر */
     one('pos_customer_ledger','created_at'), /* دفعة زبون أو قيد */
-    one('pos_sale_returns','created_at'),   /* (مراجعة) مرتجع من جهاز آخر */
-    one('pos_finance_movements','created_at'), /* (مراجعة) مصروف/تحويل/مرتب من جهاز آخر */
-    one('pos_stock_counts','created_at'),     /* (مراجعة) ورقة إحصاء من جهاز آخر */
-    one('pos_customers','updated_at')          /* (مراجعة) زبون جديد/تعديل من جهاز آخر */
+    one('pos_sale_returns','created_at'),   /* (مراجعة 0081) مرتجع من جهاز آخر */
+    one('pos_finance_movements','created_at'), /* (مراجعة 0081) مصروف/تحويل/مرتب من جهاز آخر */
+    one('pos_stock_counts','created_at'),     /* (مراجعة 0081) ورقة إحصاء من جهاز آخر */
+    one('pos_customers','updated_at')          /* (مراجعة 0081) زبون جديد/تعديل من جهاز آخر */
   ]);
   if(r.every(x=>x===null)) return null;   /* الشبكة ساقطة — لا تبنِ قراراً عليها */
   return r.join('|');
@@ -3127,7 +3152,7 @@ function renderSales(){
   const more=entries.length-salesListLimit;
   q('salesBody').innerHTML=(entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('')
     +(more>0?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="salesListLimit+=300;renderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'')
-  ) || '<tr><td colspan="10">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
+  ) || '<tr><td colspan="11">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
@@ -6452,6 +6477,13 @@ q('transferForm').addEventListener('submit', async e=>{
       logAction('transfer','pos_stock_transfers',saved.id,`${items.length} صنف - ${locations.find(l=>l.id===from)?.name||''} → ${locations.find(l=>l.id===to)?.name||''}`);
       clearDraftKey('transfer');
       transferId=saved.id;
+      /* (المهمة ٥) منفّذ التحويل: الدالة تستقبل p_user_identifier لكنها لا تخزّنه على الصف،
+         فيُكتب هنا. محاولة لا تُعطّل الحفظ: التحويل نجح فعلاً والاسم تفصيل عرض. */
+      if(appUser?.identifier){
+        api('pos_stock_transfers',{method:'PATCH',qs:`?id=eq.${saved.id}`,body:{created_by:appUser.identifier}})
+          .then(()=>{ const t=transfers.find(x=>x.id===saved.id); if(t) t.created_by=appUser.identifier; })
+          .catch(e=>console.warn('تعذّر تسجيل منفّذ التحويل (قد يحتاج SQL 0058)',e));
+      }
       resetTransferForm(); toast('تم حفظ التحويل وتحديث المخزون','success'); applyTransferLocally(saved, body, items); refreshAfterLocalUpdate();
       return;
     }
@@ -7653,7 +7685,7 @@ function renderStockCountLists(){
     const l=locations.find(x=>x.id===r.location_id);
     const st=r.status==='settled'?'<span class="badge green">مسوّى</span>':'<span class="badge yellow">مسودة</span>';
     const safe=String(r.id).replace(/'/g,"\\\\'");
-    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(r.user_identifier||'—')}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${adm?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف قائمة الجرد (لا يغيّر المخزون ولا الحركات) — للمدير فقط" onclick="deleteStockCount('${safe}')">🗑</button>`:''}</td></tr>`;
+    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${adm?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف قائمة الجرد (لا يغيّر المخزون ولا الحركات) — للمدير فقط" onclick="deleteStockCount('${safe}')">🗑</button>`:''}</td></tr>`;
   }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من تبويب «جرد جديد».</td></tr>';
 }
 async function deleteStockCount(id){
@@ -7909,4 +7941,192 @@ function renderComposites(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDateFrom')) q('dailyCashDateFrom').value=d; if(q('dailyCashDateTo')) q('dailyCashDateTo').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); injectCsvButtons(); injectReportRangeButtons(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
+
+/* ══════════════════ (المهمة ٤) التقارير: تصدير CSV عام · فترات جاهزة · طباعة ══════════════════
+   كان في المنظومة موضعان اثنان فقط يصدّران CSV (قائمة الفواتير والجرد المطلوب)،
+   وكل بقية الجداول — التقارير والمخزون والزبائن والموردون — بلا تصدير إطلاقاً.
+
+   الدوال هنا تصدّر الجدول **كما يراه المستخدم على الشاشة**: بعد الفلاتر والترتيب
+   وبنفس الأعمدة، لا استعلاماً جديداً قد يخالف ما يظهر أمامه.
+   وتبدأ الملفات بـBOM (﻿) وإلا فتحت Excel العربية حروفاً مشوّهة. */
+
+function csvCell(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+
+function csvDownload(rows, filename){
+  const csv='﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=/\.csv$/i.test(filename)?filename:filename+'.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ try{URL.revokeObjectURL(a.href);}catch(_e){} a.remove(); },0);
+}
+
+/* نصّ الخلية كما يُقرأ: بلا أزرار ولا أيقونات ولا حقول إدخال */
+function csvCellText(td){
+  const c=td.cloneNode(true);
+  c.querySelectorAll('button,select,i,svg,.no-export').forEach(e=>e.remove());
+  c.querySelectorAll('input').forEach(e=>{ const v=e.value||''; e.replaceWith(document.createTextNode(v)); });
+  c.querySelectorAll('br').forEach(e=>e.replaceWith(document.createTextNode(' ')));
+  /* فاصل قبل كل عنصر داخلي: بدونه يلتصق الاسم بالملاحظة الصغيرة داخل الخلية */
+  c.querySelectorAll('*').forEach(e=>{ try{e.insertAdjacentText('beforebegin',' ');}catch(_e){} });
+  return (c.textContent||'').replace(/\s+/g,' ').trim();
+}
+
+function csvTableRows(tbl){
+  const rows=[];
+  tbl.querySelectorAll('thead tr').forEach(tr=>{
+    const cells=[...tr.children]; if(cells.length) rows.push(cells.map(csvCellText));
+  });
+  tbl.querySelectorAll('tbody tr').forEach(tr=>{
+    if(tr.style.display==='none') return;
+    const cells=[...tr.children]; if(!cells.length) return;
+    /* سطر «لا توجد بيانات» يمتد على كل الأعمدة — ليس بياناً */
+    if(cells.length===1 && Number(cells[0].colSpan||1)>1) return;
+    rows.push(cells.map(csvCellText));
+  });
+  tbl.querySelectorAll('tfoot tr').forEach(tr=>{
+    const cells=[...tr.children]; if(cells.length) rows.push(cells.map(csvCellText));
+  });
+  return dropEmptyColumns(rows);
+}
+/* عمود فارغ في كل الصفوف = عمود أزرار (حُذفت أعلاه) — لا معنى له في ملف Excel */
+function dropEmptyColumns(rows){
+  if(rows.length<2) return rows;
+  const n=Math.max(...rows.map(r=>r.length));
+  const keep=[];
+  for(let i=0;i<n;i++) keep.push(rows.slice(1).some(r=>(r[i]||'').trim()!==''));
+  if(keep.every(Boolean)) return rows;
+  return rows.map(r=>r.filter((_,i)=>keep[i]));
+}
+
+function exportTableCsv(idOrEl, label){
+  const el=typeof idOrEl==='string'?q(idOrEl):idOrEl;
+  const tbl=el?(el.tagName==='TABLE'?el:el.closest('table')):null;
+  if(!tbl){ toast('لا يوجد جدول للتصدير','warn'); return; }
+  const rows=csvTableRows(tbl);
+  if(rows.length<2){ toast('لا توجد بيانات للتصدير','warn'); return; }
+  csvDownload(rows, (label||'تصدير')+'-'+todayStr());
+  toast('تم تصدير '+(rows.length-1)+' سطراً إلى CSV','success');
+}
+
+/* التقارير: ملف واحد فيه ترويسة الفترة + بطاقات الملخص + كل جدول ظاهر الآن */
+function exportReportCsv(){
+  const sec=q('reports'); if(!sec){ toast('شاشة التقارير غير مفتوحة','warn'); return; }
+  const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'';
+  const locSel=q('reportLocation');
+  const rows=[
+    [APP_CONFIG.businessName||'مجموعة بن عمر','تقرير'],
+    ['الفترة',(from||'من البداية')+' ← '+(to||'حتى اليوم')],
+    ['الفرع',locSel?.selectedOptions?.[0]?.textContent?.trim()||'كل الفروع'],
+    ['المستخدم',appUser?.identifier||''],
+    ['تاريخ التصدير',new Date().toLocaleString('en-GB')],
+    []
+  ];
+  const cards=[...sec.querySelectorAll('.grid.cards .card')]
+    .filter(c=>c.offsetParent)
+    .map(c=>[c.querySelector('h3')?.textContent.trim()||'', c.querySelector('.num')?.textContent.trim()||'']);
+  if(cards.length){ rows.push(['الملخص','']); rows.push(...cards); rows.push([]); }
+  let n=0;
+  sec.querySelectorAll('table').forEach(tbl=>{
+    if(!tbl.offsetParent) return;                       /* تقرير غير معروض الآن */
+    const r=csvTableRows(tbl); if(r.length<2) return;
+    const head=tbl.closest('.panel')?.querySelector('h2,h3');
+    rows.push([head?head.textContent.trim():'جدول']);
+    rows.push(...r); rows.push([]); n++;
+  });
+  if(!n && !cards.length){ toast('لا توجد بيانات ظاهرة للتصدير','warn'); return; }
+  csvDownload(rows,'تقرير-'+todayStr());
+  toast('تم تصدير التقرير ('+n+' جدولاً) إلى CSV','success');
+}
+
+/* ── فترات جاهزة: كانت الشاشة تطلب كتابة التاريخين يدوياً في كل مرة ──
+   «آخر ٧ أيام» و«آخر ٣٠ يوماً» بدل «هذا الأسبوع» تفادياً لالتباس أول أيام الأسبوع. */
+function todayStr(){ const d=new Date(); return localDateStr(d); }
+function localDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+function setReportRange(kind){
+  const now=new Date(); let from=null,to=null;
+  const day=n=>{ const d=new Date(now); d.setDate(d.getDate()+n); return d; };
+  if(kind==='today'){ from=to=now; }
+  else if(kind==='yesterday'){ from=to=day(-1); }
+  else if(kind==='d7'){ from=day(-6); to=now; }
+  else if(kind==='d30'){ from=day(-29); to=now; }
+  else if(kind==='month'){ from=new Date(now.getFullYear(),now.getMonth(),1); to=now; }
+  else if(kind==='prevmonth'){ from=new Date(now.getFullYear(),now.getMonth()-1,1); to=new Date(now.getFullYear(),now.getMonth(),0); }
+  else if(kind==='year'){ from=new Date(now.getFullYear(),0,1); to=now; }
+  else if(kind==='all'){ from=null; to=null; }
+  if(q('reportFrom')) q('reportFrom').value=from?localDateStr(from):'';
+  if(q('reportTo'))   q('reportTo').value  =to?localDateStr(to):'';
+  document.querySelectorAll('#reports [data-range]').forEach(b=>b.classList.toggle('active', b.dataset.range===kind));
+  try{ renderReports(); }catch(e){ console.error('renderReports',e); }
+}
+
+/* ── زر «تصدير CSV» يُحقن في شريط أدوات كل شاشة فيها جدول ──
+   بلا تعديل في index.html، فلا يسقط عند أي مزامنة لاحقة للملف. */
+function injectCsvButtons(){
+  document.querySelectorAll('main .section').forEach(sec=>{
+    const row=sec.querySelector('.tools .row')||sec.querySelector('.tools');
+    if(!row || row.querySelector('[data-csv]')) return;
+    const isReports = sec.id==='reports';
+    const tb = isReports ? null : pickListTbody(sec);
+    if(!isReports && !tb) return;
+    const b=document.createElement('button');
+    b.type='button'; b.className='btn secondary'; b.dataset.csv=isReports?'report':tb.id;
+    b.innerHTML='<i class="ti ti-file-spreadsheet"></i> تصدير CSV';
+    const label=sec.querySelector('.tools h2')?.textContent.trim()||sec.id;
+    /* يُحسم الجدول لحظة الضغط: بعض الشاشات تبدل بين عرضين */
+    b.addEventListener('click',()=>{ isReports?exportReportCsv():exportTableCsv((pickListTbody(sec)||tb).id,label); });
+    row.appendChild(b);
+  });
+}
+
+/* ── أزرار الفترات الجاهزة في شريط التقارير — تُحقن مرة واحدة ── */
+function injectReportRangeButtons(){
+  const row=q('reports')?.querySelector('.tools .row');
+  if(!row || row.querySelector('[data-range]')) return;
+  const wrap=document.createElement('div');
+  wrap.className='range-presets';
+  [['today','اليوم'],['yesterday','أمس'],['d7','آخر 7 أيام'],['d30','آخر 30 يوماً'],
+   ['month','هذا الشهر'],['prevmonth','الشهر الماضي'],['year','هذه السنة'],['all','الكل']]
+   .forEach(([k,t])=>{
+     const b=document.createElement('button');
+     b.type='button'; b.className='rng'; b.dataset.range=k; b.textContent=t;
+     b.addEventListener('click',()=>setReportRange(k));
+     wrap.appendChild(b);
+   });
+  row.parentElement.appendChild(wrap);
+}
+
+/* ── ترويسة الطباعة: تُملأ لحظة الطباعة فتحمل الشاشة والفترة والمستخدم ── */
+function fillPrintHead(){
+  const el=q('printHead'); if(!el) return;
+  const tab=activeTabId();
+  const sec=q(tab);
+  const title=sec?.querySelector('.tools h2')?.textContent.trim()||document.querySelector('nav button.active span')?.textContent.trim()||'';
+  const bits=[];
+  if(tab==='reports'){
+    const f=q('reportFrom')?.value, t=q('reportTo')?.value;
+    bits.push('الفترة: '+((f||'من البداية')+' ← '+(t||'حتى اليوم')));
+    const l=q('reportLocation')?.selectedOptions?.[0]?.textContent?.trim(); if(l) bits.push('الفرع: '+l);
+  }
+  bits.push('المستخدم: '+(appUser?.identifier||''));
+  bits.push('التاريخ: '+new Date().toLocaleString('en-GB'));
+  el.innerHTML='<div class="ph-brand">'+esc(APP_CONFIG.businessName||'')+'</div>'
+             +'<div class="ph-title">'+esc(title)+'</div>'
+             +'<div class="ph-meta">'+esc(bits.join('   ·   '))+'</div>';
+}
+window.addEventListener('beforeprint',()=>{ try{fillPrintHead();}catch(e){console.warn('printHead',e);} });
+
+/* جدول «القائمة» في الشاشة، لا جدول نموذج الإدخال.
+   الشاشات التي فيها نموذج (شراء/تحويل/مبدئية) تبدأ بجدول أسطر النموذج
+   ومعرّفه ينتهي بـItemsBody — يُستبعد. وإن كانت الشاشة تبدّل بين عرضين
+   يُفضَّل الظاهر منهما فعلاً لحظة الضغط. */
+function pickListTbody(sec){
+  const all=[...sec.querySelectorAll('table tbody[id]')];
+  if(!all.length) return null;
+  const lists=all.filter(t=>!/ItemsBody$/.test(t.id));
+  const pool=lists.length?lists:all;
+  return pool.find(t=>t.offsetParent && t.rows.length) || pool.find(t=>t.offsetParent) || pool[0];
+}

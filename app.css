@@ -99,7 +99,7 @@
     .section>.panel+ .panel{margin-top:22px;border-color:color-mix(in srgb,#087f5b 22%,var(--border))}
     .panel h2{color:var(--text);font-weight:900;border-bottom:2px solid color-mix(in srgb,var(--blue) 18%,var(--border));padding-bottom:10px;margin-bottom:16px!important}
     .tools h2{border-bottom:0!important;padding-bottom:0!important;margin-bottom:0!important}
-    .nav-group{margin-top:14px;padding:8px 10px;border-radius:10px;background:linear-gradient(90deg,color-mix(in srgb,var(--blue) 14%,transparent),transparent);color:#0f3d67;font-weight:900;border-inline-start:4px solid var(--blue)}
+    
     html[data-theme="dark"] .nav-group{color:#d8e8ff;background:linear-gradient(90deg,rgba(56,163,232,.18),transparent)}
     label{color:#334155;font-weight:800}
     .muted,.mini{color:#475569}
@@ -270,8 +270,6 @@
     nav button:hover i{transform:scale(1.08)}
     nav button.active{background:var(--accent-soft);color:var(--blue);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--blue) 16%,transparent)}
     nav button.active::before{content:"";position:absolute;inset-inline-start:3px;top:50%;transform:translateY(-50%);width:4px;height:20px;border-radius:99px;background:var(--primary-grad)}
-    .nav-group{grid-column:1/-1;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;padding:13px 12px 5px;opacity:.8}
-    .nav-group:first-of-type{padding-top:6px}
 
     /* ===== Right-click context menu ===== */
     .ctx-menu{position:fixed;z-index:95;min-width:216px;background:var(--card);border:1px solid var(--border);border-radius:13px;box-shadow:var(--elev-3);padding:6px;display:none;animation:posFade .12s ease}
@@ -617,7 +615,6 @@ td .mini{font-size:13px}                       /* داخل الجداول: لا 
 
 /* 2. القائمة الجانبية نص أساسي (القائمة عندنا nav button — مع إبقاء .nav-item للمستقبل) */
 nav button, nav a span, .nav-item{color:var(--text);font-size:15px;font-weight:600}
-.nav-group{font-size:12px;color:var(--muted);letter-spacing:.3px}
 
 /* 3. التسميات والعناوين */
 label{font-size:14px;color:var(--text);font-weight:700}
@@ -685,3 +682,207 @@ html[data-theme="dark"]{
     /* استكمال الحد الأدنى: تسميات المالية 12px، وجدول المنتجات 15px مثل بقية الجداول */
     .finance-selects label{font-size:12px}
     .product-table-wrap table{font-size:15px}
+
+/* ════════════════════ (المهمة ٣) هوية لون لكل قسم + تباين WCAG AA ════════════════════
+   قبل هذا الملحق كانت ‎.nav-group‎ معرّفة ثلاث مرات في ثلاثة مواضع، وآخرها يفوز:
+   شريط جانبي مسطّح، كل بنوده بلون واحد ورؤوس المجموعات رمادية صغيرة. وُحِّدت هنا.
+
+   الفكرة: لكل مجموعة متغيّر واحد ‎--sec‎. يرثه رأس المجموعة وأيقونات أزرارها
+   وحالة «نشط» وعنوان الشاشة المقابلة — فاللون يُكتب مرة واحدة لا في كل قاعدة.
+
+   كل درجة مقيسة على الخلفية التي تظهر فوقها فعلاً:
+   الفاتح ٥٫٠:١ فأعلى · الداكن ٦٫٨:١ فأعلى (الحد المطلوب 4.5:1). */
+:root{
+  --sec-home:#1d4ed8;     /* 6.70:1 على الأبيض */
+  --sec-sales:#b45309;    /* 5.02:1 */
+  --sec-stock:#15803d;    /* 5.02:1 */
+  --sec-daily:#0f766e;    /* 5.47:1 */
+  --sec-finance:#6d28d9;  /* 7.10:1 */
+  --sec-system:#475569;   /* 7.58:1 */
+}
+html[data-theme="dark"]{
+  --sec-home:#60a5fa;     /* 6.84:1 على ‎--card‎ الداكن */
+  --sec-sales:#fbbf24;    /* 10.41:1 */
+  --sec-stock:#4ade80;    /* 9.98:1 */
+  --sec-daily:#2dd4bf;    /* 9.34:1 */
+  --sec-finance:#c4b5fd;  /* 9.42:1 */
+  --sec-system:#cbd5e1;   /* 11.71:1 */
+}
+@media (prefers-color-scheme:dark){
+  :root{--sec-home:#60a5fa;--sec-sales:#fbbf24;--sec-stock:#4ade80;--sec-daily:#2dd4bf;--sec-finance:#c4b5fd;--sec-system:#cbd5e1;}
+}
+html[data-theme="light"]{
+  --sec-home:#1d4ed8;--sec-sales:#b45309;--sec-stock:#15803d;--sec-daily:#0f766e;--sec-finance:#6d28d9;--sec-system:#475569;
+}
+
+/* ── إسناد القسم: مرة واحدة لكل تبويب، ويُورَّث لكل ما بداخله ── */
+nav button[data-tab="dashboard"]{--sec:var(--sec-home)}
+nav button[data-tab="sales"],nav button[data-tab="salesList"],
+nav button[data-tab="proformas"],nav button[data-tab="customers"]{--sec:var(--sec-sales)}
+nav button[data-tab="products"],nav button[data-tab="suppliers"],nav button[data-tab="purchases"],
+nav button[data-tab="stock"],nav button[data-tab="stockCount"],nav button[data-tab="composites"],
+nav button[data-tab="transfers"],nav button[data-tab="locations"]{--sec:var(--sec-stock)}
+nav button[data-tab="expensesQuick"],nav button[data-tab="dailyCashClosing"]{--sec:var(--sec-daily)}
+nav button[data-tab="ledger"],nav button[data-tab="payments"],
+nav button[data-tab="finance"],nav button[data-tab="reports"]{--sec:var(--sec-finance)}
+nav button[data-tab="auditLog"],nav button[data-tab="users"],
+nav button[data-tab="settings"]{--sec:var(--sec-system)}
+
+nav .nav-group[data-sec="sales"]{--sec:var(--sec-sales)}
+nav .nav-group[data-sec="stock"]{--sec:var(--sec-stock)}
+nav .nav-group[data-sec="daily"]{--sec:var(--sec-daily)}
+nav .nav-group[data-sec="finance"]{--sec:var(--sec-finance)}
+nav .nav-group[data-sec="system"]{--sec:var(--sec-system)}
+
+/* ── رأس المجموعة: شريط باللون + عنوان به، بدل الرمادي المسطّح ── */
+nav .nav-group{
+  grid-column:1/-1;                 /* الشريط يصير شبكة على الهاتف — الرأس يمتد كامل العرض */
+  margin-top:15px; padding:7px 10px; border-radius:0 10px 10px 0;
+  font-size:12px; font-weight:800; letter-spacing:.02em; opacity:1;
+  color:var(--sec,var(--muted));
+  background:linear-gradient(90deg,color-mix(in srgb,var(--sec,var(--muted)) 13%,transparent),transparent 78%);
+  border-inline-start:3px solid var(--sec,var(--border));
+}
+nav .nav-group:first-of-type{margin-top:8px}
+nav .nav-group::after{color:var(--sec,var(--muted))}
+
+/* ── الأزرار: الأيقونة بلون القسم دائماً، والنص يبقى عالي التباين ── */
+nav button i{color:var(--sec,var(--muted));opacity:.9}
+nav button:hover{background:color-mix(in srgb,var(--sec,var(--blue)) 9%,transparent);color:var(--text)}
+nav button:hover i{opacity:1}
+nav button.active{
+  background:color-mix(in srgb,var(--sec,var(--blue)) 13%,transparent);
+  color:var(--sec,var(--blue));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--sec,var(--blue)) 26%,transparent);
+}
+nav button.active i{opacity:1}
+nav button.active::before{background:var(--sec,var(--blue))}
+nav button:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--sec,var(--blue)) 35%,transparent)}
+
+/* ── نفس اللون على عنوان الشاشة، فيعرف المستخدم أين هو دون قراءة ── */
+#dashboard{--sec:var(--sec-home)}
+#sales,#salesList,#proformas,#customers{--sec:var(--sec-sales)}
+#products,#suppliers,#purchases,#stock,#stockCount,#composites,#transfers,#locations{--sec:var(--sec-stock)}
+#expensesQuick,#dailyCashClosing{--sec:var(--sec-daily)}
+#ledger,#payments,#finance,#reports{--sec:var(--sec-finance)}
+#auditLog,#users,#settings{--sec:var(--sec-system)}
+.section .tools h2{
+  padding-inline-start:11px;
+  border-inline-start:4px solid var(--sec,var(--blue));
+  border-radius:2px;
+}
+
+/* ════════════════════ تصحيح التباين — كلّه مقيس ════════════════════
+   نص أبيض بحجم 15px عريض ليس «نصاً كبيراً» في WCAG (الكبير: 18.66px عريض
+   فأكثر)، فحدّه 4.5:1 لا 3:1. مربعات اللوحة كانت 3.18–4.13:1. */
+.lt-orange{background:linear-gradient(135deg,#c2410c,#9a3412)}  /* 5.18 ⇐ 3.18 */
+.lt-blue  {background:linear-gradient(135deg,#1d4ed8,#1e40af)}  /* 6.70 ⇐ 4.13 */
+.lt-green {background:linear-gradient(135deg,#15803d,#166534)}  /* 5.02 ⇐ 3.40 */
+.lt-purple{background:linear-gradient(135deg,#6d28d9,#5b21b6)}  /* 7.10 */
+.lt-teal  {background:linear-gradient(135deg,#0f766e,#115e59)}  /* 5.47 ⇐ 3.23 */
+.lt-pink  {background:linear-gradient(135deg,#be185d,#9d174d)}  /* 6.04 ⇐ 4.08 */
+.lt-slate {background:linear-gradient(135deg,#475569,#334155)}  /* 7.58 */
+.lt-dark  {background:linear-gradient(135deg,#334155,#1e293b)}  /* 10.35 */
+
+.badge.green{color:#065f46}                    /* 6.99 ⇐ 3.43 */
+html[data-theme="dark"] .badge.green{color:#6ee7b7}
+.stock-positive{color:#047857}                 /* 5.48 ⇐ 3.77 */
+html[data-theme="dark"] .stock-positive{color:#34d399}
+.count{color:#475569}                          /* 6.86 ⇐ 4.31 */
+html[data-theme="dark"] .count{color:#cbd5e1}
+.pill.sync-online{background:#1d4ed8}          /* 6.70 ⇐ 4.18 */
+.schip-sub{font-size:10.5px}                   /* كان 9px — أصغر من أن يُقرأ */
+
+/* عدّاد شجرة التصنيفات: القاعدة الفائزة هي ‎.category-node .count‎ (--muted فوق
+   الخلفية المُظلّلة = 4.31:1)، فلا يكفي ‎.count‎ وحدها. */
+.category-node .count{color:#475569}                            /* 6.86 ⇐ 4.31 */
+html[data-theme="dark"] .category-node .count{color:#cbd5e1}
+/* سطر الاختصارات فوق شريط البيع: كان 9px بشفافية 72% ⇒ 3.47:1 */
+#sales .schip-sub{font-size:11px;color:rgba(255,255,255,.92)}   /* 6.10 ⇐ 3.47 */
+
+/* ═════════ 🔴 إصلاح: الوضع الداكن التلقائي كان يعرض نصاً أسود على خلفية داكنة ═════════
+   السطر ‎:root{--text:#0f172a;--text-2:#334155;--muted:#64748b}‎ (ملحق «ضبط درجات النص»)
+   يُعيد تعريف ‎--text‎ و‎--muted‎ بلا أي شرط، وترتيبه **بعد**
+   ‎@media (prefers-color-scheme:dark){:root{…}}‎ وتساويهما في الأولوية،
+   فيفوز الأخير ⇒ في الوضع الداكن التلقائي يعود النص إلى درجته الفاتحة.
+   النتيجة: بنود الشريط الجانبي ونصوص الشاشات بتباين ‎1.05:1‎ — غير مقروءة عملياً.
+   لم يظهر العطل لمن ضغط زر الوضع الداكن يدوياً، لأن ‎html[data-theme="dark"]‎
+   أعلى أولوية؛ ظهر فقط لمن جهازه مضبوط على الداكن ولم يختر شيئاً.
+   العلاج: إعادة تثبيت درجات الداكن في آخر الملف (الترتيب لنا الآن)،
+   مع استثناء من اختار الفاتح صراحةً. */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--text:#e6edf8;--text-2:#cbd5e1;--muted:#93a1b8;}
+}
+html[data-theme="dark"]{--text:#e6edf8;--text-2:#cbd5e1;--muted:#93a1b8;}
+html[data-theme="light"]{--text:#0f172a;--text-2:#334155;--muted:#64748b;}
+
+/* ══════════════════ (المهمة ٤) أزرار الفترات الجاهزة في التقارير ══════════════════ */
+.range-presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.range-presets .rng{
+  border:1px solid var(--border);background:var(--card);color:var(--text-2);
+  font:inherit;font-size:13px;font-weight:700;padding:5px 12px;border-radius:999px;
+  cursor:pointer;transition:background .13s,color .13s,border-color .13s;
+}
+.range-presets .rng:hover{background:var(--hover);color:var(--text);border-color:color-mix(in srgb,var(--sec,var(--blue)) 40%,var(--border))}
+.range-presets .rng.active{
+  background:color-mix(in srgb,var(--sec,var(--blue)) 14%,transparent);
+  border-color:color-mix(in srgb,var(--sec,var(--blue)) 45%,transparent);
+  color:var(--sec,var(--blue));
+}
+.range-presets .rng:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--sec,var(--blue)) 32%,transparent)}
+
+/* ══════════════════ (المهمة ٤) ورقة طباعة حقيقية ══════════════════
+   كان في الملف كله قاعدتا طباعة: إخفاء الترويسة والشريط الجانبي وشريط الحالة.
+   أي أمر طباعة مباشر (Ctrl+P) من أي شاشة كان يُخرج ألوان الشاشة وظلالها
+   وأزرارها وفلاترها على الورق، ويقطع الجداول بين الصفحات بلا رؤوس.
+   نوافذ الطباعة المخصّصة (الفاتورة، التحويل، إغلاق الخزينة) لها تنسيقها
+   الخاص ولا تتأثر بهذه القواعد. */
+.print-only{display:none}
+
+@media print{
+  @page{ size:A4; margin:12mm }
+
+  html,body{background:#fff !important;color:#000 !important;font-size:10.5pt}
+  /* الداكن لا يُطبع: حبر أسود على ورق أبيض مهما كان وضع الشاشة */
+  html[data-theme="dark"], html[data-theme="dark"] body{background:#fff !important;color:#000 !important}
+
+  header,nav,.statusbar,.toast,.toasts,.modal,.ctx-menu,.launcher,
+  .seg,.range-presets,.no-print,#loadingOverlay,.sale-shortcuts,
+  .tools .row button,.tools .row input,.tools .row select,
+  .product-bottom-bar,.product-sidebar{display:none !important}
+
+  .wrap{display:block !important;max-width:none !important;margin:0 !important;padding:0 !important;gap:0 !important}
+  main{min-width:0 !important}
+  .section{display:none !important}
+  .section.active{display:block !important}
+
+  /* ترويسة الورقة: الاسم والشاشة والفترة والمستخدم والتاريخ */
+  .print-only{display:block !important}
+  #printHead{border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}
+  #printHead .ph-brand{font-size:15pt;font-weight:800}
+  #printHead .ph-title{font-size:12pt;font-weight:700;margin-top:2px}
+  #printHead .ph-meta{font-size:8.5pt;margin-top:3px}
+
+  .panel,.card{box-shadow:none !important;border:1px solid #bbb !important;background:#fff !important;
+               break-inside:avoid;page-break-inside:avoid;margin-bottom:8px !important}
+  .tools h2{font-size:12pt;border:0 !important;padding:0 !important;margin:0 0 6px}
+  .grid.cards{display:grid !important;grid-template-columns:repeat(4,1fr) !important;gap:6px !important}
+  .card .num{font-size:12pt !important}
+
+  table{width:100% !important;border-collapse:collapse !important;font-size:9pt}
+  thead{display:table-header-group}        /* رأس الجدول يتكرر في أعلى كل صفحة */
+  tfoot{display:table-footer-group}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  th,td{border:1px solid #999 !important;padding:3px 5px !important;
+        color:#000 !important;background:#fff !important;box-shadow:none !important}
+  th{background:#eee !important;font-weight:700}
+  tbody tr:hover{background:#fff !important}
+
+  /* الشارات والرقائق تُطبع حبراً لا لوناً ممتلئاً */
+  .badge,.chip,[class*="branch-chip"]{border:1px solid #777 !important;background:#fff !important;
+        color:#000 !important;padding:0 3px !important;border-radius:3px !important}
+
+  a{text-decoration:none;color:#000 !important}
+  .mini,.muted{color:#333 !important}
+  * {text-shadow:none !important}
+}
