@@ -7980,10 +7980,23 @@ function scLocStockMap(loc){
 }
 function renderStockCount(){
   const locEl=q('stockCountLocation'); if(!locEl)return;
-  if(!locEl.dataset.ready){locEl.innerHTML=locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join(''); if(appUser?.branch_id) locEl.value=appUser.branch_id; locEl.dataset.ready='1'; locEl.dataset.prev=locEl.value;}
+  /* (hotfix 1900) قائمة الفروع تُرسم من ذاكرة `locations` — إن فُتحت الصفحة قبل اكتمال جلب النواة
+     كُانت تُرسم مرة واحدة وبقيت فارغة. تُعاد الرسم إن كانت فارغة والبيانات وصلت (مع الحفاظ على الفرع). */
+  if(!locEl.dataset.ready || (locEl.options.length===0 && locations.length>0)){
+    const cur=locEl.value;
+    locEl.innerHTML=locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    const has=x=>locations.some(l=>String(l.id)===String(x));
+    locEl.value=has(cur)?cur:(has(appUser?.branch_id)?appUser.branch_id:String(locations[0]?.id||''));
+  }
+  if(!locEl.dataset.ready){locEl.dataset.ready='1'; locEl.dataset.prev=locEl.value;}
   const loc=locEl.value;
   const catEl=q('stockCountCategory');
-  if(catEl && !catEl.dataset.ready){const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();catEl.innerHTML='<option value="">كل التصنيفات</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');catEl.dataset.ready='1';}
+  if(catEl && (!catEl.dataset.ready || (catEl.options.length<=1 && products.length>0))){
+    const ccur=catEl.value;
+    const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();
+    catEl.innerHTML='<option value="">كل التصنيفات</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    catEl.value=cats.includes(ccur)?ccur:''; catEl.dataset.ready='1';
+  }
   if(!loc){q('stockCountBody').innerHTML='<tr><td colspan="8">اختر الفرع.</td></tr>';__scItems=[];window.__scLocStock=new Map();updateStockCountTotals();return;}
   const term=(q('stockCountSearch')?.value||'').trim().toLowerCase();
   const cat=catEl?.value||'';
