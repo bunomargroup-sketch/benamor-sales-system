@@ -31,12 +31,13 @@
   text-transform:none;line-height:1;speak:never;display:inline-block;
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
 
-/* الأيقونات المستعملة: 72 من أصل 5229 في الحزمة الأصلية */
+/* الأيقونات المستعملة: 74 من أصل 5229 في الحزمة الأصلية */
 .ti-alert-circle:before{content:"\ea05"}
 .ti-alert-triangle:before{content:"\ea06"}
 .ti-arrow-back-up:before{content:"\eb77"}
 .ti-arrow-left:before{content:"\ea19"}
 .ti-arrows-exchange:before{content:"\f1f4"}
+.ti-arrows-sort:before{content:"\eb5a"}
 .ti-barcode:before{content:"\ebc6"}
 .ti-basket:before{content:"\ebe1"}
 .ti-box:before{content:"\ea45"}
@@ -99,6 +100,7 @@
 .ti-truck:before{content:"\ebc4"}
 .ti-truck-delivery:before{content:"\ec4b"}
 .ti-user:before{content:"\eb4d"}
+.ti-user-dollar:before{content:"\f9d5"}
 .ti-user-down:before{content:"\f9d6"}
 .ti-user-plus:before{content:"\eb4b"}
 .ti-user-search:before{content:"\ef89"}

@@ -8,7 +8,7 @@
        كانت تُجلب من fonts.googleapis.com و cdn.jsdelivr.net، والعامل الخدمي
        يتجاهل كل ما هو خارج النطاق ⇒ خطّ نظام ومربّعات فارغة مكان الأيقونات. -->
   <link rel="preload" href="assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/app-fonts.css?v=20260927-2300">
+  <link rel="stylesheet" href="assets/app-fonts.css?v=20260928-1830">
   
   
   
@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260927-2300">
+<link rel="stylesheet" href="app.css?v=20260928-1830">
 </head>
 <body class="auth-locked">
   <header>
@@ -211,7 +211,7 @@
 
       <!-- نافذة إضافة/تعديل منتج — كل الحقول والمعرفات كما هي -->
       <div class="modal" id="productModal">
-        <div class="modal-card" style="max-width:min(1120px,97vw)">
+        <div class="modal-card" style="max-width:min(1320px,98vw)">
           <div class="modal-head">
             <div><h2 id="productModalTitle" style="margin:0">إضافة / تعديل منتج</h2><div class="mini">اكتب كوداً موجوداً لتعديل بياناته</div></div>
             <button class="btn secondary" type="button" onclick="closeProductModal()">إغلاق</button>
@@ -861,7 +861,7 @@
             <div class="card"><h3>ربح تقديري</h3><div class="num" id="repProfit">0</div></div>
             <div class="card"><h3>ديون الزبائن</h3><div class="num" id="repCustomerDebt">0</div></div>
             <div class="card"><h3>أرصدة الموردين علينا</h3><div class="num" id="repSupplierDebt">0</div></div>
-            <div class="card"><h3>قيمة المخزون بسعر الشراء</h3><div class="num" id="repStockValue">0</div></div>
+            <div class="card"><h3>قيمة المخزون بالتكلفة</h3><div class="num" id="repStockValue">0</div></div>
           </div>
         </div>
 
@@ -875,6 +875,7 @@
             <button class="seg-btn" type="button" data-rep="expenses" onclick="showReport('expenses')"><i class="ti ti-cash"></i> المصاريف والمرتبات</button>
             <button class="seg-btn" type="button" data-rep="monthly" onclick="showReport('monthly')"><i class="ti ti-calendar-stats"></i> الأداء الشهري</button>
             <button class="seg-btn" type="button" data-rep="compare" onclick="showReport('compare')"><i class="ti ti-columns-3"></i> مقارنة الفترات</button>
+            <button class="seg-btn" type="button" data-rep="seller" onclick="showReport('seller')"><i class="ti ti-user-dollar"></i> المبيعات حسب البائع</button>
             <button class="seg-btn" type="button" data-rep="branchprofit" onclick="showReport('branchprofit')"><i class="ti ti-building-store"></i> أرباح الفروع</button>
             <button class="seg-btn" type="button" data-rep="catprofit" onclick="showReport('catprofit')"><i class="ti ti-category"></i> ربحية التصنيفات</button>
             <button class="seg-btn" type="button" data-rep="lossitems" onclick="showReport('lossitems')"><i class="ti ti-trending-down"></i> أصناف خاسرة</button>
@@ -899,7 +900,7 @@
 
         <div class="panel">
           <h2>مخزون منخفض / سالب</h2>
-          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>سعر الشراء</th></tr></thead><tbody id="repLowStockBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>التكلفة</th></tr></thead><tbody id="repLowStockBody"></tbody></table></div>
         </div>
 
         <div class="panel">
@@ -932,6 +933,10 @@
         <div id="rep-compare" class="rep-view hidden">
           <div class="panel"><div class="tools"><h2>مقارنة قائمة الدخل حسب الفترة</h2><select id="repComparePeriod" onchange="renderReportsDetail()"><option value="month">شهري</option><option value="quarter">ربع سنوي</option><option value="year">سنوي</option></select></div><div class="table-scroll"><table><thead><tr><th>الفترة</th><th>عدد الفواتير</th><th>الإيرادات</th><th>التكلفة</th><th>مجمل الربح</th><th>المصاريف</th><th>التالف</th><th>صافي الربح</th></tr></thead><tbody id="repCompareBody"></tbody></table></div></div>
         </div>
+        <div id="rep-seller" class="rep-view hidden">
+          <div class="panel"><div class="tools"><h2>المبيعات حسب البائع</h2></div><p class="muted">لكل بائع: عدد فواتيره ومبيعاته وتكلفتها وربحها وهامشه، ومتوسط الفاتورة وما لم يُحصَّل بعد. الفواتير القديمة المستوردة بلا بائع تُجمع تحت «غير مسجَّل».</p><div class="table-scroll"><table><thead><tr><th>البائع</th><th>عدد الفواتير</th><th>المبيعات</th><th>المرتجعات</th><th>الصافي</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th><th>متوسط الفاتورة</th><th>آجل غير محصَّل</th></tr></thead><tbody id="repSellerBody"></tbody></table></div></div>
+          <div class="panel"><div class="tools"><h2>فواتير البائع المحدَّد</h2></div><p class="muted">اضغط سطر بائع أعلاه لعرض فواتيره.</p><div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>الربح</th></tr></thead><tbody id="repSellerSalesBody"></tbody></table></div></div>
+        </div>
         <div id="rep-branchprofit" class="rep-view hidden">
           <div class="panel"><h2>أرباح الفروع</h2><p class="muted">يعرض مجمل الربح قبل المصاريف المشتركة.</p><div class="table-scroll"><table><thead><tr><th>الفرع</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repBranchProfitBody"></tbody></table></div></div>
         </div>
@@ -956,6 +961,11 @@
       </section>
 
       <section id="settings" class="section">
+        <div class="panel">
+          <h2>أعمدة الجداول</h2>
+          <p class="mini">اختر الأعمدة الظاهرة في كل جدول. ونفس القائمة تظهر بالضغط بزر الفأرة الأيمن على رأس أي جدول. الاختيار يُحفظ على هذا الجهاز.</p>
+          <div id="columnSettingsBody"></div>
+        </div>
         <div class="panel">
           <h2>النسخ الاحتياطي والعمل دون اتصال</h2>
           <div class="mini" style="margin-bottom:8px">إصدار التشغيل الحالي: <b id="settingsBuild" class="ltr">—</b> — إذا اختلف عن آخر إصدار منشور فهذا الجهاز يعمل نسخة قديمة (أعد تحميل الصفحة)</div>
@@ -1341,7 +1351,7 @@
         <div><h2 id="movementsTitle" style="margin:0">حركات الصنف</h2><div class="mini" id="movementsSub"></div></div>
         <button class="btn secondary" onclick="closeMovementsModal()">إغلاق</button>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0"><select id="movFilterBranch" onchange="renderMovementsModalRows()"></select><select id="movFilterType" onchange="renderMovementsModalRows()"></select><span class="mini">الرصيد = مستوى مخزون ذلك الفرع بعد الحركة مباشرة · زر يمين على السطر = قائمة سريعة</span></div><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>رقم الفاتورة</th><th>البائع</th><th>الفرع</th><th>الكمية</th><th>الرصيد</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0"><select id="movFilterBranch" onchange="renderMovementsModalRows()"></select><select id="movFilterType" onchange="renderMovementsModalRows()"></select><span class="mini">الرصيد = مستوى مخزون ذلك الفرع بعد الحركة مباشرة · زر يمين على السطر = قائمة سريعة</span></div><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>رقم الفاتورة</th><th>البائع</th><th>الفرع</th><th>الكمية</th><th>سعر الوحدة</th><th>الرصيد</th><th>ملاحظات</th></tr></thead><tbody id="movementsBody"></tbody></table></div>
     </div>
   </div>
 
@@ -1353,6 +1363,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260927-2300"></script>
+<script src="app.js?v=20260928-1830"></script>
 </body>
 </html>

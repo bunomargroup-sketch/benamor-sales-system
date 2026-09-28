@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260927-2300';
+const APP_BUILD='b20260928-1830';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -15,6 +15,9 @@ const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
 let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], stockCounts=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costViewRows=[];
 let costViewMap=null; /* (0076) تكلفة مرجعية من الخادم — أولوية على الحساب المحلي */
+/* (0060) قاعدة التكلفة: متوسط مرجّح محسوب من فواتير الشراء في المنظومة القديمة
+   حتى تاريخ القطع. المنظومة الجديدة تكمل المتوسط من هذه القاعدة بما اشتُري بعدها. */
+var legacyCostRows=[], legacyCostMap=null, LEGACY_COST_AS_OF='';
 let appUser=JSON.parse(localStorage.getItem('posUser')||'null'), authSession=JSON.parse(localStorage.getItem('posAuthSession')||'null'), currentRole=null;
 let editingPurchaseId=null, originalPurchase=null, originalPurchaseItems=[];
 let editingTransferId=null, originalTransfer=null, originalTransferItems=[];
@@ -46,6 +49,63 @@ function pLabel(code,fallback){
   if(_lblSrc!==products){_lblSrc=products;_pMap=new Map((products||[]).map(pp=>[String(pp.code),[pp.name,pp.brand,pp.model].filter(Boolean).join(' — ')]));}
   const v=_pMap.get(String(code==null?'':code));
   return v||fallback||'';
+}
+/* ══════════════════ رقاقة اللون ══════════════════
+   (طلب المستخدم) اسم اللون على خلفية باللون نفسه، والنص يُقلب إلى أبيض أو
+   أسود حسب عتمة الخلفية فيبقى مقروءاً: «أسود» بيضاء على سوداء.
+
+   أسماء الألوان في البيانات فيها تشكيل (أَصْفَرُ) ومركّبات (أسود مطفي،
+   رمادي فاتح، أسود-كروم)، فالمطابقة تُجرَّد من التشكيل وتُطابَق بالتضمين،
+   و«فاتح»/«داكن» تُعدِّلان الدرجة. اللون غير المعروف يُعرض برقاقة محايدة
+   مخطّطة — لا نلوّنه بلون لا نعرفه. */
+const COLOR_BASES=[
+  ['اسود','#111111'],['ابيض','#ffffff'],['كروم','#c9d2d9'],['ذهبي','#d4af37'],
+  ['رصاصي','#6e7680'],['رمادي','#9aa3ad'],['فضي','#c8ccd0'],['بيج','#e3d4b4'],
+  ['كريمي','#f3e7d3'],['عاجي','#f7f3e3'],['رخامي','#ece7df'],
+  ['برنزي','#a97142'],['نحاسي','#b87333'],['بني','#795548'],['خشبي','#8b5a2b'],
+  ['احمر','#d32f2f'],['ازرق','#1976d2'],['كحلي','#1a237e'],['سماوي','#87ceeb'],
+  ['اخضر','#388e3c'],['زيتي','#6b8e23'],['تركواز','#1abc9c'],
+  ['اصفر','#f4c20d'],['برتقالي','#f57c00'],['مرجاني','#ff7f50'],
+  ['بنفسجي','#7b1fa2'],['وردي','#e91e63'],['زهري','#f48fb1'],
+  ['black','#111111'],['white','#ffffff'],['chrome','#c9d2d9'],['gold','#d4af37'],
+  ['silver','#c8ccd0'],['grey','#9aa3ad'],['gray','#9aa3ad'],['beige','#e3d4b4'],
+  ['red','#d32f2f'],['blue','#1976d2'],['green','#388e3c'],['yellow','#f4c20d'],
+  ['orange','#f57c00'],['brown','#795548'],['pink','#e91e63'],['purple','#7b1fa2']
+];
+function normColorName(s){
+  return String(s||'')
+    .replace(/[ً-ْـٰ]/g,'')   /* تشكيل وتطويل */
+    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
+    .replace(/[\-_،,]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+}
+function shadeHex(hex,pct){
+  const n=parseInt(hex.slice(1),16);
+  const ch=[(n>>16)&255,(n>>8)&255,n&255].map(v=>Math.max(0,Math.min(255,Math.round(v+(pct>0?(255-v):v)*pct))));
+  return '#'+ch.map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function hexLuminance(hex){
+  const n=parseInt(hex.slice(1),16);
+  const f=v=>{v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)};
+  return 0.2126*f((n>>16)&255)+0.7152*f((n>>8)&255)+0.0722*f(n&255);
+}
+function colorHexFor(name){
+  const t=normColorName(name);
+  if(!t) return null;
+  if(/شفاف|transparent/.test(t)) return null;
+  const hit=COLOR_BASES.find(([k])=>t.includes(k));
+  if(!hit) return null;
+  let hex=hit[1];
+  if(/فاتح|light/.test(t)) hex=shadeHex(hex, 0.32);    /* \b لا يعمل مع الحروف العربية */
+  if(/داكن|غامق|dark/.test(t)) hex=shadeHex(hex,-0.32);
+  return hex;
+}
+function colorChip(name){
+  const raw=String(name||'').trim();
+  if(!raw) return '';
+  const hex=colorHexFor(raw);
+  if(!hex) return `<span class="color-chip color-chip-none" title="${esc(raw)}">${esc(raw)}</span>`;
+  const fg=hexLuminance(hex)>0.45?'#111827':'#ffffff';
+  return `<span class="color-chip" style="background:${hex};color:${fg}" title="${esc(raw)}">${esc(raw)}</span>`;
 }
 function fillProductNote(tr,sel,code){
   const p=productByCode(code); if(!p||!tr) return;
@@ -885,7 +945,7 @@ function initOfflineQueue(){
    وإلا يعود النمط الكلاسيكي تلقائياً (لا كسر قبل تشغيل SQL 0076). */
 /* (0077) pos_finance_account_balances خارج هذه القائمة: الخادم يرفضه (TABLE_NOT_ALLOWED)
    ووجوده هنا كان يُسقط الجلب الجماعي للنواة كلها. يُجلب وحده بطلب كلاسيكي واحد. */
-const CORE_TABLES=['pos_locations','pos_supplier_balances','pos_user_roles','pos_product_stock_summary','pos_stock','pos_expense_categories','pos_composite_items','pos_product_avg_cost'];
+const CORE_TABLES=['pos_locations','pos_supplier_balances','pos_user_roles','pos_product_stock_summary','pos_stock','pos_expense_categories','pos_composite_items','pos_product_avg_cost','pos_product_legacy_cost'];
 const HEAVY_SALES=['pos_sales','pos_sale_items','pos_sale_payments'];
 const HEAVY_REST=['pos_supplier_ledger','pos_supplier_payments','pos_purchases','pos_purchase_items','pos_stock_transfers','pos_proformas','pos_proforma_items','pos_sale_returns','pos_sale_return_items','pos_stock_counts','pos_stock_movements','pos_customer_balances','pos_customer_ledger','pos_finance_movements','pos_daily_cash_closings','pos_expenses','pos_employees','pos_salary_payments','pos_purchase_returns','pos_purchase_return_items','pos_stock_waste','pos_stock_waste_items'];
 
@@ -912,11 +972,19 @@ async function tryBulk(tables, depth=0){
 
 /* (0076) المرجعية الواحدة للتكلفة: وجهة نظر الخادم إن وُجدت، وإلا المحاكاة المحلية (متوسط متحرك) */
 function applyCostReference(){
+  /* (0060) قاعدة التكلفة القديمة أولاً: هي المحسوبة من فواتير الشراء الفعلية */
+  legacyCostMap=(legacyCostRows||[]).length
+    ? new Map(legacyCostRows.map(r=>[String(r.code||'').trim().toLowerCase(), r]))
+    : null;
+  LEGACY_COST_AS_OF=String((legacyCostRows||[])[0]?.as_of||'').slice(0,10);
   if((costViewRows||[]).length){
     costViewMap=new Map(costViewRows.map(r=>[String(r.code||'').trim().toLowerCase(), Number(r.avg_cost||0)]));
     productCostCache=new Map();
   } else {
     costViewMap=null;
+  }
+  /* مع قاعدة قديمة: نبني دائماً لأن المحاكاة تنطلق منها وتكمل ما بعد تاريخ القطع */
+  if(legacyCostMap || !costViewMap){
     try{ buildProductCostIndex(); }catch(e){ console.warn('build product cost index', e); }
   }
 }
@@ -933,6 +1001,7 @@ async function loadCore(){
     products=bulk.pos_product_stock_summary||[]; stock=bulk.pos_stock||[];
     financeAccounts=finAcc||financeAccounts; expenseCategories=bulk.pos_expense_categories||[];
     compositeItems=bulk.pos_composite_items||[]; costViewRows=bulk.pos_product_avg_cost||[];
+    legacyCostRows=bulk.pos_product_legacy_cost||legacyCostRows;
   } else {
     [locations,suppliers,userRoles,products,stock,financeAccounts,expenseCategories,compositeItems]=await Promise.all([
       api('pos_locations',{qs:'?select=*&order=name.asc'}),
@@ -945,6 +1014,8 @@ async function loadCore(){
       apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc').catch(e=>{return []}),
     ]);
     costViewRows=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}).catch(()=>[]);
+    legacyCostRows=await apiAll('pos_product_legacy_cost','?select=code,cost,cost_source,purchases,qty_as_of,last_price,last_purchase,as_of&order=code.asc')
+      .catch(e=>{console.warn('قاعدة التكلفة غير مُنصَّبة — شغّل SQL 0060',e); return legacyCostRows;});
   }
   buildProductSearchIndex();
   applyCostReference();
@@ -1056,7 +1127,7 @@ const TAB_RENDERERS={
   reports:()=>renderReports(),
   auditLog:()=>refreshAuditLog(),
   users:()=>renderRoles(),
-  settings:()=>{renderSettingsExpenseCategories(); renderProductOptionSettings();}
+  settings:()=>{renderSettingsExpenseCategories(); renderProductOptionSettings(); renderColumnSettings();}
 };
 const tabDirty={};
 function activeTabId(){const a=document.querySelector('nav button.active'); return a?.dataset.tab||'dashboard';}
@@ -1542,8 +1613,40 @@ function renderProductDatalist(){
   }
   const lists={brandDatalist:'brand',modelDatalist:'model',colorDatalist:'color'};
   const extra={brand:APP_CONFIG.customBrands||[],model:APP_CONFIG.customModels||[],color:APP_CONFIG.customColors||[]};
-  Object.entries(lists).forEach(([id,key])=>{const el=q(id); if(el){const vals=[...new Set([...(products.map(p=>p[key]).filter(Boolean)),...(extra[key]||[])])].sort(); el.innerHTML=vals.map(v=>`<option value="${esc(v)}"></option>`).join('')}});
+  /* ⚠️ قوائم الماركة/الموديل/اللون كانت تُرسَم كاملة: الموديل وحده 2,306 خياراً.
+     المتصفح يفتح قائمة بطول الشاشة تبتلع الحقل فيتعذّر كتابة قيمة جديدة.
+     الآن تُحفظ القيم كاملة في الذاكرة ويُرسَم منها ما يطابق ما يكتبه المستخدم
+     (60 اقتراحاً كحد أقصى) — الكتابة حرّة والقائمة تساعد ولا تعترض. */
+  Object.entries(lists).forEach(([id,key])=>{
+    if(!q(id)) return;
+    __optAll[key]=[...new Set([...(products.map(p=>p[key]).filter(Boolean)),...(extra[key]||[])])].sort();
+    fillOptionDatalist(key,(q(OPT_INPUT[key])||{}).value||'');
+  });
+  wireOptionInputs();
 }
+/* ══ (المهمة: تعذّر كتابة موديل جديد) قوائم الخيارات المفلترة ══ */
+var __optAll={brand:[],model:[],color:[]};   /* var: renderProductDatalist أعلاه تستعملها — لا منطقة ميتة */
+var OPT_DATALIST={brand:'brandDatalist',model:'modelDatalist',color:'colorDatalist'};
+var OPT_INPUT={brand:'productBrand',model:'productModel',color:'productColor'};
+var OPT_MAX=60;
+function fillOptionDatalist(key,text){
+  const el=q(OPT_DATALIST[key]); if(!el) return;
+  const t=String(text||'').trim().toLowerCase();
+  const all=__optAll[key]||[];
+  const hit=t ? all.filter(v=>String(v).toLowerCase().includes(t)) : all;
+  el.innerHTML=hit.slice(0,OPT_MAX).map(v=>`<option value="${esc(v)}"></option>`).join('');
+}
+var __optWired=false;
+function wireOptionInputs(){
+  if(__optWired) return;
+  Object.entries(OPT_INPUT).forEach(([key,id])=>{
+    const el=q(id); if(!el) return;
+    el.addEventListener('input',()=>fillOptionDatalist(key,el.value));
+    el.addEventListener('focus',()=>fillOptionDatalist(key,el.value));
+  });
+  __optWired=true;
+}
+
 function findProductByInput(value){
   value=(value||'').trim();
   if(!value) return null;
@@ -1588,11 +1691,25 @@ function selectProductCategory(cat){
 const PRODUCT_COLS=[
   {id:'code',label:'الكود'},{id:'name',label:'الصنف'},{id:'brand',label:'الماركة/الموديل'},
   {id:'color',label:'اللون'},{id:'barcode',label:'الباركود'},{id:'supplier',label:'المورد'},
-  {id:'category',label:'التصنيف'},{id:'purchase',label:'شراء'},{id:'retail',label:'بيع'},
+  {id:'category',label:'التصنيف'},{id:'cost',label:'التكلفة'},{id:'purchase',label:'شراء'},{id:'retail',label:'بيع'},
   {id:'margin',label:'الهامش'},{id:'margin_pct',label:'نسبة الهامش'},
   {id:'s11',label:'11 يونيو'},{id:'ssr',label:'السراج'},{id:'sjz',label:'جنزور'},{id:'total',label:'الإجمالي'}
 ];
-function getProductHiddenCols(){try{return JSON.parse(localStorage.getItem('posProductHiddenCols')||'[]')}catch(e){return []}}
+function getProductHiddenCols(){
+  /* (0060) اعتماد التكلفة بدل سعر الشراء: عمود «شراء» يُخفى مرّة واحدة عند أول
+     تشغيل بعد التحديث، ويبقى متاحاً في قائمة الأعمدة لمن يريده. */
+  try{
+    const raw=localStorage.getItem('posProductHiddenCols');
+    let hidden=raw?JSON.parse(raw):[];
+    if(!Array.isArray(hidden)) hidden=[];
+    if(!localStorage.getItem('posCostAdopted')){
+      if(!hidden.includes('purchase')) hidden.push('purchase');
+      localStorage.setItem('posCostAdopted','1');
+      localStorage.setItem('posProductHiddenCols',JSON.stringify(hidden));
+    }
+    return hidden;
+  }catch(e){ return ['purchase']; }
+}
 function toggleProductCol(colId){
   let hidden=getProductHiddenCols();
   if(hidden.includes(colId)) hidden=hidden.filter(x=>x!==colId); else hidden.push(colId);
@@ -1610,10 +1727,11 @@ function applyProductColVisibility(shown, smartParsed=null){
       code:`<td class="ltr"><span class="code">${esc(p.code)}</span></td>`,
       name:`<td>${nm}</td>`,
       brand:`<td>${brandChip(p.brand)}${modelChip(p.model)}</td>`,
-      color:`<td>${esc(p.color)}</td>`,
+      color:`<td>${colorChip(p.color)}</td>`,
       barcode:`<td class="ltr"><span class="code">${esc(p.barcode)}</span></td>`,
       supplier:`<td>${esc(p.supplier_name)}</td>`,
       category:`<td>${esc(p.category)}</td>`,
+      cost:`<td class="amount" title="${esc(costTip(p.code))}">${money(productCost(p.code))}</td>`,
       purchase:`<td class="amount">${money(p.purchase_price)}</td>`,
       retail:`<td class="amount">${money(p.retail_price)}</td>`,
       margin:`<td class="amount">${money(p._mv)}</td>`,
@@ -1966,23 +2084,60 @@ function viewSelectedProduct(){
   const p=getSelectedProduct(); if(!p) return;
   q('productViewTitle').textContent=pLabel(p.code,p.name)||'مشاهدة المنتج';
   q('productViewSub').textContent=p.code||'';
-  q('productViewBody').innerHTML=`<div class="grid cards" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+  q('productViewBody').innerHTML=`<div class="grid cards pv-cards">
     <div class="card"><h3>الكود</h3><div class="ltr"><b>${esc(p.code||'')}</b></div></div>
     <div class="card"><h3>التصنيف</h3><div>${esc(p.category||'')}</div></div>
     <div class="card"><h3>الماركة</h3><div>${esc(p.brand||'')}</div></div>
     <div class="card"><h3>الموديل</h3><div class="ltr">${esc(p.model||'')}</div></div>
-    <div class="card"><h3>اللون</h3><div>${esc(p.color)}</div></div>
+    <div class="card"><h3>اللون</h3><div>${colorChip(p.color)}</div></div>
     <div class="card"><h3>الباركود</h3><div class="ltr">${esc(p.barcode)}</div></div>
     <div class="card"><h3>حد الطلب</h3><div class="num">${money(p.reorder_point)}</div></div>
     <div class="card"><h3>المورد</h3><div>${esc(p.supplier_name)}</div></div>
+    <div class="card pv-cost"><h3>التكلفة</h3><div class="num">${money(productCost(p.code))}</div><div class="mini">${esc(costTip(p.code))}</div></div>
     <div class="card"><h3>سعر الشراء</h3><div class="num">${money(p.purchase_price)}</div></div>
     <div class="card"><h3>سعر البيع</h3><div class="num">${money(p.retail_price)}</div></div>
     <div class="card"><h3>فرع 11 يونيو</h3><div class="num">${money(liveBranchQty(p.code,'stock_11_june'))}</div></div>
     <div class="card"><h3>فرع السراج</h3><div class="num">${money(liveBranchQty(p.code,'stock_sarraj'))}</div></div>
     <div class="card"><h3>مخزن جنزور</h3><div class="num">${money(liveBranchQty(p.code,'stock_janzour'))}</div></div>
     <div class="card"><h3>الإجمالي</h3><div class="num">${money(liveTotalQty(p.code))}</div></div>
-  </div>`;
+  </div>
+  <div id="productViewMoves" class="pv-moves"><div class="mini">جارٍ تحميل الحركات…</div></div>`;
   q('productViewModal').classList.add('show');
+  loadProductViewMovements(p.code);
+}
+
+/* (طلب المستخدم) حركات المنتج داخل شاشة المشاهدة — كان لا بد من فتح نافذة
+   أخرى لرؤيتها. آخر 12 حركة بقيمتها، وزر لفتح السجل الكامل.
+   الترتيب نفسه المستعمل في نافذة الحركات: legacy_seq يحسم تساوي التاريخ. */
+async function loadProductViewMovements(code){
+  const box=q('productViewMoves'); if(!box) return;
+  const enc=encodeURIComponent(code);
+  const sel=`?select=*&product_code=eq.${enc}`;
+  let rows=[];
+  try{
+    rows=await api('pos_stock_movements',{qs:`${sel}&order=movement_date.desc,legacy_seq.desc.nullslast,created_at.desc,id.desc&limit=12`})
+      .catch(()=>api('pos_stock_movements',{qs:`${sel}&order=movement_date.desc,created_at.desc,id.desc&limit=12`}));
+  }catch(e){
+    box.innerHTML='<div class="mini">تعذّر تحميل الحركات: '+esc(friendlyError(e))+'</div>';
+    return;
+  }
+  const safe=String(code).replace(/'/g,"\'");
+  const head=`<div class="pv-moves-head"><h3>آخر الحركات</h3>`
+    +`<button class="btn secondary" type="button" onclick="openProductMovements('${safe}')">📜 كل الحركات</button></div>`;
+  if(!rows.length){ box.innerHTML=head+'<div class="mini">لا توجد حركات لهذا الصنف بعد.</div>'; return; }
+  const body=rows.map(m=>{
+    const qty=Number(m.qty_change||0);
+    const info=movementDocInfo(m);
+    const val=movementValue(m);
+    return `<tr><td>${esc(String(m.movement_date||'').slice(0,10))}</td>`
+      +`<td>${esc(typeLabel(m.movement_type))}</td>`
+      +`<td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td>`
+      +`<td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td>`
+      +`<td class="amount">${val===null?'—':money(val)}</td></tr>`;
+  }).join('');
+  box.innerHTML=head+`<div class="table-scroll"><table><thead><tr>`
+    +`<th>التاريخ</th><th>النوع</th><th>الفرع</th><th>الكمية</th><th>سعر الوحدة</th>`
+    +`</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function closeProductViewModal(){q('productViewModal').classList.remove('show')}
 function fillPickerSelect(id,key,label){
@@ -2183,7 +2338,10 @@ function nextProductCodeFrom(baseCode){
 function duplicateProduct(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('اختر منتجًا أولاً','warn'); return;}
   productFormMode='duplicate'; editingProductCode=null;
-  document.querySelector('[data-tab="products"]').click();
+  /* كان يكتفي بفتح تبويب المنتجات ويملأ النموذج — والنموذج داخل نافذة
+     منبثقة، فلا يظهر شيء ويبدو الزر معطّلاً. الآن تُفتح النافذة فعلاً. */
+  document.querySelector('[data-tab="products"]')?.click();
+  openProductModal();
   q('productCode').readOnly=false;
   q('productCode').value=nextProductCodeFrom(p.code);
   q('productName').value=p.name||'';
@@ -2268,14 +2426,38 @@ function computeMovementLevels(rows,code){
   }
   return lvls;
 }
+/* سعر وحدة الحركة: سعر البيع للبيع والمرتجع، وسعر الشراء لما عداه.
+   يُقرأ من سطر المستند نفسه إن وُجد (سعر يوم العملية، أدقّ من سعر البطاقة
+   اليوم)، وإلا فمن بطاقة المنتج. سعر الوحدة لا الإجمالي — الضرب في الكمية
+   متروك للقارئ، وعمود الكمية يحمل الاتجاه. */
+function movementValue(m){
+  const qty=Number(m.qty_change||0); if(!qty) return null;
+  const code=String(m.product_code||'').toLowerCase();
+  let unit=null;
+  if(m.reference_table==='pos_sales' && m.reference_id){
+    const it=(saleItems||[]).find(x=>x.sale_id===m.reference_id && String(x.product_code||'').toLowerCase()===code);
+    if(it && Number(it.qty||0)) unit=Math.abs(Number(it.line_total||0))/Math.abs(Number(it.qty));
+  }else if(m.reference_table==='pos_purchases' && m.reference_id){
+    const it=(purchaseItems||[]).find(x=>x.purchase_id===m.reference_id && String(x.product_code||'').toLowerCase()===code);
+    if(it && Number(it.qty||0)) unit=Math.abs(Number(it.line_total||0))/Math.abs(Number(it.qty));
+  }
+  if(unit===null || !isFinite(unit)){
+    const p=(products||[]).find(x=>String(x.code||'').toLowerCase()===code);
+    unit = /^(sale|return_customer)$/.test(String(m.movement_type||''))
+      ? Number(p?.retail_price||0)
+      : Number(productCost(m.product_code)||0);
+  }
+  if(!isFinite(unit)) return null;
+  return unit;                                   /* سعر الوحدة لا الإجمالي */
+}
 function renderMovementsModalRows(){
   const fb=q('movFilterBranch')?(q('movFilterBranch').value||''):'';
   const ft=q('movFilterType')?(q('movFilterType').value||''):'';
   const list=__movRows.map((m,i)=>({m,lvl:__movLevels[i]})).filter(x=>(!fb||String(x.m.location_id||'')===fb)&&(!ft||String(x.m.movement_type||'')===ft));
   q('movementsBody').innerHTML = list.map(({m,lvl})=>{
     const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
-    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><span class="code">${esc(info.no)}</span></td><td>${esc(info.seller)}</td><td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount"><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
-  }).join('') || '<tr><td colspan="8">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
+    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><span class="code">${esc(info.no)}</span></td><td>${esc(info.seller)}</td><td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount">${(()=>{const v=movementValue(m); return v===null?'—':`<b>${money(v)}</b> <span class="mini">${esc(APP_CONFIG.currency)}</span>`;})()}</td><td class="amount"><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
+  }).join('') || '<tr><td colspan="9">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
 }
 async function openProductMovements(code){
   try{
@@ -6566,9 +6748,20 @@ function buildProductCostIndex(){
     targets.forEach(tg=>events.push({t:saleDate.get(it.sale_id)||'',k:q>0?'out':'ret',code:tg.code,q:tg.q}));
   });
   events.sort((a,b)=> (a.t<b.t)?-1:((a.t>b.t)?1:0));
-  const S=k=>{let o=st.get(k); if(!o){o={q:0,v:0,avg:0}; st.set(k,o);} return o;};
+  /* (0060) البذرة: الصنف الوارد في قاعدة التكلفة يبدأ بكميته وتكلفته عند تاريخ
+     القطع، وتُتجاهل حركاته التي تسبق ذلك التاريخ لأنها محسوبة في القاعدة أصلاً. */
+  const S=k=>{let o=st.get(k); if(!o){
+      const lg=legacyCostMap&&legacyCostMap.get(k);
+      if(lg){ const q=Math.max(0,Number(lg.qty_as_of||0)), c=Number(lg.cost||0);
+              o={q:q, v:q*c, avg:c, seeded:true}; }
+      else o={q:0,v:0,avg:0,seeded:false};
+      st.set(k,o);} return o;};
+  /* كل صنف في القاعدة يأخذ حالة ولو لم تكن له حركة واحدة بعد تاريخ القطع،
+     وإلا سبقته احتياطيات آخر الدالة (سعر شراء البطاقة) إلى الذاكرة. */
+  if(legacyCostMap) legacyCostMap.forEach((_v,k)=>S(k));
   events.forEach(e=>{
     const o=S(e.code);
+    if(o.seeded && LEGACY_COST_AS_OF && String(e.t||'').slice(0,10)<=LEGACY_COST_AS_OF) return;
     if(e.k==='in'){ o.q+=e.q; o.v+=e.q*(e.c||0); }
     else{
       const avg=o.q>0.0000001?o.v/o.q:(o.avg||0);
@@ -6586,9 +6779,26 @@ function buildProductCostIndex(){
   // احتياطي 2: سعر الشراء الثابت من بطاقة المنتج
   for(const p of products){ const k=String(p.code||'').trim().toLowerCase(); if(k && !productCostCache.has(k)){ const v=Number(p.purchase_price||p.cost||0); if(v>0) productCostCache.set(k,v); } }
 }
+/* (0060) شرح مصدر رقم التكلفة — يظهر تحت البطاقة وكتلميح على خلية الجدول */
+function costTip(code){
+  const key=String(code||'').split('|')[0].trim().toLowerCase();
+  const lg=legacyCostMap&&legacyCostMap.get(key);
+  if(!lg) return costViewMap&&costViewMap.has(key)?'متوسط مرجّح من مشتريات المنظومة':'سعر الشراء المسجَّل في بطاقة الصنف';
+  const n=Number(lg.purchases||0);
+  if(lg.cost_source!=='wac'||!n) return 'آخر سعر شراء — لا توجد فواتير شراء لهذا الصنف';
+  const d=String(lg.last_purchase||'').slice(0,10);
+  return 'متوسط مرجّح من '+n+' عملية شراء'+(d?'، آخرها '+d:'');
+}
 function productCost(code){
   const key=String(code||'').split('|')[0].trim().toLowerCase();
   if(!key) return 0;
+  /* (0060) الصنف المهاجَر من المنظومة القديمة: تكلفته من قاعدة فواتير الشراء
+     مضافاً إليها ما اشتُري بعد تاريخ القطع — أدقّ من وجهة نظر الخادم التي
+     تعيد حساب كل التاريخ بلا معالجة الجرد والرصيد الافتتاحي. */
+  if(legacyCostMap && legacyCostMap.has(key)){
+    if(productCostCache.has(key)) return productCostCache.get(key);
+    const c=Number(legacyCostMap.get(key).cost||0); if(c>0){ productCostCache.set(key,c); return c; }
+  }
   if(costViewMap){ const v=costViewMap.get(key); if(v!==undefined) return v; } /* (0076) وجهة نظر الخادم مرجعية أولى */
   if(productCostCache.has(key)) return productCostCache.get(key);
   const hist=(saleItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===key && Number(x.unit_cost_at_sale||0)>0);
@@ -6873,10 +7083,10 @@ function renderDailyCashReport(){
   const lists=`<div class="panel" style="box-shadow:none;margin-top:12px">
     ${details('ملخص المبيعات', tbl(['البيان','القيمة '+cur],salesRows))}
     ${expCatRows.length?details('المصاريف حسب التصنيف', tbl(['التصنيف','الإجمالي'],expCatRows)):''}
-    ${details('قائمة الفواتير ('+d.invoices.length+')', tbl(['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع','المتبقي','البائع'],invRows))}
-    ${details('قائمة المرتجعات ('+d.refunds.length+')', tbl(['وقت المرتج','الفاتورة الأصلية','طريقة الاسترداد','المبلغ','الزبون'],refRows))}
-    ${details('دفعات الزبائن ('+d.customerPayments.length+')', tbl(['الزبون','الطريقة','المبلغ','ملاحظات'],cpRows))}
-    ${details('دفعات الموردين ('+d.supplierPayments.length+')', tbl(['المورد','الطريقة','المبلغ','ملاحظات'],spRows))}
+    ${d.invoices.length?details('قائمة الفواتير ('+d.invoices.length+')', tbl(['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع','المتبقي','البائع'],invRows)):''}
+    ${d.refunds.length?details('قائمة المرتجعات ('+d.refunds.length+')', tbl(['وقت المرتج','الفاتورة الأصلية','طريقة الاسترداد','المبلغ','الزبون'],refRows)):''}
+    ${d.customerPayments.length?details('دفعات الزبائن ('+d.customerPayments.length+')', tbl(['الزبون','الطريقة','المبلغ','ملاحظات'],cpRows)):''}
+    ${d.supplierPayments.length?details('دفعات الموردين ('+d.supplierPayments.length+')', tbl(['المورد','الطريقة','المبلغ','ملاحظات'],spRows)):''}
   </div>`;
   q('dailyCashReportBody').innerHTML=header+inSec+outSec+baqi+settlement+lists;
   updateDailyCashDifference();
@@ -6909,7 +7119,12 @@ function dailyCashPrintHtml(d, meta={}){
   const refRows=(d.refunds||[]).map(r=>`<tr><td>${esc(r.time)}</td><td>${esc(r.original_invoice||'—')}</td><td>${esc(M[r.refund_method]||r.refund_method)}</td><td><b>${money(r.amount)}</b></td><td>${esc(r.customer)}</td></tr>`);
   const cpRows=(d.customerPayments||[]).map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td>${esc(p.notes||'')}</td></tr>`);
   const spRows=(d.supplierPayments||[]).map(p=>`<tr><td>${esc(p.supplier)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td>${esc(p.notes||'')}</td></tr>`);
-  const T=(title,head,rows)=>`<h3>${title}</h3><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')||`<tr><td colspan="${head.length}" class="empty">لا توجد بيانات.</td></tr>`}</tbody></table>`;
+  /* (طلب المستخدم) الجدول الفارغ لا يُطبع إطلاقاً — لا عنوانه ولا سطر
+     «لا توجد بيانات». كان يشغل نصف ورقة بلا فائدة. سطر «حركة اليوم»
+     أعلى التقرير يذكر الأعداد فيُعرف أن الصفري حُذف عمداً. */
+  const T=(title,head,rows)=> rows.length
+    ? `<h3>${title} <span class="small">(${rows.length})</span></h3><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`
+    : '';
   if(d.isRange){
     const dayRows=(d.days||[]).map(D=>`<tr><td>${esc(D.date)}</td><td>${D.invoiceCount}</td><td>${money(D.salesTotal)}</td><td>${money(D.cashIn)}</td><td>${money(D.cashOut)}</td><td class="${cashCls(D.cashRemaining)}">${money(D.cashRemaining)}</td></tr>`);
     const periodLabel=esc(d.dateFrom)+' ← '+esc(d.dateTo);
@@ -6944,7 +7159,13 @@ td.pos{color:#087f5b;font-weight:800}td.neg{color:#dc2626;font-weight:800}
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير الخزينة اليومية — ${esc(d.branchName)} ${esc(d.date)}</title>
 <style>
 *{box-sizing:border-box}
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+/* الخط محلي: الإطار يرث مسار الصفحة، وجلبه من جوجل لا يعمل دون اتصال ويؤخّر الطباعة */
+@font-face{font-family:'Cairo';font-style:normal;font-weight:400 700;font-display:swap;
+  src:url('assets/fonts/cairo-arabic.woff2') format('woff2');
+  unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+08A0-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC;}
+@font-face{font-family:'Cairo';font-style:normal;font-weight:400 700;font-display:swap;
+  src:url('assets/fonts/cairo-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+2000-206F,U+2212;}
 body{font-family:'Cairo',Tahoma,Arial,sans-serif;color:#111;margin:22px;line-height:1.6}
 .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:10px}
 .head .title{font-size:24px;font-weight:800;color:#1d4ed8}.head .sub{color:#555;font-size:13px}
@@ -6962,12 +7183,31 @@ td.empty{text-align:center;color:#94a3b8;padding:12px}
 .settle{margin-top:6px}.settle .row{display:flex;gap:24px;flex-wrap:wrap}.settle .row>div{min-width:150px}.settle label{display:block;font-size:12px;color:#64748b;font-weight:700}.settle .big{font-size:20px;font-weight:900}
 .sign{display:flex;gap:60px;margin-top:40px}.sign div{flex:1;border-top:1px solid #333;text-align:center;padding-top:8px;font-size:13px}
 .small{font-size:11px;color:#777}
-@media print{@page{size:A4;margin:10mm}.no-print{display:none}}
+.cols{display:flex;gap:10px;align-items:flex-start}.cols>div{flex:1;min-width:0}
+.activity{font-size:11.5px;color:#334155;background:#f6f9ff;border:1px solid #dbe6ff;border-radius:8px;padding:5px 9px;margin:7px 0 2px}
+@media print{
+  @page{size:A4;margin:8mm}
+  .no-print{display:none}
+  body{margin:0;font-size:11px;line-height:1.35}
+  h3{font-size:12.5px;margin:8px 0 3px;break-after:avoid;page-break-after:avoid}
+  table{font-size:10.3px}
+  thead{display:table-header-group}            /* رأس الجدول يتكرر في كل صفحة */
+  tr{break-inside:avoid;page-break-inside:avoid}
+  th,td{padding:3px 5px}
+  .head{padding-bottom:6px;margin-bottom:4px}.head .title{font-size:17px}.head .sub{font-size:11px}
+  .meta{font-size:10.5px;line-height:1.5}
+  .baqi{padding:7px 10px;margin:7px 0;break-inside:avoid}.baqi .amt{font-size:20px}.baqi .lbl{font-size:12px}
+  .settle,.sign{break-inside:avoid;page-break-inside:avoid}
+  .sign{margin-top:20px;gap:40px}
+}
 </style></head><body>
 <div class="head"><div><div class="title">${esc(APP_CONFIG.businessName)}</div><div class="sub">تقرير حالة الخزينة اليومية — إغلاق اليوم</div></div>
 <div class="meta">الفرع: <b>${esc(d.branchName)}</b><br>${d.isRange?('الفترة: <b>'+esc(d.dateFrom)+' ← '+esc(d.dateTo)+'</b>'):('التاريخ: <b>'+esc(d.date)+'</b>')}<br>المسؤول: <b>${esc(responsible)}</b><br>وقت التوليد: <b>${esc(generated)}</b><br>الحالة: <span class="badge">${esc(savedStatus)}</span></div></div>
-<h3>المداخيل (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${inRows||'<tr><td colspan="2" class="empty">لا توجد مداخيل.</td></tr>'}</tbody></table>
-<h3>المصاريف (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${outRows||'<tr><td colspan="2" class="empty">لا توجد مصاريف.</td></tr>'}</tbody></table>
+<div class="activity">حركة اليوم: فواتير <b>${(d.invoices||[]).length}</b> · مرتجعات <b>${(d.refunds||[]).length}</b> · دفعات زبائن <b>${(d.customerPayments||[]).length}</b> · دفعات موردين <b>${(d.supplierPayments||[]).length}</b> · تصنيفات مصاريف <b>${expCatRows.length}</b><span class="small"> — الأقسام الفارغة لا تُطبع</span></div>
+<div class="cols">
+<div><h3>المداخيل (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${inRows||'<tr><td colspan="2" class="empty">لا توجد مداخيل.</td></tr>'}</tbody></table></div>
+<div><h3>المصاريف (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${outRows||'<tr><td colspan="2" class="empty">لا توجد مصاريف.</td></tr>'}</tbody></table></div>
+</div>
 <div class="baqi"><div><div class="lbl">الباقي كاش (النقد فقط)</div><div class="small">البطاقة والتحويل لا يدخلان في الباقي الكاشي — فقط النقد الداخل ناقص النقد الخارج.</div></div><div class="amt ${cashCls(d.cashRemaining)}">${money(d.cashRemaining)} ${cur}</div></div>
 <div class="settle"><h3 style="margin:0 0 8px">التسوية النهائية</h3>
 <div class="row">
@@ -7089,6 +7329,20 @@ function showReport(name){
   document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.rep===name));
   renderReportsDetail();
 }
+var __sellerRows=[], __sellerPick=null;
+function showSellerSales(id){ __sellerPick=id; renderSellerSales(); }
+function renderSellerSales(){
+  const box=q('repSellerSalesBody'); if(!box) return;
+  const r=__sellerRows.find(x=>String(x.id)===String(__sellerPick));
+  if(!r){ box.innerHTML='<tr><td colspan="8">اختر بائعاً من الجدول أعلاه.</td></tr>'; return; }
+  const rows=(r.sales||[]).slice().sort((a,b)=>String(b.sale_date||'').localeCompare(String(a.sale_date||'')));
+  box.innerHTML=rows.map(sl=>{
+    const prof=Number(sl.total||0)-Number(sl.__cost||0);
+    const l=locations.find(x=>x.id===sl.location_id);
+    const c=customers.find(x=>x.id===sl.customer_id);
+    return `<tr><td class="ltr"><span class="code">${esc(sl.invoice_no||String(sl.id).slice(0,8))}</span></td><td>${esc(sl.sale_date||'')}</td><td>${esc(l?.name||'')}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${money(sl.total)}</td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0.004?'stock-negative':''}">${money(sl.balance_due)}</td><td class="${profitClass(prof)}">${money(prof)}</td></tr>`;
+  }).join('') || '<tr><td colspan="8">لا فواتير.</td></tr>';
+}
 function reportContext(){
   const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'', loc=q('reportLocation')?.value||'';
   const filteredSales=sales.filter(sl=>inDateRange(sl.sale_date,from,to)&&(!loc||sl.location_id===loc));
@@ -7142,6 +7396,41 @@ function renderReportsDetail(){
   if(q('repMonthlyBody')) q('repMonthlyBody').innerHTML=Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,r])=>{const net=r.sales-r.returns-r.cost-r.expenses-r.waste; return `<tr><td>${esc(m)}</td><td>${money(r.sales)}</td><td>${money(r.returns)}</td><td>${money(r.cost)}</td><td>${money(r.expenses)}</td><td>${r.waste?('−'+money(r.waste)):'0'}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(7,'لا توجد بيانات شهرية.');
 
   const d=repScopeData();
+  /* ══ (طلب المستخدم) المبيعات حسب البائع ══
+     pos_sales.created_by يحمل معرّف الدخول. الفواتير المستوردة من النظام
+     القديم بلا بائع ⇒ تُجمع تحت «غير مسجَّل» بدل أن تُنسب لأحد.
+     التكلفة من نفس محرّك saleLineCost المستعمل في أرباح الفروع. */
+  if(currentReport==='seller' && q('repSellerBody')){
+    const bySale={}; d.fItems.forEach(it=>{(bySale[it.sale_id]||(bySale[it.sale_id]=[])).push(it);});
+    const m={};
+    d.fSales.forEach(sl=>{
+      const k=String(sl.created_by||'').trim()||'—';
+      const o=m[k]||(m[k]={id:k,count:0,rev:0,cost:0,ret:0,due:0,sales:[]});
+      o.count++; o.rev+=Number(sl.total||0); o.due+=Number(sl.balance_due||0); o.sales.push(sl);
+      let c=0; (bySale[sl.id]||[]).forEach(it=>c+=Number(it.qty||0)*saleLineCost(it));
+      o.cost+=c; sl.__cost=c;
+    });
+    /* المرتجع يُنسب لبائع الفاتورة الأصلية إن عُرفت */
+    const byRet={}; d.fRetItems.forEach(it=>{(byRet[it.return_id]||(byRet[it.return_id]=[])).push(it);});
+    const saleById=new Map(d.fSales.map(s=>[s.id,s]));
+    d.fReturns.forEach(r=>{
+      const src=r.sale_id?saleById.get(r.sale_id):null;
+      const k=String(src?.created_by||'').trim()||'—';
+      const o=m[k]; if(!o) return;
+      o.ret+=Number(r.total||0);
+      (byRet[r.id]||[]).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));
+    });
+    const rows=Object.values(m).map(r=>{
+      const net=r.rev-r.ret, profit=net-r.cost;
+      return {...r, name:(r.id==='—'?'غير مسجَّل':sellerName(r.id)), net, profit,
+              margin:net?profit/net*100:0, avg:r.count?net/r.count:0};
+    }).sort((a,b)=>b.net-a.net);
+    __sellerRows=rows;
+    q('repSellerBody').innerHTML=rows.map(r=>`<tr style="cursor:pointer" onclick="showSellerSales('${esc(String(r.id).replace(/'/g,''))}')" title="اضغط لعرض فواتيره"><td><b>${esc(r.name)}</b>${(r.id!=='—'&&r.name!==r.id)?` <span class="mini">${esc(r.id)}</span>`:''}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.ret)}</td><td><b>${money(r.net)}</b></td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td><td>${money(r.avg)}</td><td class="${r.due>0.004?'stock-negative':''}">${money(r.due)}</td></tr>`).join('')
+      || '<tr><td colspan="10">لا توجد مبيعات في هذه الفترة.</td></tr>';
+    if(!__sellerPick || !rows.some(r=>String(r.id)===String(__sellerPick))) __sellerPick=rows[0]?.id||null;
+    renderSellerSales();
+  }
   if(currentReport==='branchprofit' && q('repBranchProfitBody')){
     const bySale={}; d.fItems.forEach(it=>{(bySale[it.sale_id]||(bySale[it.sale_id]=[])).push(it);});
     const m={}; d.fSales.forEach(sl=>{const k=sl.location_id||'none'; const o=m[k]||(m[k]={id:k,count:0,rev:0,cost:0}); o.count++; o.rev+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
@@ -7224,8 +7513,152 @@ function printReports(){
 }
 
 
+
+/* ══════════════════ إظهار/إخفاء أعمدة أي جدول + ثبات الترتيب ══════════════════
+   كانت ميزة اختيار الأعمدة في جدول المنتجات وحده (PRODUCT_COLS). هنا نسخة
+   عامة تعمل على كل جدول له tbody بمعرّف، بلا تعديل في أي دالة رسم.
+
+   الإخفاء بقاعدة CSS على nth-child لا بتعديل الصفوف: أي صف يُرسم لاحقاً
+   يرث الإخفاء تلقائياً، فلا حاجة لإعادة تطبيق بعد كل رسم. */
+const COLS_KEY='posHiddenCols';
+var __hiddenCols={};
+try{ __hiddenCols=JSON.parse(localStorage.getItem(COLS_KEY)||'{}')||{}; }catch(_e){ __hiddenCols={}; }
+/* جدول المنتجات له نظامه الخاص (لا يرسم العمود أصلاً) — لا نزاحمه */
+const COLS_SKIP=['productsBody'];
+
+function saveHiddenCols(){ try{ localStorage.setItem(COLS_KEY,JSON.stringify(__hiddenCols)); }catch(_e){} }
+function applyHiddenCols(){
+  let el=document.getElementById('__colStyle');
+  if(!el){ el=document.createElement('style'); el.id='__colStyle'; document.head.appendChild(el); }
+  const css=[];
+  Object.entries(__hiddenCols).forEach(([key,arr])=>{
+    (arr||[]).forEach(i=>{
+      const n=Number(i)+1;
+      css.push(`table[data-cols="${key}"] thead th:nth-child(${n}),table[data-cols="${key}"] tbody td:nth-child(${n}){display:none}`);
+    });
+  });
+  el.textContent=css.join('\n');
+}
+function tableColumnList(table){
+  return [...table.querySelectorAll('thead th')].map((th,i)=>({
+    i, label:(th.textContent||'').replace(/[⇅↕✓]/g,'').trim() || ('عمود '+(i+1))
+  }));
+}
+function toggleTableCol(key,i){
+  const arr=(__hiddenCols[key]||[]).slice();
+  const at=arr.indexOf(i);
+  if(at>=0) arr.splice(at,1); else arr.push(i);
+  if(arr.length) __hiddenCols[key]=arr; else delete __hiddenCols[key];
+  saveHiddenCols(); applyHiddenCols(); renderColumnSettings();
+}
+function showAllTableCols(key){ delete __hiddenCols[key]; saveHiddenCols(); applyHiddenCols(); renderColumnSettings(); }
+
+/* ══════ ثبات الترتيب ══════
+   كان الترتيب يُعاد ترتيب صفوف DOM مباشرة بلا حالة محفوظة، فأول إعادة رسم
+   (الضغط على سطر يستدعي renderSales مثلاً) تُرجع الترتيب الأصلي.
+   الآن تُحفظ الحالة لكل جدول، ويُعاد التطبيق تلقائياً عند تغيّر صفوفه. */
+var __tableSort={};          /* tbodyId -> {idx,dir} */
+var __sortingNow=false;
+
+function sortCellValue(r,idx){
+  const t=(r.children[idx]?.innerText||'').trim().replace(/,/g,'');
+  const n=parseFloat(t);
+  return isNaN(n)?t:n;
+}
+function applyDomSort(tbody,idx,dir){
+  if(!tbody) return;
+  const rows=[...tbody.children].filter(r=>r.tagName==='TR' && r.children.length>1);
+  if(rows.length<2) return;
+  rows.sort((a,b)=>{
+    const va=sortCellValue(a,idx), vb=sortCellValue(b,idx);
+    const c=(typeof va==='number'&&typeof vb==='number') ? va-vb : String(va).localeCompare(String(vb),'ar');
+    return dir==='asc'?c:-c;
+  });
+  __sortingNow=true;
+  const frag=document.createDocumentFragment();
+  rows.forEach(r=>frag.appendChild(r));
+  tbody.appendChild(frag);
+  __sortingNow=false;
+}
+function watchTbodySort(tbody){
+  if(!tbody || tbody.dataset.sortWatch) return;
+  tbody.dataset.sortWatch='1';
+  const obs=new MutationObserver(()=>{
+    if(__sortingNow) return;
+    const st=__tableSort[tbody.id]; if(!st) return;
+    clearTimeout(tbody.__sortT);
+    tbody.__sortT=setTimeout(()=>applyDomSort(tbody,st.idx,st.dir),0);
+  });
+  obs.observe(tbody,{childList:true});
+}
+function clearTableSort(key){
+  delete __tableSort[key];
+  document.querySelectorAll(`table[data-cols="${key}"] thead th`).forEach(th=>{ delete th.dataset.dir; th.classList.remove('sorted-asc','sorted-desc'); });
+  toast('أُلغي الترتيب — يعود الجدول إلى ترتيبه الأصلي عند التحديث','info');
+}
+function markSortedHeader(table,idx,dir){
+  table.querySelectorAll('thead th').forEach((th,i)=>{
+    th.classList.toggle('sorted-asc', i===idx && dir==='asc');
+    th.classList.toggle('sorted-desc', i===idx && dir==='desc');
+  });
+}
+
+/* ══════ شاشة الإعدادات: نفس الاختيار بلا زر يمين ══════ */
+function renderColumnSettings(){
+  const box=document.getElementById('columnSettingsBody'); if(!box) return;
+  const seen=new Set(); const blocks=[];
+  document.querySelectorAll('table').forEach(table=>{
+    const tb=table.querySelector('tbody'); const key=tb&&tb.id;
+    if(!key || seen.has(key) || COLS_SKIP.includes(key)) return;
+    const cols=tableColumnList(table); if(cols.length<2) return;
+    seen.add(key);
+    /* أقرب عنوان فوق الجدول أدقّ من عنوان الشاشة: الشاشة الواحدة قد تحمل
+       عدة جداول. وإن تشابه عنوانان نُميّزهما بأول عمود. */
+    let title='';
+    for(let n=table.parentElement; n && !title; n=n.parentElement){
+      let p=n.previousElementSibling;
+      while(p && !title){ const hh=p.matches?.('h1,h2,h3')?p:p.querySelector?.('h1,h2,h3'); if(hh) title=(hh.textContent||'').trim(); p=p.previousElementSibling; }
+      const hh2=n.querySelector?.(':scope > h1,:scope > h2,:scope > h3,:scope > .tools h2');
+      if(!title && hh2) title=(hh2.textContent||'').trim();
+      if(n.classList?.contains('section')||n.classList?.contains('modal')) break;
+    }
+    if(!title) title = table.closest('.section')?.querySelector('.tools h2')?.textContent?.trim()
+                    || table.closest('.modal')?.querySelector('h2,h3')?.textContent?.trim()
+                    || key;
+    title=title.replace(/\s+/g,' ').slice(0,44);
+    if(blocks.some(b=>b.indexOf('>'+esc(title)+' ')>=0)) title += ' — ' + (cols[0]?.label||key);
+    const hid=__hiddenCols[key]||[];
+    blocks.push(`<details class="colset"><summary>${esc(title)} <span class="mini">(${cols.length - hid.length}/${cols.length})</span></summary>
+      <div class="colset-grid">${cols.map(c=>`<label class="colset-item"><input type="checkbox" ${hid.includes(c.i)?'':'checked'} onchange="toggleTableCol('${esc(key)}',${c.i})"> <span>${esc(c.label)}</span></label>`).join('')}</div>
+      <button class="btn secondary" type="button" style="margin:6px 0 4px" onclick="showAllTableCols('${esc(key)}')">إظهار الكل</button>
+    </details>`);
+  });
+  box.innerHTML = blocks.join('') || '<div class="mini">افتح الشاشات مرة واحدة لتظهر جداولها هنا.</div>';
+}
+
 function setupTableSorting(){
   document.querySelectorAll('table').forEach(table=>{
+    /* وسم الجدول بمعرّف جسمه: عليه تُبنى قواعد إخفاء الأعمدة */
+    const tb0=table.querySelector('tbody'); const colKey=tb0&&tb0.id;
+    if(colKey && !COLS_SKIP.includes(colKey)){
+      table.dataset.cols=colKey;
+      const thead=table.querySelector('thead');
+      if(thead && !thead.dataset.colCtx){
+        thead.dataset.colCtx='1';
+        thead.addEventListener('contextmenu',ev=>{
+          ev.preventDefault(); ev.stopPropagation();
+          const hid=__hiddenCols[colKey]||[];
+          showCtxMenu(ev.clientX,ev.clientY,[{head:'إظهار / إخفاء الأعمدة'},
+            ...tableColumnList(table).map(c=>({label:c.label,
+              icon:hid.includes(c.i)?'ti-square':'ti-square-check',
+              action:()=>toggleTableCol(colKey,c.i)})),
+            {sep:true},
+            {label:'إظهار كل الأعمدة',icon:'ti-eye',action:()=>showAllTableCols(colKey)},
+            ...(__tableSort[colKey]?[{label:'إلغاء الترتيب',icon:'ti-arrows-sort',action:()=>clearTableSort(colKey)}]:[])
+          ]);
+        });
+      }
+    }
     const ths=table.querySelectorAll('thead th');
     ths.forEach((th,idx)=>{
       if(th.dataset.sortReady) return;
@@ -7237,10 +7670,11 @@ function setupTableSorting(){
         if(tbody.id==='productsBody'){productSortIndex=idx; productSortDir=dir; renderProducts(); return;}
         if(tbody.id==='stockBody'){stockSortIndex=idx; stockSortDir=dir; renderStock(); return;}
         if(tbody.id==='salePickerBody'){pickerSortIndex=idx; pickerSortDir=dir; renderSaleProductPicker(); return;}
-        const rows=[...tbody.querySelectorAll('tr')].filter(r=>r.children.length>1);
-        const val=(r)=>{let t=(r.children[idx]?.innerText||'').trim().replace(/,/g,''); let n=parseFloat(t); return isNaN(n)?t:n;};
-        rows.sort((a,b)=>{const va=val(a), vb=val(b); let c=(typeof va==='number'&&typeof vb==='number')?va-vb:String(va).localeCompare(String(vb),'ar'); return dir==='asc'?c:-c;});
-        rows.forEach(r=>tbody.appendChild(r));
+        /* كان يعيد ترتيب صفوف DOM بلا حالة: أول إعادة رسم (الضغط على سطر
+           يستدعي renderSales مثلاً) تمحو الترتيب وتعيد الأصلي.
+           الآن تُحفظ الحالة ويُعاد التطبيق تلقائياً عند تغيّر صفوف الجدول. */
+        if(tbody.id){ __tableSort[tbody.id]={idx,dir}; watchTbodySort(tbody); markSortedHeader(table,idx,dir); }
+        applyDomSort(tbody,idx,dir);
       });
     });
   });
@@ -7301,6 +7735,7 @@ const CTX_BUILDERS={
   salePickerBody(tr){const code=(tr.children[0]?.querySelector('b')?.textContent||tr.children[0]?.innerText||'').split(/\s+/)[0].trim(); if(!code) return []; const p=products.find(x=>String(x.code||'').toLowerCase()===String(code).toLowerCase());
     return [{head:p?`${code} — ${p.name||''}`:code},
       {label:'مشاهدة تفاصيل المنتج',icon:'ti-eye',action:()=>viewProductFromCode(code)},
+      {label:'نسخ المنتج',icon:'ti-copy',action:()=>{closeSaleProductPicker?.(); setTimeout(()=>duplicateProduct(code),60);}},
       {label:'حركات المنتج / التاريخ',icon:'ti-history',action:()=>{setTimeout(()=>openProductMovements(code),50)}},
       {label:'المخزون الحالي',icon:'ti-stack-2',action:()=>showProductStockSummary(code,'all')},
       {label:'الكمية في كل فرع',icon:'ti-building-store',action:()=>showProductStockSummary(code,'branches')},
@@ -7872,7 +8307,15 @@ async function ceSave(){
   const name=(q('ceName')?.value||'').trim();
   if(!name){toast('اسم المنتج مطلوب','warn');return;}
   const p=products.find(x=>String(x.code)===String(sb.id)); if(!p){toast('لم يتم العثور على المنتج','warn');return;}
-  const becamePlain=!sb.comps.length; /* حذف كل المكوّنات = العودة إلى منتج عادي */
+  /* (طلب المستخدم) مكوّن واحد بكمية 1 ليس تركيباً بل اسم آخر لنفس الصنف،
+     ويجعل البيع يخصم من كود والكمية على كود آخر — فينزل المكوّن تحت الصفر. */
+  const onlyOne = sb.comps.length===1 && Math.abs(Number(sb.comps[0].qty||0)-1)<1e-9;
+  if(onlyOne){
+    if(!confirm('مكوّن واحد بكمية 1 ليس تركيباً.\nالحفظ سيجعله منتجاً عادياً يُخصم من مخزونه هو. متابعة؟')) return;
+    sb.comps=[];
+  }
+  const becamePlain=!sb.comps.length; /* بلا مكوّنات أو بمكوّن واحد = العودة إلى منتج عادي */
+
   if(becamePlain && !confirm('أزلتَ كل مكوّناته — الحفظ الآن يحوّل هذا المنتج المركّب إلى منتج عادي (يُباع ويُخزَّن كمنتج مستقل بلا تجزئة). متابعة؟')) return;
   if(window.__busy)return; window.__busy=true;
   try{
@@ -7974,7 +8417,7 @@ function renderComposites(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDateFrom')) q('dailyCashDateFrom').value=d; if(q('dailyCashDateTo')) q('dailyCashDateTo').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); injectCsvButtons(); injectReportRangeButtons(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); applyHiddenCols(); injectCsvButtons(); injectReportRangeButtons(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
 
 /* ══════════════════ (المهمة ٤) التقارير: تصدير CSV عام · فترات جاهزة · طباعة ══════════════════
    كان في المنظومة موضعان اثنان فقط يصدّران CSV (قائمة الفواتير والجرد المطلوب)،
