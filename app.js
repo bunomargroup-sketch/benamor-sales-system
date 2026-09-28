@@ -6125,16 +6125,6 @@ q('saleForm').addEventListener('submit', async e=>{
   document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=true);
   const items=getSaleItems();
   if(!items.length){toast('أضف صنف واحد على الأقل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
-  /* (1961) فحص الأسطر: الخادم يرفض منذ 0027 أي كمية سالبة/صفرية في البيع
-     (الكود الخام NEGATIVE_OR_ZERO_SALE_QTY…) — يُمنع مبكراً برسالة واضحة
-     وتوجيه لشاشة المرتجع: إرجاع + بيع جديد = فاتورتان، والفرق يُسدد في البيع. */
-  const badLines=items.filter(x=>Number(x.qty||0)<=0);
-  if(badLines.length){
-    toast('لا يمكن حفظ فاتورة بيع فيها كمية سالبة أو صفر ('+badLines.slice(0,3).map(x=>x.product_code).join('، ')+(badLines.length>3?'…':'')+'). الإرجاع لا يُدخَل داخل فاتورة البيع: من «فواتير البيع» اختر الفاتورة الأصلية واضغط «مرتجع» (أو «↩ مرتجع بدون فاتورة»)، ثم سجّل فاتورة البيع الجديدة وسدّد الفرق.','warn');
-    if(editingSaleId){ openSaleReturn(editingSaleId); }
-    window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false);
-    return;
-  }
   const location_id=canSelectSaleBranch() ? q('saleLocation').value : (appUser?.branch_id || q('saleLocation').value); if(q('saleLocation') && location_id) q('saleLocation').value=location_id; if(!location_id){toast('اختر فرع البيع','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   updateSaleTotal();
   const subtotal=items.reduce((a,x)=>a+x.line_total,0); const discount=moneyVal(q('saleDiscount').value); const total=subtotal-discount;
@@ -6147,15 +6137,9 @@ q('saleForm').addEventListener('submit', async e=>{
     payRows.push(...((salePayments||[]).filter(p=>p.sale_id===editingSaleId).map(p=>({payment_method:p.payment_method,amount:Number(p.amount||0)}))));
     rawPaid=payRows.reduce((a,x)=>a+x.amount,0);
   }
-  if(isRefundInvoice){
-    /* 🔴 إغلاق باب «المرتجع بفاتورة سالبة»: الخادم يرفضه في البيع الجديد أصلاً
-       (NEGATIVE_OR_ZERO_SALE_QTY / DISCOUNT_EXCEEDS_SUBTOTAL) — وهنا نمنعه مبكراً
-       وبرسالة واضحة ونوجّه إلى شاشة المرتجع المناسبة */
-    toast('لا يمكن حفظ فاتورة بيع بإجمالي سالب — لتصحيح بيع سابق استعمل «مرتجع بيع» من الفاتورة الأصلية','warn');
-    window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false);
-    if(editingSaleId){ openSaleReturn(editingSaleId); }
-    return;
-  }
+  /* (1962) الفواتير المختلطة (مرتجع + شراء) واردة مجدداً — قرار المالك، الخادم 0089:
+     إجمالي موجب = يُسدَّد الفرق عاديّاً · إجمالي سالب = فاتورة استرداد يُدخل فيها
+     مبلغ الاسترداد كاملًا (التحققان أدناه). الشاشة المستقلة للمرتجع تبقى متاحة. */
   if(!isRefundInvoice && rawPaid>total){toast('المدفوع أكبر من إجمالي الفاتورة. صحّح مبالغ الدفع قبل الحفظ.','warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   if(isRefundInvoice && Math.abs(rawPaid-refundRequired)>0.001){toast('هذه فاتورة مرتجع. يجب إدخال مبلغ الاسترداد كاملًا: '+money(refundRequired)+' '+APP_CONFIG.currency,'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   if(isRefundInvoice){const missing=payRows.find(r=>!defaultAccountFor(r.payment_method,location_id)); if(missing){toast('اختر حسابًا ماليًا لطريقة الاسترداد: '+typeLabel(missing.payment_method),'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}}
@@ -7853,6 +7837,7 @@ const CTX_BUILDERS={
       {label:'تعديل سعر الصنف',icon:'ti-edit',action:()=>editSelectedSaleLinePrice()},
       {label:'الهامش (إظهار/إخفاء)',icon:'ti-chart-pie',action:()=>toggleSupervisorMargins()},
       {label:'زيادة الكمية +1',icon:'ti-plus',action:()=>{const qn=tr.querySelector('.si-qty'); qn.value=Number(qn.value||0)+1; updateSaleTotal(); updateSaleAvailable(qn);}},
+      {label:'تغيير إلى مرتجع',icon:'ti-arrow-back-up',action:()=>{const sel=tr.querySelector('.si-kind'); if(sel && ![...sel.options].some(o=>o.value==='return')) sel.insertAdjacentHTML('beforeend','<option value="return">مرتجع</option>'); if(sel){sel.value='return'; updateSaleLineKind(sel); updateSaleTotal(); toast('تم تحويل السطر إلى مرتجع','success');}}},
       {label:'تغيير إلى بيع',icon:'ti-shopping-cart',action:()=>{const sel=tr.querySelector('.si-kind'); if(sel){sel.value='sale'; updateSaleLineKind(sel); updateSaleTotal();}}},
       {sep:true},{label:'حذف من الفاتورة',icon:'ti-trash',action:()=>{tr.remove(); updateSaleTotal();}}];
   },
