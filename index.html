@@ -171,6 +171,8 @@
             <h2 style="margin:0" title="البيانات مستوردة من ملفك: الكود، الصنف، الماركة، الموديل، المورد، التصنيف، سعر الشراء، سعر البيع، والمخزون حسب المكان">قاعدة المنتجات</h2>
             <span class="mini" id="productsInfo" style="font-weight:700"></span>
             <input id="productSearch" placeholder="🔍 ابحث... مثال: خلاط كروم أقل من 200" oninput="debounceRenderProducts()" style="width:100%;max-width:500px;font-size:17px;font-weight:700;padding:13px 18px;border:2.5px solid var(--blue);border-radius:14px;background:var(--accent-soft)">
+            <button class="btn secondary" type="button" onclick="extraSearchLineProduct()" title="إضافة سطر بحث إضافي — كل الأسطر يجب أن تتطابق معًا (من price checker)">＋ سطر بحث</button>
+            <div id="productExtraSearch"></div>
             <button class="btn" type="button" onclick="openProductModal()">+ منتج جديد</button>
           </div>
           <div id="smartFilterInfo" style="display:none;margin:4px 0 6px"></div>
@@ -1331,7 +1333,7 @@
         <button class="btn secondary" onclick="closeSaleProductPicker()">إغلاق</button>
       </div>
       <div class="picker-grid">
-        <div><label>بحث</label><input id="salePickerSearch" onkeydown="handleSalePickerKey(event)" placeholder="اسم، كود، باركود، SKU، موديل، مورد..." oninput="pickerSelectedIndex=-1;renderSaleProductPicker()"></div>
+        <div><label>بحث <button class="btn secondary" type="button" style="padding:0 7px;font-size:12px" onclick="extraSearchLinePicker()" title="إضافة سطر بحث إضافي — كل الأسطر يجب أن تتطابق معًا">＋</button></label><input id="salePickerSearch" onkeydown="handleSalePickerKey(event)" placeholder="اسم، كود، باركود، SKU، موديل، مورد..." oninput="pickerSelectedIndex=-1;renderSaleProductPicker()"><div id="salePickerExtraSearch"></div></div>
         <div><label>التصنيف</label><select id="salePickerCategory" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
         <div><label>الماركة</label><select id="salePickerBrand" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
         <div><label>اللون</label><select id="salePickerColor" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>

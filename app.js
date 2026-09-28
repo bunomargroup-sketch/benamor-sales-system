@@ -1596,6 +1596,29 @@ function smartMatch(query, fields){
   });
 }
 function productSearchFields(p){return [p.product_no,p.code,p.barcode,p.sku,p.item_no,p.name,p.brand,p.model,p.color,p.category,p.supplier_name]}
+/* (1959) بحث متعدد الأسطر (من price checker): أسطر إضافية أسفل حقل البحث الرئيسي —
+   كل سطر نص حر (يُجزَّأ بالكلمة عبر smartMatch) وجميع الأسطر يجب أن تتطابق معًا (AND). */
+function extraSearchTerms(containerId){
+  const c=q(containerId); if(!c) return [];
+  return [...c.querySelectorAll('input.extraSearchLine')].map(i=>i.value.trim()).filter(Boolean);
+}
+function addExtraSearchLine(containerId,onInput,maxW){
+  const c=q(containerId); if(!c) return;
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;gap:6px;margin-top:6px;align-items:center';
+  const inp=document.createElement('input');
+  inp.className='extraSearchLine';
+  inp.placeholder='سطر بحث إضافي — يجب أن تتطابق الأسطر كلها (كود، اسم، ماركة، موديل، مورد…)';
+  inp.style.cssText='flex:1;max-width:'+String(maxW||520)+'px';
+  inp.addEventListener('input',onInput);
+  const rm=document.createElement('button');
+  rm.className='btn secondary'; rm.type='button'; rm.textContent='−'; rm.title='إزالة هذا السطر';
+  rm.style.cssText='padding:5px 10px';
+  rm.addEventListener('click',()=>{ d.remove(); onInput(); });
+  d.append(inp,rm); c.appendChild(d); inp.focus();
+}
+function extraSearchLineProduct(){ addExtraSearchLine('productExtraSearch',debounceRenderProducts,500); }
+function extraSearchLinePicker(){ addExtraSearchLine('salePickerExtraSearch',()=>{pickerSelectedIndex=-1;renderSaleProductPicker();},260); }
 
 function renderProductDatalist(){
   const dl=q('productsDatalist');
@@ -2053,6 +2076,9 @@ function renderProducts(){
   }else{
     rows=products.filter(p=>(!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier));
   }
+  /* (1959) الأسطر الإضافية: تضييق إضافي — كل سطر يجب أن يتطابق */
+  const extraLines=extraSearchTerms('productExtraSearch');
+  if(extraLines.length) rows=rows.filter(p=>extraLines.every(t=>smartMatch(t,productSearchFields(p))));
   const productCols=['code','name','brand','color','barcode','supplier_name','category','purchase_price','retail_price','margin_value','margin_pct','stock_11_june','stock_sarraj','stock_janzour','total_stock'];
   const key=productCols[productSortIndex]||'total_stock';
   rows.sort((a,b)=>{const va=key==='margin_value'?a._mv:(key==='margin_pct'?a._mp:(a[key]??'')), vb=key==='margin_value'?b._mv:(key==='margin_pct'?b._mp:(b[key]??'')); const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va).localeCompare(String(vb),'ar'); return productSortDir==='asc'?c:-c;});
@@ -2071,7 +2097,7 @@ function selectProductRow(code){selectedProductCode=code; renderProducts()}
 /* ═══ (المهمة ٢) نافذة المنتج + شريط الإجراءات + فلاتر ═══ */
 function openProductModal(){q("productModal").classList.add("show"); ['newBrand','newModel','newColor'].forEach(id=>{const e=q(id); if(e) e.value='';}); setTimeout(()=>q("productCode")?.focus(),60)}
 function closeProductModal(){q("productModal").classList.remove("show")}
-function clearProductFilters(){["productCategoryFilter","productBrandFilter","productColorFilter","productSupplierFilter"].forEach(id=>{const el=q(id); if(el){el.value=""; delete el.dataset.ready;}}); if(q("productSearch"))q("productSearch").value=""; renderProducts()}
+function clearProductFilters(){["productCategoryFilter","productBrandFilter","productColorFilter","productSupplierFilter"].forEach(id=>{const el=q(id); if(el){el.value=""; delete el.dataset.ready;}}); if(q("productSearch"))q("productSearch").value=""; const pe=q("productExtraSearch"); if(pe)pe.innerHTML=""; renderProducts()}
 function clearStockFilters(){["stockLocationFilter","stockCategoryFilter","stockBrandFilter","stockSupplierFilter","stockStatusFilter"].forEach(id=>{const el=q(id); if(el)el.value="";}); if(q("stockSearch"))q("stockSearch").value=""; renderStock()}
 function filterStockLow(){const el=q("stockStatusFilter"); if(el){el.value="low"; renderStock();}}
 function getSelectedProduct(){
@@ -2260,8 +2286,10 @@ function pickerPerfMaps(loc){
 function renderSaleProductPicker(){
   const term=(q('salePickerSearch')?.value||'').trim().toLowerCase();
   const cat=q('salePickerCategory')?.value||'', brand=q('salePickerBrand')?.value||'', color=q('salePickerColor')?.value||'', supplier=q('salePickerSupplier')?.value||'';
+  const extraLines=extraSearchTerms('salePickerExtraSearch'); /* (1959) أسطر بحث إضافية */
   const rows=products.filter(p=>{
-    return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&smartMatch(term, productSearchFields(p));
+    return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&smartMatch(term, productSearchFields(p))
+      &&extraLines.every(t=>smartMatch(t, productSearchFields(p)));
   });
   const pickerCols=['code','name','brand','color','supplier_name','notes','available','retail_price','margin_value','margin_pct'];
   const key=pickerCols[pickerSortIndex]||'available';
