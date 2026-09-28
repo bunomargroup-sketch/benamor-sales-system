@@ -8221,9 +8221,12 @@ async function saveStockCount(){
      لا إعادة تسوية للكمية الأصلية (تجنّب التسوية المزدوجة). */
   let adj;
   if(editing && editing.status==='settled'){
+    /* (1955) الأساس في كل سطر: السطر الموجود بالقائمة → المعدود الأصلي؛
+       الصنف المُضاف أثناء التحرير → كمية المنظومة الحالية (فرق عادي، لا كامل الكمية). */
     adj=doc.rows.map(r=>{
       const o=editing.orig.get(String(r.product_code));
-      return {product_code:r.product_code,product_name:r.product_name,delta:Number(r.counted_qty)-Number(o?.counted_qty||0)};
+      const base=o?Number(o.counted_qty):Number(r.system_qty);
+      return {product_code:r.product_code,product_name:r.product_name,delta:Number(r.counted_qty)-base};
     }).filter(a=>Math.abs(a.delta)>0.001);
   } else {
     adj=doc.rows.filter(r=>Math.abs(r.diff_qty)>0.001).map(r=>({product_code:r.product_code,product_name:r.product_name,delta:Number(r.diff_qty)}));
