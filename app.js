@@ -8268,30 +8268,16 @@ async function saveStockCount(){
     toast(isResettle?`تم تطبيق فرق التعديل (${adj.length} صنف) وتحديث القائمة`:`تم تسوية ${adj.length} صنف وحفظ قائمة الجرد`,'success');
   }catch(e){console.error(e);toast('تعذّر حفظ الجرد: '+friendlyError(e),'error')}finally{showLoading(false);window.__busy=false}
 }
-/* ─── قوائم الجرد السابقة: عرض وتفاصيل وحذف (الحذف للمدير) ─── */
+/* ─── قوائم الجرد السابقة: عرض وتحرير (قرار المالك: بلا زر حذف — الإلغاء يتم بتعديل القائمة وتطبيق فرق معاكس) ─── */
 function renderStockCountLists(){
   const el=q('stockCountListsBody'); if(!el)return;
   const rows=mergedStockCounts();
-  const adm=currentRole?.role==='admin';
   el.innerHTML=rows.map(r=>{
     const l=locations.find(x=>x.id===r.location_id);
     const st=r.status==='settled'?'<span class="badge green">مسوّى</span>':'<span class="badge yellow">مسودة</span>';
     const safe=String(r.id).replace(/'/g,"\\\\'");
-    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="فتح القائمة في المحرر لتعديل الكميات وإعادة الحفظ/التسوية" onclick="editStockCount('${safe}')">✎ تعديل</button> <button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${adm?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف قائمة الجرد (لا يغيّر المخزون ولا الحركات) — للمدير فقط" onclick="deleteStockCount('${safe}')">🗑</button>`:''}</td></tr>`;
+    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="فتح القائمة في المحرر لتعديل الكميات وإعادة الحفظ/التسوية" onclick="editStockCount('${safe}')">✎ تعديل</button> <button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button></td></tr>`;
   }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من تبويب «جرد جديد».</td></tr>';
-}
-async function deleteStockCount(id){
-  if(currentRole?.role!=='admin'){toast('حذف قوائم الجرد للمدير فقط','warn');return;}
-  if(!confirm('حذف قائمة الجرد هذه نهائياً؟ (لا يغيّر المخزون ولا الحركات — يحذف المستند فقط)'))return;
-  if(window.__busy)return;window.__busy=true;
-  try{
-    showLoading(true);
-    if(String(id).startsWith('loc_')){localStorage.setItem('posStockCountLocal',JSON.stringify(stockCountLocalList().filter(x=>x.id!==id)));}
-    else{await api('pos_stock_counts',{method:'DELETE',qs:`?id=eq.${id}`}); stockCounts=stockCounts.filter(x=>x.id!==id);}
-    if(__scEditing && String(__scEditing.id)===String(id)){ __scEditing=null; }
-    renderStockCountLists(); renderScEditBanner();
-    toast('تم حذف قائمة الجرد','success');
-  }catch(e){console.error(e);toast('تعذّر حذف القائمة: '+friendlyError(e),'error')}finally{showLoading(false);window.__busy=false}
 }
 function ensureStockCountViewModal(){
   if(q('stockCountViewModal'))return;
