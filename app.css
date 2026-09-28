@@ -506,6 +506,14 @@
     #sales .sale-barcode-strip .barcode-input:focus{outline:none}
     #sales .sale-barcode-strip .schip-picker{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--blue) 45%,var(--border));color:var(--text);cursor:pointer;font-family:inherit}
     #sales .sale-barcode-strip .schip-picker .kbd{background:var(--table-head)}
+    /* (1960) مربع الإدخال السريع للجرد — نفس تنسيق شريط الباركود في البيع */
+    #stockCount .sale-barcode-strip{margin-top:0;display:flex;align-items:center;gap:10px;background:var(--input);border:2px solid var(--blue);border-radius:14px;box-shadow:0 0 0 3px rgba(59,130,246,.18);padding:7px 12px;min-height:54px}
+    #stockCount .sale-barcode-strip .sale-barcode-icon{display:flex;align-items:center;color:var(--blue);margin:0}
+    #stockCount .sale-barcode-strip .sale-barcode-icon i{font-size:26px}
+    #stockCount .sale-barcode-strip .barcode-input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font-size:19px;font-weight:800;padding:6px 8px;min-height:34px}
+    #stockCount .sale-barcode-strip .barcode-input:focus{outline:none}
+    #stockCount .sale-barcode-strip .schip-picker{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--blue) 45%,var(--border));color:var(--text);cursor:pointer;font-family:inherit}
+    #stockCount .sale-barcode-strip .schip-picker .kbd{background:var(--table-head)}
 
     /* [5] السطر السياقي — شرطي، شريحة خضراء خافتة */
     #sales .sale-context-strip{min-height:24px;display:flex;align-items:center;overflow-x:auto}

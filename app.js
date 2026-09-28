@@ -2219,8 +2219,11 @@ function openSaleProductPicker(){ closeQuickSearch();
   fillPickerSelect('salePickerColor','color','كل الألوان');
   fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
   q('salePickerQty').value=q('salePickerQty').value||'1';
+  setProductPickerTitle(productPickerTarget); /* (1960) عنوان حسب الهدف + بحث نظيف عند كل فتح */
+  if(q('salePickerSearch'))q('salePickerSearch').value='';
+  if(q('salePickerExtraSearch'))q('salePickerExtraSearch').innerHTML='';
   pickerSelectedIndex=-1;
-  q('saleProductPickerModal').classList.add('show');
+  q('saleProductPickerModal').classList.add('show'); modalToTop(q('saleProductPickerModal'));
   renderSaleProductPicker();
   setTimeout(()=>q('salePickerSearch')?.focus(),50);
 }
@@ -2233,8 +2236,11 @@ function openProformaProductPicker(){
   fillPickerSelect('salePickerColor','color','كل الألوان');
   fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
   q('salePickerQty').value=q('salePickerQty').value||'1';
+  setProductPickerTitle(productPickerTarget); /* (1960) عنوان حسب الهدف + بحث نظيف عند كل فتح */
+  if(q('salePickerSearch'))q('salePickerSearch').value='';
+  if(q('salePickerExtraSearch'))q('salePickerExtraSearch').innerHTML='';
   pickerSelectedIndex=-1;
-  q('saleProductPickerModal').classList.add('show');
+  q('saleProductPickerModal').classList.add('show'); modalToTop(q('saleProductPickerModal'));
   renderSaleProductPicker();
   setTimeout(()=>q('salePickerSearch')?.focus(),50);
 }
@@ -2247,8 +2253,11 @@ function openPurchaseProductPicker(){
   fillPickerSelect('salePickerColor','color','كل الألوان');
   fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
   q('salePickerQty').value=q('salePickerQty').value||'1';
+  setProductPickerTitle(productPickerTarget); /* (1960) عنوان حسب الهدف + بحث نظيف عند كل فتح */
+  if(q('salePickerSearch'))q('salePickerSearch').value='';
+  if(q('salePickerExtraSearch'))q('salePickerExtraSearch').innerHTML='';
   pickerSelectedIndex=-1;
-  q('saleProductPickerModal').classList.add('show');
+  q('saleProductPickerModal').classList.add('show'); modalToTop(q('saleProductPickerModal'));
   renderSaleProductPicker();
   setTimeout(()=>q('salePickerSearch')?.focus(),50);
 }
@@ -2261,8 +2270,11 @@ function openTransferProductPicker(){
   fillPickerSelect('salePickerColor','color','كل الألوان');
   fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
   q('salePickerQty').value=q('salePickerQty').value||'1';
+  setProductPickerTitle(productPickerTarget); /* (1960) عنوان حسب الهدف + بحث نظيف عند كل فتح */
+  if(q('salePickerSearch'))q('salePickerSearch').value='';
+  if(q('salePickerExtraSearch'))q('salePickerExtraSearch').innerHTML='';
   pickerSelectedIndex=-1;
-  q('saleProductPickerModal').classList.add('show');
+  q('saleProductPickerModal').classList.add('show'); modalToTop(q('saleProductPickerModal'));
   renderSaleProductPicker();
   setTimeout(()=>q('salePickerSearch')?.focus(),50);
 }
@@ -2293,12 +2305,12 @@ function renderSaleProductPicker(){
   });
   const pickerCols=['code','name','brand','color','supplier_name','notes','available','retail_price','margin_value','margin_pct'];
   const key=pickerCols[pickerSortIndex]||'available';
-  const loc=(productPickerTarget==='noInvoiceReturn'?(appUser?.branch_id||''):(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:(productPickerTarget==='transfer'?q('transferFrom')?.value:(canSelectSaleBranch()?q('saleLocation')?.value:(appUser?.branch_id||q('saleLocation')?.value))))))||'';
+  const loc=(productPickerTarget==='noInvoiceReturn'?(appUser?.branch_id||''):(productPickerTarget==='count'?q('stockCountLocation')?.value:(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:(productPickerTarget==='transfer'?q('transferFrom')?.value:(canSelectSaleBranch()?q('saleLocation')?.value:(appUser?.branch_id||q('saleLocation')?.value)))))))||'';
   const maps=pickerPerfMaps(loc);
   rows.sort((a,b)=>{const av=key==='available'?(maps.availableMap.get(String(a.code))||0):(key==='margin_value'?(maps.mvMap.get(String(a.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(a.code))||0):(a[key]??''))); const bv=key==='available'?(maps.availableMap.get(String(b.code))||0):(key==='margin_value'?(maps.mvMap.get(String(b.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(b.code))||0):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,250);
   if(!shown.length) pickerSelectedIndex=-1; else if(pickerSelectedIndex>=shown.length) pickerSelectedIndex=shown.length-1;
-q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 var(--br-sr)"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><span class="code">${esc(p.code||'')}</span><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td><span class="name">${esc(p.name)}</span>${isComp?' <span class="chip br-sr">مركّب</span>':''}</td><td>${brandChip(p.brand)}${modelChip(p.model)}</td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="mini" style="max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.description||'')}">${esc(p.description||'')}</td><td class="amount"><b>${money(available)}</b></td><td class="amount">${money(p.retail_price)}</td><td class="amount">${money(p._mv)}</td><td class="amount">${money(p._mp)}%</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="12">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
+q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); const isCount=productPickerTarget==='count'; const inCountList=isCount&&stockCountData[String(p.code)]!==undefined; return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 var(--br-sr)"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><span class="code">${esc(p.code||'')}</span><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td><span class="name">${esc(p.name)}</span>${isComp?' <span class="chip br-sr">مركّب</span>':''}${inCountList?' <span class="chip" style="color:#4ade80" title="موجود في قائمة الجرد الحالية">✓ في قائمة الجرد</span>':''}</td><td>${brandChip(p.brand)}${modelChip(p.model)}</td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="mini" style="max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.description||'')}">${esc(p.description||'')}</td><td class="amount"><b>${money(available)}</b></td><td class="amount">${money(p.retail_price)}</td><td class="amount">${money(p._mv)}</td><td class="amount">${money(p._mp)}%</td><td><button class="btn ${isCount?'':'secondary'}" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">${isCount?(inCountList?'✓ مضاف':'إضافة للجرد'):'إضافة'}</button></td></tr>`}).join('') || '<tr><td colspan="12">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
   setupTableSorting();
 }
@@ -2323,6 +2335,7 @@ function pickerApplySelection(rows){
 
 function addSaleProductFromPicker(code,qtyOverride=null){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
+  if(productPickerTarget==='count'){ /* (1960) الجرد: يضيف الصنف لقائمة الجرد والنافذة تبقى مفتوحة */ addStockCountItem(String(p.code)); return; }
   const qty=Number((qtyOverride ?? q('salePickerQty').value) || 1);
   if(productPickerTarget==='proforma') addOrIncrementProformaProduct(p,qty); else if(productPickerTarget==='purchase') addOrIncrementPurchaseProduct(p,qty); else if(productPickerTarget==='transfer') addOrIncrementTransferProduct(p,qty); else if(productPickerTarget==='noInvoiceReturn') addNoInvoiceReturnProduct(p,qty); else addOrIncrementSaleProduct(p,qty);
   q('salePickerQty').value='1';
@@ -5567,8 +5580,11 @@ function openNoInvoiceReturnPicker(){
   fillPickerSelect('salePickerColor','color','كل الألوان');
   fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
   q('salePickerQty').value=q('salePickerQty').value||'1';
+  setProductPickerTitle(productPickerTarget); /* (1960) عنوان حسب الهدف + بحث نظيف عند كل فتح */
+  if(q('salePickerSearch'))q('salePickerSearch').value='';
+  if(q('salePickerExtraSearch'))q('salePickerExtraSearch').innerHTML='';
   pickerSelectedIndex=-1;
-  q('saleProductPickerModal').classList.add('show');
+  q('saleProductPickerModal').classList.add('show'); modalToTop(q('saleProductPickerModal'));
   renderSaleProductPicker();
   setTimeout(()=>q('salePickerSearch')?.focus(),50);
 }
@@ -8007,7 +8023,7 @@ function showStockCountSub(name){
 function stockCountBranchChanged(el){
   const n=Object.keys(stockCountData).length;
   if(n>0 && !confirm(`قائمة الجرد الحالية فيها ${n} صنفاً — تغيير الفرع يفرغها. متابعة؟`)){ el.value=el.dataset.prev||el.value; return; }
-  el.dataset.prev=el.value; stockCountData={}; renderStockCount();
+  el.dataset.prev=el.value; stockCountData={}; clearStockCountFilters(); renderStockCount();
 }
 function scLocStockMap(loc){
   const m=new Map(); stock.forEach(s=>{if(s.location_id===loc) m.set(String(s.product_code),Number(s.qty||0));});
@@ -8033,7 +8049,7 @@ function renderStockCount(){
     catEl.innerHTML='<option value="">كل التصنيفات</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
     catEl.value=cats.includes(ccur)?ccur:''; catEl.dataset.ready='1';
   }
-  if(!loc){q('stockCountBody').innerHTML='<tr><td colspan="8">اختر الفرع.</td></tr>';__scItems=[];window.__scLocStock=new Map();updateStockCountTotals();return;}
+  if(!loc){q('stockCountBody').innerHTML='<tr><td colspan="8">اختر الفرع.</td></tr>';__scItems=[];window.__scLocStock=new Map();window.__scHiddenCount=0;updateStockCountTotals();return;}
   const term=(q('stockCountSearch')?.value||'').trim().toLowerCase();
   const cat=catEl?.value||'';
   const locStock=scLocStockMap(loc); window.__scLocStock=locStock;
@@ -8047,10 +8063,11 @@ function renderStockCount(){
     return true;
   });
   __scItems=items;
+  window.__scHiddenCount=Math.max(0,Object.keys(stockCountData).length-items.length); /* (1960) أصناف خفيت بالبحث/التصنيف */
   if(!items.length){
     q('stockCountBody').innerHTML=Object.keys(stockCountData).length
       ?'<tr><td colspan="8">لا أصناف تطابق البحث/التصنيف ضمن قائمة الجرد الحالية.</td></tr>'
-      :'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:26px">📋 قائمة الجرد فارغة — اضغط <b class="kbd">F3</b> أو زر «🔎 إضافة صنف للجرد» لإضافة أول صنف، أو من شاشة المنتجات اضغط بالزر الأيمن على المنتج واختر «إنشاء جرد بهذا الصنف».</td></tr>';
+      :'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:26px">📋 قائمة الجرد فارغة — اكتب الكود/الباركود في <b>مربع الإدخال السريع</b> أعلاه ثم Enter، أو اضغط <b class="kbd">F3</b> (قائمة المنتجات المفلترة كما في البيع)، أو من شاشة المنتجات اضغط بالزر الأيمن على المنتج واختر «إنشاء جرد بهذا الصنف».</td></tr>';
     updateStockCountTotals(); return;
   }
   q('stockCountBody').innerHTML=items.map(s=>{
@@ -8085,7 +8102,8 @@ function stockCountTotals(){
 function updateStockCountTotals(){
   const el=q('stockCountTotals'); if(!el)return;
   const t=stockCountTotals();
-  el.innerHTML=`🖐 في القائمة: <b>${money(Object.keys(stockCountData).length)}</b> صنفاً — مُدخل منه: <b>${money(t.counted)}</b> · زيادة: <b class="stock-positive">+${money(t.posQ)}</b> (+${money(t.posV)} ${APP_CONFIG.currency}) · نقص: <b class="stock-negative">${money(t.negQ)}</b> (${money(t.negV)} ${APP_CONFIG.currency}) · <b>الصافي: ${money(t.netQ)} (${money(t.netV)} ${APP_CONFIG.currency})</b>`;
+  const hidden=window.__scHiddenCount||0;
+    el.innerHTML=`🖐 في القائمة: <b>${money(Object.keys(stockCountData).length)}</b> صنفاً — مُدخل منه: <b>${money(t.counted)}</b> · زيادة: <b class="stock-positive">+${money(t.posQ)}</b> (+${money(t.posV)} ${APP_CONFIG.currency}) · نقص: <b class="stock-negative">${money(t.negQ)}</b> (${money(t.negV)} ${APP_CONFIG.currency}) · <b>الصافي: ${money(t.netQ)} (${money(t.netV)} ${APP_CONFIG.currency})</b>`+(hidden>0?` · <b style="color:#b45309" title="أمسح خانة البحث وحيدد «كل التصنيفات» لرؤية كل الأصناف">⚠️ ${money(hidden)} صنف مخفي بالبحث/التصنيف</b>`:'');
 }
 function addStockCountItem(code){
   const loc=q('stockCountLocation')?.value; if(!loc){toast('اختر الفرع أولاً','warn');return;}
@@ -8096,6 +8114,48 @@ function addStockCountItem(code){
     const inp=q('sci_'+sc); if(inp){inp.focus();inp.select();} },80);
 }
 function removeStockCountItem(code){ if(stockCountData[code]===undefined)return; delete stockCountData[code]; renderStockCount(); }
+/* (1960) مسح بحث/تصنيف المحرر عند نقاط الانتقال — الفلتر القديم كان يخفي أسطر القائمة بصمت (مشكلة «سطر واحد فقط») */
+function clearStockCountFilters(){ const s=q('stockCountSearch'); if(s)s.value=''; const c=q('stockCountCategory'); if(c)c.value=''; }
+/* ─── (1960) مربع الإدخال السريع للجرد — نفس مربع الباركود في شاشة البيع:
+     كود/باركود تام (Enter أو 4 أحرف فأكثر) ← يُضاف الصنف لقائمة الجرد فوراً.
+     بلا مطابقة تامة ← تُفتح قائمة المنتجات المفلترة (F3) بالنص المكتوب. ─── */
+function handleCountBarcodeKey(e){
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  const raw=(q('countBarcodeInput')?.value||'').trim(); if(!raw)return;
+  const p=findProductByCodeOrBarcode(raw);
+  if(p){ addStockCountItem(String(p.code)); q('countBarcodeInput').value=''; q('countBarcodeInput').focus(); return; }
+  if(raw.length>=2){ q('countBarcodeInput').value=''; openStockCountPicker(raw); return; }
+  toast('لم يتم العثور على المنتج أو الباركود');
+}
+function handleCountBarcodeInput(){
+  const v=(q('countBarcodeInput')?.value||'').trim();
+  if(v.length>=4){ const p=findProductByCodeOrBarcode(v); if(p){ addStockCountItem(String(p.code)); q('countBarcodeInput').value=''; } }
+}
+/* (1960) حارس الماسح الضوئي لشاشة الجرد — كما في البيع: النقرات السريعة تُوجَّه لمربع الإدخال السريع حتى لو كان التركيز في مكان آخر */
+document.addEventListener('keydown',e=>{
+  if(!q('stockCount')?.classList.contains('active')) return;
+  if(e.ctrlKey||e.altKey||e.metaKey) return;
+  if(document.activeElement===q('countBarcodeInput')) return;
+  const now=performance.now();
+  const rapid=(now-scannerLastTs)<28;
+  window.__scannerRapid=rapid;
+  scannerLastTs=now;
+  if(!rapid) scannerBuffer='';
+  if(e.key==='Enter'){
+    if(scannerBuffer.length>=5){
+      e.preventDefault();
+      const inp=q('countBarcodeInput');
+      if(inp){inp.value=scannerBuffer; handleCountBarcodeKey({key:'Enter',preventDefault(){}});}
+    }
+    scannerBuffer='';
+    return;
+  }
+  if(e.key.length===1){
+    scannerBuffer+=e.key;
+    if(rapid && scannerBuffer.length>=3) e.preventDefault();
+  }
+});
 /* ─── (1945) تحرير قوائم الجرد المحفوظة: فتح الأسطر في المحرر، وإعادة الحفظ/التسوية على القائمة نفسها ─── */
 function renderScEditBanner(){
   const b=q('scEditBanner'); if(!b)return;
@@ -8130,6 +8190,7 @@ async function editStockCount(id){
     __scEditing={id:String(r.id), status:r.status||'draft', no:r.count_no||String(r.id),
                  orig:new Map(items.map(it=>[String(it.product_code),it]))};
     locEl.value=String(r.location_id); locEl.dataset.prev=locEl.value;
+    clearStockCountFilters();
     showStockCountSub('editor');
     renderStockCount();
     toast('فُتحت القائمة للتحرير — عدّل الكميات المعدودة ثم «حفظ قائمة الجرد» أو «تسوية»','info');
@@ -8157,21 +8218,36 @@ async function updateStockCountRecord(id, doc, status){
   if(i>=0) stockCounts[i]={...stockCounts[i],...hdr,_items:doc.rows};
   if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
 }
-/* ─── نافذة F3 للجرد: تضيف الصنف المختار إلى قائمة الجرد وتركّز خانة المعدود ─── */
-function openStockCountPicker(){
+/* ─── (1960) نافذة F3 للجرد: نفس قائمة المنتجات في البيع (بحث متعدد الأسطر + فلاتر التصنيف/الماركة/اللون/المورد) —
+     الاختيار يضيف الصنف إلى قائمة الجرد ولا يغلق النافذة (لإضافة عدة أصناف متتالية). ─── */
+function openStockCountPicker(presetTerm=''){
   if(q('stockCountLists') && q('stockCountLists').style.display!=='none'){toast('ارجع إلى تبويب «جرد جديد» أولاً','info');return;}
   const loc=q('stockCountLocation')?.value; if(!loc){toast('اختر الفرع أولاً ثم F3 لإضافة أصناف','warn');return;}
-  const locStock=window.__scLocStock&&window.__scLocStock.size?window.__scLocStock:scLocStockMap(loc);
-  const dummy=document.createElement('input');
-  dummy.addEventListener('input',()=>{ addStockCountItem(dummy.value); });
-  longPickerState={target:dummy,type:'input',
-    items:(products||[]).map(p=>{const sc=String(p.code||''); return {value:sc,text:sc+' — '+(p.name||''),sub:'المخزون في هذا الفرع: '+money(locStock.get(sc)||0)+(stockCountData[sc]!==undefined?' · ✓ في قائمة الجرد':''),search:sc+' '+(p.name||'')+' '+(p.barcode||'')}}),
-    filtered:[],index:0,title:'إضافة صنف إلى قائمة الجرد (F3)'};
-  longPickerState.filtered=longPickerState.items;
-  q('longPickerTitle').textContent=longPickerState.title;
-  q('longPickerSearch').value='';
-  q('longPickerModal').classList.add('show'); modalToTop(q('longPickerModal'));
-  renderLongPicker(); setTimeout(()=>q('longPickerSearch')?.focus(),40);
+  productPickerTarget='count';
+  setProductPickerTitle('count');
+  fillPickerSelect('salePickerCategory','category','كل التصنيفات');
+  fillPickerSelect('salePickerBrand','brand','كل الماركات');
+  fillPickerSelect('salePickerColor','color','كل الألوان');
+  fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
+  ['salePickerCategory','salePickerBrand','salePickerColor','salePickerSupplier'].forEach(id=>{const el=q(id); if(el)el.value='';}); /* بداية نظيفة: لا فلاتر من استعمال سابق */
+  q('salePickerQty').value='1';
+  if(q('salePickerExtraSearch'))q('salePickerExtraSearch').innerHTML='';
+  pickerSelectedIndex=-1;
+  q('saleProductPickerModal').classList.add('show'); modalToTop(q('saleProductPickerModal'));
+  const s=q('salePickerSearch'); if(s)s.value=presetTerm||'';
+  renderSaleProductPicker();
+  setTimeout(()=>q('salePickerSearch')?.focus(),50);
+}
+/* (1960) عنوان/تلميح موحد لنافذة المنتجات حسب الهدف — يمنع بقاء عنوان «البيع» عند فتحها للجرد وغيره */
+function setProductPickerTitle(mode){
+  const t={sale:['قائمة المنتجات للبيع','اختصار الفتح: F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
+           count:['قائمة المنتجات للجرد','F3 — نفس البحث والفلاتر كما في البيع: اختر ثم «إضافة للجرد» (أو Enter على الصف المحدد). النافذة تفتح حتى تُغلقها لإضافة عدة أصناف'],
+           proforma:['قائمة المنتجات للفاتورة المبدئية','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
+           purchase:['قائمة منتجات فاتورة الشراء','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
+           transfer:['قائمة منتجات التحويل','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
+           noInvoiceReturn:['قائمة المنتجات للاسترجاع بدون فاتورة','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة']}[mode]||['قائمة المنتجات','F3 — ابحث بالفلاتر ثم أضف'];
+  const h=q('productPickerTitle'); if(h)h.textContent=t[0];
+  const m=q('productPickerHint'); if(m)m.textContent=t[1];
 }
 /* فتح الجرد بصنف محدد (من قائمة يمين المنتج أو أي زر خارجي) */
 function startProductCount(code){
@@ -8179,6 +8255,7 @@ function startProductCount(code){
   setTimeout(()=>{
     const locEl=q('stockCountLocation');
     if(locEl){ if(!locEl.dataset.ready) renderStockCount(); if(appUser?.branch_id && [...locEl.options].some(o=>o.value===appUser.branch_id)){ locEl.value=appUser.branch_id; locEl.dataset.prev=locEl.value; } }
+    clearStockCountFilters();
     addStockCountItem(code);
   },60);
 }
@@ -8237,7 +8314,7 @@ async function saveStockCountList(){
     if(wasEdit){ await updateStockCountRecord(__scEditing.id,doc,'draft'); }
     else{ await postStockCountDoc(doc,'draft'); }
     await logAction(wasEdit?'stock_count_edit_save':'stock_count_save',null,null,`${wasEdit?'تحديث قائمة جرد':'حفظ قائمة جرد'} ${doc.rows.length} صنف — ${locations.find(l=>l.id===doc.loc)?.name||''} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
-    __scEditing=null; stockCountData={};renderStockCount();
+    __scEditing=null; stockCountData={}; clearStockCountFilters(); renderStockCount();
     toast(wasEdit?'تم تحديث القائمة المحفوظة':'تم حفظ قائمة الجرد — تجدها في تبويب «قوائم الجرد السابقة»','success');
   }catch(e){console.error(e);toast('تعذّر حفظ قائمة الجرد: '+friendlyError(e),'error')}
   finally{showLoading(false);window.__busy=false}
@@ -8290,7 +8367,7 @@ async function saveStockCount(){
     if(editing){ await updateStockCountRecord(editing.id,doc,'settled'); }
     else{ await postStockCountDoc(doc,'settled'); }
     await logAction(isResettle?'stock_count_resettle':'stock_count',null,null,`${isResettle?'تعديل جرد مسوّى وتطبيق فرق':'جرد وتسوية'} ${adj.length} صنف — ${locName} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
-    __scEditing=null; stockCountData={};
+    __scEditing=null; stockCountData={}; clearStockCountFilters();
     await refreshSalesDomain();
     renderStockCount();
     toast(isResettle?`تم تطبيق فرق التعديل (${adj.length} صنف) وتحديث القائمة`:`تم تسوية ${adj.length} صنف وحفظ قائمة الجرد`,'success');

@@ -1065,9 +1065,14 @@
               <select id="stockCountLocation" onchange="stockCountBranchChanged(this)" style="min-width:210px"></select>
               <input id="stockCountSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderStockCount()" style="max-width:300px">
               <select id="stockCountCategory" onchange="renderStockCount()" style="min-width:170px"><option value="">كل التصنيفات</option></select>
-              <button class="btn secondary" type="button" onclick="openStockCountPicker()" title="نافذة بحث الأصناف للقفز إلى سطر الجرد">🔎 إضافة صنف للجرد <b class="kbd">F3</b></button>
             </div>
-            <p class="muted">الجرد يبدأ <b>بقائمة فارغة</b>: اختر الفرع/المخزن، أضف الأصناف من نافذة البحث F3 (أو من قائمة الزر الأيمن على المنتج في شاشة المنتجات)، ثم أدخل الكمية المعدودة. المخزون الظاهر يُقرأ حيّاً من المنظومة. «قيمة الفرق» = الفرق × تكلفة الصنف الحالية. يمكنك حفظ القائمة دون تسوية، أو تسوية الفروقات مباشرة على المخزون. القوائم المحفوظة في تبويب «قوائم الجرد السابقة» يمكن <b>رؤيتها (تفاصيل) وتحريرها (✎ تعديل)</b> — وإن تبيّن خطأ في تسوية قائمة سابقة، صحَّحها بالتعديل وتُطبَّق فرق التصحيح فقط.</p>
+            <!-- (1960) مربع الإدخال السريع — كما في شاشة البيع: كود/باركود تام ← Enter ← يُضاف لقائمة الجرد -->
+            <div class="sale-barcode-strip">
+              <label for="countBarcodeInput" class="sale-barcode-icon"><i class="ti ti-barcode"></i></label>
+              <input id="countBarcodeInput" class="ltr barcode-input" placeholder="امسح الكود/الباركود ثم Enter — يُضاف الصنف لقائمة الجرد" onkeydown="handleCountBarcodeKey(event)" oninput="handleCountBarcodeInput()">
+              <button type="button" class="schip schip-picker" onclick="openStockCountPicker()">قائمة المنتجات <b class="kbd">F3</b></button>
+            </div>
+            <p class="muted">الجرد يبدأ <b>بقائمة فارغة</b>: اختر الفرع/المخزن، ثم أضف الأصناف من <b>مربع الإدخال السريع</b> (امسح الكود أو اكتبه ثم Enter)، أو من <b>قائمة المنتجات F3</b> — نفس البحث والفلاتر كما في البيع (أسطر بحث متعددة، تصنيف، ماركة، لون، مورد) — أو من قائمة الزر الأيمن على المنتج في شاشة المنتجات، ثم أدخل الكمية المعدودة. المخزون الظاهر يُقرأ حيّاً من المنظومة. «قيمة الفرق» = الفرق × تكلفة الصنف الحالية. إن بحثت أو فلترت فستظهر أسطر مخفية — راجع تنبيه «صنف مخفي» في سطر الإجماليات وامسح البحث لرؤيتها. يمكنك حفظ القائمة دون تسوية، أو تسوية الفروقات مباشرة على المخزون. القوائم المحفوظة في تبويب «قوائم الجرد السابقة» يمكن <b>رؤيتها (تفاصيل) وتحريرها (✎ تعديل)</b> — وإن تبيّن خطأ في تسوية قائمة سابقة، صحَّحها بالتعديل وتُطبَّق فرق التصحيح فقط.</p>
             <div id="scEditBanner" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:#fff8e6;border:1px solid #e2c766;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px"></div>
             <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المخزون</th><th>التكلفة</th><th>المعدود</th><th>الفرق</th><th>قيمة الفرق</th></tr></thead><tbody id="stockCountBody"></tbody></table></div>
             <div id="stockCountTotals" class="card" style="margin-top:10px;font-size:14px"></div>
@@ -1329,7 +1334,7 @@
   <div class="modal" id="saleProductPickerModal">
     <div class="modal-card">
       <div class="modal-head">
-        <div><h2 style="margin:0">قائمة المنتجات للبيع</h2><div class="mini">اختصار الفتح: F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة</div></div>
+        <div><h2 id="productPickerTitle" style="margin:0">قائمة المنتجات للبيع</h2><div class="mini" id="productPickerHint">اختصار الفتح: F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة</div></div>
         <button class="btn secondary" onclick="closeSaleProductPicker()">إغلاق</button>
       </div>
       <div class="picker-grid">
