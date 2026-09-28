@@ -7967,6 +7967,7 @@ function renderAuditLog(){
 }
 async function logAction(action,entityType='',entityId='',details=''){try{await api('pos_audit_log',{method:'POST',body:{user_identifier:appUser?.identifier||'',action,entity_type:entityType,entity_id:String(entityId||''),details,branch_id:appUser?.branch_id||null}});}catch(e){console.warn('audit log failed',e)}}
 let stockCountData={};
+let __scEditing=null; /* (1945) قائمة جرد محفوظة مفتوحة للتحرير: {id,status,no,orig:Map(code→سطر)} */
 let __scItems=[]; /* أسطر جدول الجرد آخر رسم — لنافذة F3 والإجماليات */
 function showStockCountSub(name){
   const ed=q('stockCountEditor'), ls=q('stockCountLists'); if(!ed||!ls)return;
@@ -7986,6 +7987,7 @@ function scLocStockMap(loc){
 }
 function renderStockCount(){
   const locEl=q('stockCountLocation'); if(!locEl)return;
+  renderScEditBanner();
   /* (hotfix 1900) قائمة الفروع تُرسم من ذاكرة `locations` — إن فُتحت الصفحة قبل اكتمال جلب النواة
      كُانت تُرسم مرة واحدة وبقيت فارغة. تُعاد الرسم إن كانت فارغة والبيانات وصلت (مع الحفاظ على الفرع). */
   if(!locEl.dataset.ready || (locEl.options.length===0 && locations.length>0)){
@@ -8066,6 +8068,67 @@ function addStockCountItem(code){
     const inp=q('sci_'+sc); if(inp){inp.focus();inp.select();} },80);
 }
 function removeStockCountItem(code){ if(stockCountData[code]===undefined)return; delete stockCountData[code]; renderStockCount(); }
+/* ─── (1945) تحرير قوائم الجرد المحفوظة: فتح الأسطر في المحرر، وإعادة الحفظ/التسوية على القائمة نفسها ─── */
+function renderScEditBanner(){
+  const b=q('scEditBanner'); if(!b)return;
+  if(!__scEditing){ b.style.display='none'; b.innerHTML=''; return; }
+  const hint=__scEditing.status==='settled'
+    ? 'قائمة <b>مسوّاة</b> — عند التسوية يُطبَّق <b>الفرق بين المعدود الجديد والمعدود الأصلي فقط</b> (لا تسوية مزدوجة)'
+    : 'قائمة <b>مسودة</b> — التسوية تحسب الفرق على كمية المنظومة الآن وتحدّث القائمة نفسها';
+  b.style.display='flex';
+  b.innerHTML=`<span>✎ جارٍ تحرير قائمة الجرد «${esc(__scEditing.no||String(__scEditing.id))}» — ${hint}</span><button class="btn danger" type="button" style="padding:2px 10px" onclick="cancelStockCountEdit()">إلغاء التحرير</button>`;
+}
+async function editStockCount(id){
+  const r=mergedStockCounts().find(x=>String(x.id)===String(id));
+  if(!r){toast('لم توجد قائمة الجرد (ربما حُذفت أو غابت عن التحميل — اضغط تحديث)','warn');return;}
+  if(window.__busy)return;window.__busy=true;
+  try{
+    let items=r._items||null;
+    if(!items && !String(r.id).startsWith('loc_')){
+      showLoading(true);
+      try{items=await apiAll('pos_stock_count_items','?select=*&count_id=eq.'+r.id+'&order=created_at.asc,id.asc');}
+      finally{showLoading(false);}
+    }
+    if(!items||!items.length){toast('لا أسطر مسجلة لهذه القائمة — لا شيء للتعديل','info');return;}
+    const n=Object.keys(stockCountData).length;
+    if(n && !confirm(`قائمة الجرد الحالية فيها ${n} صنفاً — ستُفرَّغ لفتح القائمة المحفوظة «${r.count_no||r.id}». متابعة؟`))return;
+    stockCountData={};
+    items.forEach(it=>{ stockCountData[String(it.product_code)]=String(it.counted_qty); });
+    const locEl=q('stockCountLocation');
+    if(!locEl || ![...locEl.options].some(o=>String(o.value)===String(r.location_id))){
+      toast('الفرع/المخزن الخاص بهذه القائمة غير موجود في قائمة الفروع الآن — لا يمكن تحريرها','warn');
+      stockCountData={}; renderStockCount(); return;
+    }
+    __scEditing={id:String(r.id), status:r.status||'draft', no:r.count_no||String(r.id),
+                 orig:new Map(items.map(it=>[String(it.product_code),it]))};
+    locEl.value=String(r.location_id); locEl.dataset.prev=locEl.value;
+    showStockCountSub('editor');
+    renderStockCount();
+    toast('فُتحت القائمة للتحرير — عدّل الكميات المعدودة ثم «حفظ قائمة الجرد» أو «تسوية»','info');
+  }catch(e){console.error(e);toast('تعذّر فتح القائمة للتحرير: '+friendlyError(e),'error');}
+  finally{window.__busy=false;}
+}
+function cancelStockCountEdit(){
+  if(!__scEditing)return;
+  if(!confirm('إلغاء تحرير القائمة؟ (تُفرَّغ أسطر المحرر — القائمة المحفوظة لا تتأثر)'))return;
+  __scEditing=null; stockCountData={}; renderStockCount(); toast('أُلغي التحرير','info');
+}
+/* تحديث قائمة جرد محفوظة (رأس + استبدال الأسطر) بدلاً من إنشاء قائمة جديدة */
+async function updateStockCountRecord(id, doc, status){
+  const settledAt=status==='settled'?new Date().toISOString():null;
+  if(String(id).startsWith('loc_')){
+    const ls=stockCountLocalList().map(x=>x.id===id?{...x,...doc.header,status,settled_at:settledAt,_items:doc.rows}:x);
+    localStorage.setItem('posStockCountLocal',JSON.stringify(ls.slice(0,50)));
+    return;
+  }
+  const hdr={...doc.header,status,settled_at:settledAt};
+  await api('pos_stock_counts',{method:'PATCH',qs:`?id=eq.${id}`,body:hdr});
+  await api('pos_stock_count_items',{method:'DELETE',qs:`?count_id=eq.${id}`});
+  if(doc.rows.length) await api('pos_stock_count_items',{method:'POST',body:doc.rows.map(x=>({...x,count_id:id}))});
+  const i=(stockCounts||[]).findIndex(x=>String(x.id)===String(id));
+  if(i>=0) stockCounts[i]={...stockCounts[i],...hdr,_items:doc.rows};
+  if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
+}
 /* ─── نافذة F3 للجرد: تضيف الصنف المختار إلى قائمة الجرد وتركّز خانة المعدود ─── */
 function openStockCountPicker(){
   if(q('stockCountLists') && q('stockCountLists').style.display!=='none'){toast('ارجع إلى تبويب «جرد جديد» أولاً','info');return;}
@@ -8135,32 +8198,71 @@ async function postStockCountDoc(doc,status){
 }
 async function saveStockCountList(){
   const doc=buildStockCountDoc(); if(!doc)return;
-  if(!confirm(`حفظ قائمة الجرد (${doc.rows.length} صنفاً مجرداً — صافي قيمة الفرق: ${money(doc.header.diff_value)} ${APP_CONFIG.currency}) دون تغيير المخزون؟`))return;
+  if(__scEditing && __scEditing.status==='settled'){toast('القائمة مسوّاة على المخزون — لا تُعاد حفظها كمسودة. استخدم «تسوية واعتماد الفروقات» لتطبيق التعديل.','warn');return;}
+  const wasEdit=!!__scEditing;
+  if(!confirm(wasEdit
+    ? `تحديث القائمة المحفوظة «${__scEditing.no}» (${doc.rows.length} صنفاً) دون تغيير المخزون؟`
+    :`حفظ قائمة الجرد (${doc.rows.length} صنفاً مجرداً — صافي قيمة الفرق: ${money(doc.header.diff_value)} ${APP_CONFIG.currency}) دون تغيير المخزون؟`))return;
   if(window.__busy)return;window.__busy=true;
   try{
     showLoading(true);
-    await postStockCountDoc(doc,'draft');
-    await logAction('stock_count_save',null,null,`حفظ قائمة جرد ${doc.rows.length} صنف — ${locations.find(l=>l.id===doc.loc)?.name||''} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
-    stockCountData={};renderStockCount();
-    toast('تم حفظ قائمة الجرد — تجدها في تبويب «قوائم الجرد السابقة»','success');
+    if(wasEdit){ await updateStockCountRecord(__scEditing.id,doc,'draft'); }
+    else{ await postStockCountDoc(doc,'draft'); }
+    await logAction(wasEdit?'stock_count_edit_save':'stock_count_save',null,null,`${wasEdit?'تحديث قائمة جرد':'حفظ قائمة جرد'} ${doc.rows.length} صنف — ${locations.find(l=>l.id===doc.loc)?.name||''} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
+    __scEditing=null; stockCountData={};renderStockCount();
+    toast(wasEdit?'تم تحديث القائمة المحفوظة':'تم حفظ قائمة الجرد — تجدها في تبويب «قوائم الجرد السابقة»','success');
   }catch(e){console.error(e);toast('تعذّر حفظ قائمة الجرد: '+friendlyError(e),'error')}
   finally{showLoading(false);window.__busy=false}
 }
 async function saveStockCount(){
   const doc=buildStockCountDoc(); if(!doc)return;
-  const adj=doc.rows.filter(r=>Math.abs(r.diff_qty)>0.001);
-  if(!adj.length){toast('كل المعدود يساوي كمية المنظومة — لا فروقات تُسوّى. احفظ القائمة بزر «حفظ قائمة الجرد»','info');return;}
-  if(!confirm(`تسوية ${adj.length} صنف على المخزون + حفظ قائمة الجرد كمستند «مسوّى»؟`))return;
+  const editing=__scEditing;
+  /* (1945) قائمة مسوّاة مفتوحة للتحرير: يُطبَّق الفرق بين المعدود الجديد والأصلي فقط —
+     لا إعادة تسوية للكمية الأصلية (تجنّب التسوية المزدوجة). */
+  let adj;
+  if(editing && editing.status==='settled'){
+    adj=doc.rows.map(r=>{
+      const o=editing.orig.get(String(r.product_code));
+      return {product_code:r.product_code,product_name:r.product_name,delta:Number(r.counted_qty)-Number(o?.counted_qty||0)};
+    }).filter(a=>Math.abs(a.delta)>0.001);
+  } else {
+    adj=doc.rows.filter(r=>Math.abs(r.diff_qty)>0.001).map(r=>({product_code:r.product_code,product_name:r.product_name,delta:Number(r.diff_qty)}));
+  }
+  if(!adj.length){
+    toast(editing&&editing.status==='settled'
+      ?'الكميات المعدودة بلا تغيّر عن الأصل — لا فرق جديد يُطبَّق. يمكنك إلغاء التحرير'
+      :'كل المعدود يساوي كمية المنظومة — لا فروقات تُسوّى. احفظ القائمة بزر «حفظ قائمة الجرد»','info');
+    return;
+  }
+  const locName=locations.find(l=>l.id===doc.loc)?.name||'';
+  if(!confirm(editing&&editing.status==='settled'
+    ?`تطبيق فرق التعديل (${adj.length} صنف — صافي كمية ${money(adj.reduce((a,x)=>a+x.delta,0))}) على المخزون + تحديث القائمة المحفوظة؟`
+    :`تسوية ${adj.length} صنف على المخزون + ${editing?'تحديث القائمة المحفوظة':'حفظ قائمة الجرد كمستند «مسوّى»'}.`))return;
   if(window.__busy)return;window.__busy=true;
   try{
     showLoading(true);
-    for(const a of adj){await adjustStockDoc(doc.loc,{product_code:a.product_code,product_name:a.product_name},a.diff_qty,'adjustment',null,null,`جرد فعلي - ${appUser?.identifier||''}`);}
-    await postStockCountDoc(doc,'settled');
-    await logAction('stock_count',null,null,`جرد وتسوية ${adj.length} صنف — ${locations.find(l=>l.id===doc.loc)?.name||''} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
-    stockCountData={};
+    const isResettle=!!(editing&&editing.status==='settled');
+    for(const a of adj){await adjustStockDoc(doc.loc,{product_code:a.product_code,product_name:a.product_name},a.delta,'adjustment',null,null,`${isResettle?'جرد فعلي (تسوية معدّلة)':'جرد فعلي'} - ${appUser?.identifier||''}`);}
+    if(isResettle){
+      /* المستند بعد التعديل: كمية المنظومة الأصلية محفوظة، والمعدود الجديد والفرق الإجمالي الحالي */
+      const rows=doc.rows.map(r=>{
+        const o=editing.orig.get(String(r.product_code));
+        const sys=Number(o?.system_qty??r.system_qty), cnt=Number(r.counted_qty), d=cnt-sys, cost=Number(r.unit_cost||0);
+        return {...r,system_qty:sys,diff_qty:d,diff_value:d*cost};
+      });
+      doc.rows=rows;
+      doc.header.counted_items=rows.length;
+      doc.header.diff_qty=rows.reduce((a,x)=>a+x.diff_qty,0);
+      doc.header.diff_value=rows.reduce((a,x)=>a+x.diff_value,0);
+      doc.header.notes=`تسوية معدّلة بواسطة ${appUser?.identifier||'—'} بتاريخ ${new Date().toISOString().slice(0,16).replace('T',' ')}`;
+    }
+    if(editing){ await updateStockCountRecord(editing.id,doc,'settled'); }
+    else{ await postStockCountDoc(doc,'settled'); }
+    await logAction(isResettle?'stock_count_resettle':'stock_count',null,null,`${isResettle?'تعديل جرد مسوّى وتطبيق فرق':'جرد وتسوية'} ${adj.length} صنف — ${locName} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
+    __scEditing=null; stockCountData={};
     await refreshSalesDomain();
     renderStockCount();
-    toast(`تم تسوية ${adj.length} صنف وحفظ قائمة الجرد`,'success');
+    toast(isResettle?`تم تطبيق فرق التعديل (${adj.length} صنف) وتحديث القائمة`:`تم تسوية ${adj.length} صنف وحفظ قائمة الجرد`,'success');
   }catch(e){console.error(e);toast('تعذّر حفظ الجرد: '+friendlyError(e),'error')}finally{showLoading(false);window.__busy=false}
 }
 /* ─── قوائم الجرد السابقة: عرض وتفاصيل وحذف (الحذف للمدير) ─── */
@@ -8172,7 +8274,7 @@ function renderStockCountLists(){
     const l=locations.find(x=>x.id===r.location_id);
     const st=r.status==='settled'?'<span class="badge green">مسوّى</span>':'<span class="badge yellow">مسودة</span>';
     const safe=String(r.id).replace(/'/g,"\\\\'");
-    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${adm?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف قائمة الجرد (لا يغيّر المخزون ولا الحركات) — للمدير فقط" onclick="deleteStockCount('${safe}')">🗑</button>`:''}</td></tr>`;
+    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="فتح القائمة في المحرر لتعديل الكميات وإعادة الحفظ/التسوية" onclick="editStockCount('${safe}')">✎ تعديل</button> <button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${adm?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف قائمة الجرد (لا يغيّر المخزون ولا الحركات) — للمدير فقط" onclick="deleteStockCount('${safe}')">🗑</button>`:''}</td></tr>`;
   }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من تبويب «جرد جديد».</td></tr>';
 }
 async function deleteStockCount(id){
@@ -8183,14 +8285,15 @@ async function deleteStockCount(id){
     showLoading(true);
     if(String(id).startsWith('loc_')){localStorage.setItem('posStockCountLocal',JSON.stringify(stockCountLocalList().filter(x=>x.id!==id)));}
     else{await api('pos_stock_counts',{method:'DELETE',qs:`?id=eq.${id}`}); stockCounts=stockCounts.filter(x=>x.id!==id);}
-    renderStockCountLists();
+    if(__scEditing && String(__scEditing.id)===String(id)){ __scEditing=null; }
+    renderStockCountLists(); renderScEditBanner();
     toast('تم حذف قائمة الجرد','success');
   }catch(e){console.error(e);toast('تعذّر حذف القائمة: '+friendlyError(e),'error')}finally{showLoading(false);window.__busy=false}
 }
 function ensureStockCountViewModal(){
   if(q('stockCountViewModal'))return;
   const d=document.createElement('div'); d.className='modal'; d.id='stockCountViewModal';
-  d.innerHTML=`<div class="modal-card" style="width:min(1050px,96vw)"><div class="modal-head"><h3 id="scvListTitle">قائمة جرد</h3><button class="btn secondary" type="button" onclick="q('stockCountViewModal').classList.remove('show')">إغلاق</button></div><div id="scvListMeta" class="mini" style="margin-bottom:8px"></div><div class="table-scroll" style="max-height:62vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>كمية المنظومة</th><th>المعدود</th><th>الفرق</th><th>التكلفة</th><th>قيمة الفرق</th></tr></thead><tbody id="scvListBody"></tbody></table></div></div>`;
+  d.innerHTML=`<div class="modal-card" style="width:min(1050px,96vw)"><div class="modal-head"><h3 id="scvListTitle">قائمة جرد</h3><div class="row" style="gap:6px"><button class="btn secondary" type="button" id="scvEditBtn">✎ تعديل</button><button class="btn secondary" type="button" onclick="q('stockCountViewModal').classList.remove('show')">إغلاق</button></div></div><div id="scvListMeta" class="mini" style="margin-bottom:8px"></div><div class="table-scroll" style="max-height:62vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>كمية المنظومة</th><th>المعدود</th><th>الفرق</th><th>التكلفة</th><th>قيمة الفرق</th></tr></thead><tbody id="scvListBody"></tbody></table></div></div>`;
   document.body.appendChild(d);
 }
 async function viewStockCount(id){
@@ -8203,6 +8306,7 @@ async function viewStockCount(id){
   }
   if(!items||!items.length){toast('لا أسطر مسجلة لهذه القائمة','info');return;}
   ensureStockCountViewModal();
+  const eb=q('scvEditBtn'); if(eb) eb.onclick=()=>{ q('stockCountViewModal').classList.remove('show'); editStockCount(String(id)); };
   const l=locations.find(x=>x.id===r.location_id);
   q('scvListTitle').textContent='قائمة جرد'+(r.count_no?(' '+r.count_no):'')+' — '+String(r.count_date||'').slice(0,10)+(l?(' · '+l.name):'');
   q('scvListMeta').textContent=`المجرِّد: ${r.user_identifier||'—'} · ${money(r.counted_items||0)}/${money(r.items_count||0)} صنف · صافي كمية الفرق: ${money(r.diff_qty||0)} · صافي قيمة الفرق: ${money(r.diff_value||0)} ${APP_CONFIG.currency} · الحالة: ${r.status==='settled'?'مسوّى على المخزون':'مسودة لم تُسوَّ'}${r._local?' · (محفوظة محلياً مؤقتاً)':''}`;
