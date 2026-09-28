@@ -1690,7 +1690,7 @@ function selectProductCategory(cat){
 
 const PRODUCT_COLS=[
   {id:'code',label:'الكود'},{id:'name',label:'الصنف'},{id:'brand',label:'الماركة/الموديل'},
-  {id:'color',label:'اللون'},{id:'barcode',label:'الباركود'},{id:'supplier',label:'المورد'},
+  {id:'color',label:'اللون'},{id:'barcode',label:'الباركود'},{id:'supplier',label:'المورد'},{id:'notes',label:'ملاحظات'},
   {id:'category',label:'التصنيف'},{id:'cost',label:'التكلفة'},{id:'purchase',label:'شراء'},{id:'retail',label:'بيع'},
   {id:'margin',label:'الهامش'},{id:'margin_pct',label:'نسبة الهامش'},
   {id:'s11',label:'11 يونيو'},{id:'ssr',label:'السراج'},{id:'sjz',label:'جنزور'},{id:'total',label:'الإجمالي'}
@@ -1730,6 +1730,7 @@ function applyProductColVisibility(shown, smartParsed=null){
       color:`<td>${colorChip(p.color)}</td>`,
       barcode:`<td class="ltr"><span class="code">${esc(p.barcode)}</span></td>`,
       supplier:`<td>${esc(p.supplier_name)}</td>`,
+      notes:`<td class="mini" style="max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.description||'')}">${esc(p.description||'')}</td>`,
       category:`<td>${esc(p.category)}</td>`,
       cost:`<td class="amount" title="${esc(costTip(p.code))}">${money(productCost(p.code))}</td>`,
       purchase:`<td class="amount">${money(p.purchase_price)}</td>`,
@@ -2068,7 +2069,7 @@ function renderProducts(){
 
 function selectProductRow(code){selectedProductCode=code; renderProducts()}
 /* ═══ (المهمة ٢) نافذة المنتج + شريط الإجراءات + فلاتر ═══ */
-function openProductModal(){q("productModal").classList.add("show"); setTimeout(()=>q("productCode")?.focus(),60)}
+function openProductModal(){q("productModal").classList.add("show"); ['newBrand','newModel','newColor'].forEach(id=>{const e=q(id); if(e) e.value='';}); setTimeout(()=>q("productCode")?.focus(),60)}
 function closeProductModal(){q("productModal").classList.remove("show")}
 function clearProductFilters(){["productCategoryFilter","productBrandFilter","productColorFilter","productSupplierFilter"].forEach(id=>{const el=q(id); if(el){el.value=""; delete el.dataset.ready;}}); if(q("productSearch"))q("productSearch").value=""; renderProducts()}
 function clearStockFilters(){["stockLocationFilter","stockCategoryFilter","stockBrandFilter","stockSupplierFilter","stockStatusFilter"].forEach(id=>{const el=q(id); if(el)el.value="";}); if(q("stockSearch"))q("stockSearch").value=""; renderStock()}
@@ -2262,14 +2263,14 @@ function renderSaleProductPicker(){
   const rows=products.filter(p=>{
     return (!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier)&&smartMatch(term, productSearchFields(p));
   });
-  const pickerCols=['code','name','brand','color','supplier_name','available','retail_price','margin_value','margin_pct'];
+  const pickerCols=['code','name','brand','color','supplier_name','notes','available','retail_price','margin_value','margin_pct'];
   const key=pickerCols[pickerSortIndex]||'available';
   const loc=(productPickerTarget==='noInvoiceReturn'?(appUser?.branch_id||''):(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:(productPickerTarget==='transfer'?q('transferFrom')?.value:(canSelectSaleBranch()?q('saleLocation')?.value:(appUser?.branch_id||q('saleLocation')?.value))))))||'';
   const maps=pickerPerfMaps(loc);
   rows.sort((a,b)=>{const av=key==='available'?(maps.availableMap.get(String(a.code))||0):(key==='margin_value'?(maps.mvMap.get(String(a.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(a.code))||0):(a[key]??''))); const bv=key==='available'?(maps.availableMap.get(String(b.code))||0):(key==='margin_value'?(maps.mvMap.get(String(b.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(b.code))||0):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,250);
   if(!shown.length) pickerSelectedIndex=-1; else if(pickerSelectedIndex>=shown.length) pickerSelectedIndex=shown.length-1;
-q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 var(--br-sr)"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><span class="code">${esc(p.code||'')}</span><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td><span class="name">${esc(p.name)}</span>${isComp?' <span class="chip br-sr">مركّب</span>':''}</td><td>${brandChip(p.brand)}${modelChip(p.model)}</td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="amount"><b>${money(available)}</b></td><td class="amount">${money(p.retail_price)}</td><td class="amount">${money(p._mv)}</td><td class="amount">${money(p._mp)}%</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="11">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
+q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 var(--br-sr)"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><span class="code">${esc(p.code||'')}</span><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td><span class="name">${esc(p.name)}</span>${isComp?' <span class="chip br-sr">مركّب</span>':''}</td><td>${brandChip(p.brand)}${modelChip(p.model)}</td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="mini" style="max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.description||'')}">${esc(p.description||'')}</td><td class="amount"><b>${money(available)}</b></td><td class="amount">${money(p.retail_price)}</td><td class="amount">${money(p._mv)}</td><td class="amount">${money(p._mp)}%</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">إضافة</button></td></tr>`}).join('') || '<tr><td colspan="12">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
   q('salePickerInfo').textContent=`عرض ${shown.length} من ${rows.length} منتج` + (rows.length>250?' - استخدم البحث أو الفلاتر لتضييق النتائج':'');
   setupTableSorting();
 }
@@ -2310,6 +2311,7 @@ function editProduct(code){
   if(hasCompositeComponents(code)){openCompositeEditModal(code);return;} /* المنتج المركّب يُعدَّل من نافذته الخاصة دائماً */
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   productFormMode='edit'; editingProductCode=p.code;
+  ['newBrand','newModel','newColor'].forEach(id=>{const e=q(id); if(e) e.value='';});
   document.querySelector('[data-tab="products"]').click();
   q('productCode').value=p.code||''; q('productName').value=p.name||''; q('productCategory').value=p.category||'';
   q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productColor').value=p.color||''; q('productBarcode').value=p.barcode||''; q('productReorderPoint').value=Number(p.reorder_point||0); q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0); q('productWholesalePrice').value=Number(p.wholesale_price||0);
@@ -6274,14 +6276,18 @@ function renderProductOptionSettings(){
 
 /* ═══ إضافات فورية من نافذة المنتج: ماركة/موديل/لون جديد ➕ أو مورد جديد — بلا مغادرة النفذة ═══ */
 function quickAddProductOption(type){
+  /* (1930) صندوقان منفصلان: مربع الاختيار (datalist) لموجود، ومربع «جديد» لإضافة قيمة غير موجودة.
+     الزر يقرأ من مربع الجديد؛ إن كان فارغاً يسأل في نافذة ثم يعتمد القيمة في المربعين. */
   const fid={brand:'productBrand',model:'productModel',color:'productColor'}[type];
+  const nid={brand:'newBrand',model:'newModel',color:'newColor'}[type];
   const label=type==='brand'?'الماركة':type==='model'?'الموديل':'اللون';
   const el=q(fid);
-  let v=(el?.value||'').trim();
+  let v=(q(nid)?.value||'').trim();
   if(!v) v=(prompt('اسم '+label+' الجديدة:')||'').trim();
-  if(!v){toast('اكتب قيمة '+label+' أولاً','warn');return;}
+  if(!v){toast('اكتب قيمة '+label+' في مربع «'+label+' جديد/جديدة» أولاً','warn');return;}
   addProductOption(type,v);
   if(el) el.value=v;
+  const ne=q(nid); if(ne) ne.value='';
   toast('اعتُمدت «'+v+'» في قائمة '+label+' — وستقترح في كل النوافذ','success');
 }
 async function quickAddSupplierForProduct(){
