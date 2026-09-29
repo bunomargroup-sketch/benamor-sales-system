@@ -8,7 +8,7 @@
        كانت تُجلب من fonts.googleapis.com و cdn.jsdelivr.net، والعامل الخدمي
        يتجاهل كل ما هو خارج النطاق ⇒ خطّ نظام ومربّعات فارغة مكان الأيقونات. -->
   <link rel="preload" href="assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/app-fonts.css?v=20260929-1968">
+  <link rel="stylesheet" href="assets/app-fonts.css?v=20260929-1969">
   
   
   
@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260929-1968">
+<link rel="stylesheet" href="app.css?v=20260929-1969">
 </head>
 <body class="auth-locked">
   <header>
@@ -197,7 +197,7 @@
           <div class="product-workbench">
             <aside class="product-sidebar">
               <h3>التصنيفات</h3>
-              <div class="category-node active" onclick="selectProductCategory('')"><span>كل الأصناف</span><span class="count" id="allProductsCountSide">0</span></div>
+              <div class="category-node active" id="allProductsCatNode" onclick="selectProductCategory('')"><span>كل الأصناف</span><span class="count" id="allProductsCountSide">0</span></div>
               <div id="productCategoryTree"></div>
             </aside>
             <div class="product-table-wrap" oncontextmenu="if(event.target.closest('thead')){event.preventDefault();showProductColMenu(event)}">
@@ -1390,6 +1390,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260929-1968"></script>
+<script src="app.js?v=20260929-1969"></script>
 </body>
 </html>

@@ -1091,3 +1091,15 @@ nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
 .ctx-menu{z-index:1300}
 .calc-panel{z-index:1210}
 #salePaymentScreen.payment-open{z-index:1205}
+/* ═══ (1969) شجرة التصنيفات: عقدة قابلة للتوسيع، النقر على الاسم = فلترة الفرع كاملاً ═══ */
+.cat-node{font-size:13px}
+.cat-row{display:flex;align-items:center;gap:5px;padding:5px 7px;margin:1px 0;border-radius:8px;cursor:pointer;color:var(--text)}
+.cat-node:hover>.cat-row{background:var(--accent-soft)}
+.cat-node.active>.cat-row{background:var(--accent-soft);color:var(--blue);font-weight:700}
+.cat-caret{flex:none;width:14px;font-size:10px;color:#8892a6;cursor:pointer;user-select:none}
+.cat-caret.open{color:var(--blue)}
+.cat-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-row .count{flex:none;font-family:ui-monospace,monospace;color:var(--muted);font-size:12px}
+.cat-node.active .count{color:var(--blue)}
+html[data-theme="dark"] .cat-caret{color:#94a3b8}
+html[data-theme="dark"] .cat-row .count{color:#cbd5e1}

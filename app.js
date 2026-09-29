@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1968';
+const APP_BUILD='b20260929-1969';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1723,15 +1723,108 @@ function fillPurchaseRow(input){
 }
 
 
-let _productCatCounts=null, _productCatCountKey=-1;
-function renderProductCategoryTree(activeCat=''){
-  if(!q('productCategoryTree')) return;
-  if(_productCatCountKey!==products.length){ _productCatCountKey=products.length; const counts={}; for(const p of products){const c=p.category||'بدون تصنيف'; counts[c]=(counts[c]||0)+1;} _productCatCounts=counts; }
-  q('allProductsCountSide').textContent=products.length;
-  q('productCategoryTree').innerHTML=Object.entries(_productCatCounts||{}).sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0],'ar')).map(([cat,count])=>`<div class="category-node ${activeCat===cat?'active':''}" onclick="selectProductCategory('${String(cat).replace(/'/g,"\'")}')"><span>${esc(cat)}</span><span class="count">${count}</span></div>`).join('');
+/* ═══ (1969) شجرة التصنيفات: فلترة على أي مستوى (فرع كامل) بدل القائمة المسطّحة ═══
+   بعد 0092 يحتوي pos_products.category على المسار الكامل "الجذر › الفرع › … › الورقة".
+   الشجرة تُبنى من المسارات (وتعمل أيضًا مع أسماء قديمة قصيرة فتظهر كجذور)، والنقر على
+   أي عقدة يفلتر كل ما تحتها (مطابقة البادئة "العقدة › ") بدل التطابق التام، وقائمة
+   التصنيف في شريط الفلاتر أصبحت تعرض كل الفروع على كل المستويات. توسيع العقد محفوظ. */
+const CAT_SEP=' › ';
+let _productCatCounts=null;
+let _catTreeKey=null,_catTreeData=null,_catOpenVer=0;
+let _catTreeOpenSet=null;
+function loadCatTreeOpen(){
+  if(_catTreeOpenSet) return _catTreeOpenSet;
+  let s=null; try{ s=new Set(JSON.parse(localStorage.getItem('posCatTreeOpen')||'[]')); }catch(e){ s=new Set(); }
+  if(!(s instanceof Set)) s=new Set();
+  _catTreeOpenSet=s;
+  return s;
+}
+function persistCatTreeOpen(){ try{ const a=[...loadCatTreeOpen()]; if(a.length>800) a.length=800; localStorage.setItem('posCatTreeOpen',JSON.stringify(a)); }catch(e){} }
+/* بصمة قيم التصنيف: تغيّر أي مسار (أو عدده) يغيّر البصمة ⇒ إعادة بناء الشجرة */
+function _catFingerprint(){
+  let sumLen=0,dups=0; const seen=new Set();
+  for(const p of products){ const c=p.category; if(!c) continue; if(seen.has(c)) dups++; else { seen.add(c); sumLen+=c.length; } }
+  return seen.size+':'+sumLen+':'+dups+':'+products.length;
+}
+/* [[CAT-TREE-LOGIC-START]] */
+function buildCategoryTreeData(counts){
+  const nodes=new Map();
+  const ensure=path=>{
+    if(nodes.has(path)) return nodes.get(path);
+    const i=path.lastIndexOf(CAT_SEP);
+    const n={name:i<0?path:path.slice(i+3),children:new Set()};
+    nodes.set(path,n);
+    if(i>=0) ensure(path.slice(0,i)).children.add(path);
+    return n;
+  };
+  for(const path of Object.keys(counts)) ensure(path);
+  const branch=new Map();
+  const calc=path=>{ let s=counts[path]||0; for(const ch of nodes.get(path).children) s+=calc(ch); branch.set(path,s); return s; };
+  const roots=[...nodes.keys()].filter(p=>p.lastIndexOf(CAT_SEP)<0).sort((a,b)=>a.localeCompare(b,'ar'));
+  for(const r of roots) calc(r);
+  return {nodes,branch,roots};
+}
+function categoryMatches(pCat,sel){ if(!sel) return true; const c=String(pCat==null?'':pCat); return c===sel || c.startsWith(sel+CAT_SEP); }
+function catAncestors(path){ const out=[]; let p=path; let i=p.lastIndexOf(CAT_SEP); while(i>=0){ p=p.slice(0,i); out.push(p); i=p.lastIndexOf(CAT_SEP); } return out; }
+function catAllPaths(td){ const out=[]; const walk=p=>{ out.push(p); const kids=[...td.nodes.get(p).children].sort((a,b)=>a.localeCompare(b,'ar')); for(const k of kids) walk(k); }; for(const r of td.roots) walk(r); return out; }
+/* [[CAT-TREE-LOGIC-END]] */
+function ensureCatTreeData(){
+  if(_catTreeData && _catTreeKey===_catFingerprint()) return _catTreeData;
+  const counts={}; for(const p of products){ const c=p.category; if(c) counts[c]=(counts[c]||0)+1; }
+  _catTreeData=buildCategoryTreeData(counts);
+  _productCatCounts=counts;
+  _catTreeKey=_catFingerprint();
+  return _catTreeData;
+}
+function catNodeHtml(path,td){
+  const open=loadCatTreeOpen().has(path);
+  const kids=[...td.nodes.get(path).children].sort((a,b)=>a.localeCompare(b,'ar'));
+  const caret=kids.length?(open?'<span class="cat-caret open">▾</span>':'<span class="cat-caret">▸</span>'):'<span class="cat-caret"></span>';
+  const inner=open?kids.map(k=>catNodeHtml(k,td)).join(''):'';
+  const depth=catAncestors(path).length;
+  return `<div class="cat-node" data-path="${esc(path)}"><div class="cat-row" style="padding-left:${8+depth*14}px">${caret}<span class="cat-name" title="${esc(path)}">${esc(td.nodes.get(path).name)}</span><span class="count">${td.branch.get(path)}</span></div>${inner}</div>`;
+}
+function renderProductCategoryTree(selCat=''){
+  const box=q('productCategoryTree'); if(!box) return;
+  const td=ensureCatTreeData();
+  const allN=q('allProductsCatNode');
+  if(allN) allN.classList.toggle('active',!selCat);
+  if(q('allProductsCountSide')) q('allProductsCountSide').textContent=products.length;
+  if(!box._catListener){
+    box._catListener=1;
+    box.addEventListener('click',e=>{
+      const node=e.target.closest('.cat-node'); if(!node) return;
+      if(e.target.closest('.cat-caret')){ toggleCatTreeNode(node.dataset.path); return; }
+      selectProductCategory(node.dataset.path);
+    });
+  }
+  if(selCat){
+    const open=loadCatTreeOpen(); let changed=false;
+    const addAll=ps=>{ for(const a of ps) if(!open.has(a)){ open.add(a); changed=true; } };
+    addAll(catAncestors(selCat)); addAll([selCat]);
+    if(changed){ persistCatTreeOpen(); _catOpenVer++; }
+  }
+  if(box._catKey!==_catTreeKey || box._catOpenVer!==_catOpenVer){
+    box.innerHTML=td.roots.map(p=>catNodeHtml(p,td)).join('');
+    box._catKey=_catTreeKey; box._catOpenVer=_catOpenVer;
+  }else{
+    box.querySelectorAll('.cat-node.active').forEach(n=>n.classList.remove('active'));
+    if(selCat){ for(const n of box.querySelectorAll('.cat-node')) if(n.dataset.path===selCat){ n.classList.add('active'); break; } }
+  }
+}
+function toggleCatTreeNode(path){
+  const open=loadCatTreeOpen();
+  if(open.has(path)) open.delete(path); else open.add(path);
+  persistCatTreeOpen(); _catOpenVer++;
+  renderProductCategoryTree(q('productCategoryFilter')?.value||'');
 }
 function selectProductCategory(cat){
-  q('productCategoryFilter').value=cat||'';
+  const sel=q('productCategoryFilter');
+  if(cat){
+    const open=loadCatTreeOpen();
+    if(!open.has(cat)){ open.add(cat); persistCatTreeOpen(); _catOpenVer++; }
+  }
+  if(sel){ if(cat && ![...sel.options].some(o=>o.value===cat)) cat=''; sel.value=cat||''; }
   renderProducts();
 }
 
@@ -2075,8 +2168,16 @@ function buildProductSearchIndex(){ for(const p of products){ if(!p) continue; i
 let _renderProductsTimer=null;
 function debounceRenderProducts(){ clearTimeout(_renderProductsTimer); _renderProductsTimer=setTimeout(renderProducts,180); }
 function renderProducts(){
-  const filterDefs=[['productCategoryFilter','category','كل التصنيفات'],['productBrandFilter','brand','كل الماركات'],['productColorFilter','color','كل الألوان'],['productSupplierFilter','supplier_name','كل الموردين']];
+  const filterDefs=[['productBrandFilter','brand','كل الماركات'],['productColorFilter','color','كل الألوان'],['productSupplierFilter','supplier_name','كل الموردين']];
   filterDefs.forEach(([id,key,label])=>{const el=q(id); if(el && !el.dataset.ready){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''); el.dataset.ready='1';}});
+  /* (1969) قائمة التصنيف تعرض كل فروع الشجرة (أي مستوى) — تُعاد بنائها عند تغيّر البيانات */
+  { const el=q('productCategoryFilter'); const td=ensureCatTreeData();
+    if(el&&td&&(!el.dataset.ready||el.dataset.treeKey!==String(_catTreeKey))){
+      el.innerHTML='<option value="">كل التصنيفات</option>'+catAllPaths(td).map(pth=>`<option value="${esc(pth)}">${esc(pth)}</option>`).join('');
+      el.dataset.ready='1'; el.dataset.treeKey=String(_catTreeKey);
+    }
+    if(el&&el.value && ![...el.options].some(o=>o.value===el.value)) el.value='';
+  }
   const term=(q('productSearch')?.value||'').trim().toLowerCase();
   const cat=q('productCategoryFilter')?.value||'', brand=q('productBrandFilter')?.value||'', color=q('productColorFilter')?.value||'', supplier=q('productSupplierFilter')?.value||'';
   renderProductCategoryTree(cat);
@@ -2090,15 +2191,15 @@ function renderProducts(){
     }else if(smartParsed&&smartParsed.isExactCode){
       rows=smartFilterProducts(smartParsed);
     }else{
-      rows=products.filter(p=>(!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier));
+      rows=products.filter(p=>(!cat||categoryMatches(p.category,cat))&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier));
     }
     // Apply dropdown filters on top
-    if(cat)rows=rows.filter(p=>p.category===cat);
+    if(cat)rows=rows.filter(p=>categoryMatches(p.category,cat));
     if(brand)rows=rows.filter(p=>p.brand===brand);
     if(color)rows=rows.filter(p=>p.color===color);
     if(supplier)rows=rows.filter(p=>p.supplier_name===supplier);
   }else{
-    rows=products.filter(p=>(!cat||p.category===cat)&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier));
+    rows=products.filter(p=>(!cat||categoryMatches(p.category,cat))&&(!brand||p.brand===brand)&&(!color||p.color===color)&&(!supplier||p.supplier_name===supplier));
   }
   /* (1959) الأسطر الإضافية: تضييق إضافي — كل سطر يجب أن يتطابق */
   const extraLines=extraSearchTerms('productExtraSearch');
