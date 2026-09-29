@@ -422,6 +422,9 @@
     /* Cashier mode: keep line items visible and hide internal margin metrics */
     #sales .pos-items-card th:nth-child(2),#sales .pos-items-card td:nth-child(2){min-width:360px;width:42%}
     #saleItemsBody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 45%,transparent);outline-offset:-2px}
+/* (1967) تحديد فاتورة شراء من القائمة — الإجراء ينفَّذ من شريط الأدوات فوق الجدول */
+#purchasesBody tr{cursor:pointer}
+#purchasesBody tr.selected-row{background:var(--accent-soft)!important;outline:2px solid color-mix(in srgb,var(--blue) 45%,transparent);outline-offset:-2px}
     /* Payment drawer: right-side action drawer, never full-screen overlay */
     #salePaymentScreen.pos-bottom-bar.payment-open{display:grid;position:fixed;inset:auto 16px 78px auto;width:min(460px,34vw);max-height:calc(100vh - 110px);overflow:auto;z-index:110;grid-template-columns:1fr;box-shadow:0 22px 70px rgba(2,6,23,.28);align-content:start}
     #salePaymentScreen.payment-open .payment-title,#salePaymentScreen.payment-open .pos-payment-note,#salePaymentScreen.payment-open .pos-mini-keypad{grid-column:1/-1}

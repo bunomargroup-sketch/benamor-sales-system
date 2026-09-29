@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1966';
+const APP_BUILD='b20260929-1967';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2969,11 +2969,91 @@ function renderPayments(){
   q('paymentsBody').innerHTML = payments.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);return `<tr><td>${esc(p.payment_date)}</td><td>${esc(s?.name||'')}</td><td><b>${money(p.amount)}</b></td><td>${esc(typeLabel(p.payment_method))}</td><td>${esc(p.notes||'')}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد دفعات بعد.</td></tr>';
 }
 
+let selectedPurchaseId=null;
 function renderPurchases(){
   q('purchasesBody').innerHTML = purchases.map(p=>{
     const s=suppliers.find(x=>x.id===p.supplier_id); const l=locations.find(x=>x.id===p.location_id);
-    return `<tr><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td><td><button class="btn secondary" onclick="openPurchaseForEdit('${p.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="openPurchaseReturn('${p.id}')" title="إرجاع بضاعة لهذه الفاتورة إلى المورد — يُخفّض المخزون ودين المورد">↩ إرجاع</button></td></tr>`;
-  }).join('') || '<tr><td colspan="8">لا توجد فواتير شراء بعد.</td></tr>';
+    return `<tr data-id="${p.id}" class="${p.id===selectedPurchaseId?'selected-row':''}" onclick="selectPurchaseRow(this)"><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td></tr>`;
+  }).join('') || '<tr><td colspan="7">لا توجد فواتير شراء بعد.</td></tr>';
+  updatePurchaseSelHint();
+}
+/* (1967) إجراءات فواتير الشراء ثابتة فوق الجدول — نقرة على السطر تحدد الفاتورة */
+function selectPurchaseRow(tr){
+  const id=tr.dataset.id; if(!id) return;
+  selectedPurchaseId=id;
+  [...q('purchasesBody').querySelectorAll('tr')].forEach(r=>r.classList.toggle('selected-row', r.dataset.id===id));
+  updatePurchaseSelHint();
+}
+function updatePurchaseSelHint(){
+  const h=q('purchaseSelHint'); if(!h) return;
+  const p=purchases.find(x=>x.id===selectedPurchaseId);
+  h.textContent=p?`المحددة: ${p.purchase_no||String(p.id).slice(0,8)} — ${money(p.total)} ${APP_CONFIG.currency}`:'حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها';
+}
+function purchaseListAction(kind){
+  const id=selectedPurchaseId;
+  if(!id){toast('حدّد فاتورة شراء من القائمة أولاً (انقر السطر)','warn');return;}
+  if(kind==='view') viewPurchaseDetails(id);
+  else if(kind==='edit') openPurchaseForEdit(id);
+  else if(kind==='return') openPurchaseReturn(id);
+  else if(kind==='delete') deletePurchase(id);
+}
+async function deletePurchase(id){
+  const p=purchases.find(x=>x.id===id); if(!p)return;
+  if(!confirm(`حذف نهائي لفاتورة الشراء: ${p.purchase_no||id.slice(0,8)} — ${money(p.total)} ${APP_CONFIG.currency}؟
+سيُعكس المخزون ودين المورد — لا رجوع.`))return;
+  try{
+    showLoading(true);
+    await rpc('pos_delete_purchase',{p_id:id,p_user_identifier:appUser?.identifier||''});
+    toast('حُذفت الفاتورة وعُكست آثارها','success');
+    selectedPurchaseId=null;
+    await refreshParts(['salesDomain']);
+    renderPurchases();
+  }catch(e){console.error(e);
+    const m=String(e&&e.message||e||'');
+    if(/Could not find the function|PGRST202/i.test(m)) toast('حذف فواتير الشراء غير مُفعَّل في قاعدة البيانات بعد — الدالة (0091) تُنشأ عند الطلب','warn');
+    else toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
+}
+/* (1967) مشاهدة فاتورة شراء — قراءة فقط */
+function ensurePurchaseViewDetailsModal(){
+  if(q('pvdModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='pvdModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(900px,96vw)">
+    <div class="modal-head"><div><h2 style="margin:0">📄 فاتورة شراء — <span class="ltr" id="pvdTitle">—</span></h2><div class="mini" id="pvdMeta"></div></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <button class="btn secondary" type="button" onclick="pvdCloseAndEdit()" title="فتح الفاتورة المحددة للتعديل">✏️ فتح / تعديل</button>
+        <button class="btn secondary" type="button" onclick="pvdCloseAndReturn()" title="إرجاع بضاعة لهذه الفاتورة إلى المورد">↩ إرجاع</button>
+        <button class="btn secondary" type="button" onclick="q('pvdModal').classList.remove('show')">إغلاق</button>
+      </div></div>
+    <div id="pvdBody" style="max-height:72vh;overflow:auto"></div>
+  </div>`;
+  document.body.appendChild(d);
+}
+let pvdCtxId=null;
+function pvdCloseAndEdit(){ q('pvdModal').classList.remove('show'); if(pvdCtxId) openPurchaseForEdit(pvdCtxId); }
+function pvdCloseAndReturn(){ q('pvdModal').classList.remove('show'); if(pvdCtxId) openPurchaseReturn(pvdCtxId); }
+async function viewPurchaseDetails(id){
+  ensurePurchaseViewDetailsModal();
+  try{
+    showLoading(true);
+    const localP=purchases.find(x=>x.id===id);
+    const offline=!navigator.onLine || !localP;
+    const p=localP || (await api('pos_purchases',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
+    if(!p){toast('لم يتم العثور على الفاتورة','warn');return;}
+    let items=(purchaseItems||[]).filter(x=>String(x.purchase_id)===String(id));
+    if(!items.length) items=await api('pos_purchase_items',{qs:`?select=*&purchase_id=eq.${id}&order=created_at.asc`}).catch(()=>items);
+    pvdCtxId=id;
+    const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
+    q('pvdTitle').textContent=p.purchase_no||String(id).slice(0,8);
+    q('pvdMeta').textContent=`${p.purchase_date||''} · المورد: ${s?.name||'—'} · المكان: ${l?.name||'—'} · ${typeLabel(p.status)}`;
+    const info=[['رقم فاتورة المورد',p.invoice_no],['الإجمالي',money(p.total)+' '+APP_CONFIG.currency],['المدفوع للمورد',p.paid_amount!=null?money(p.paid_amount)+' '+APP_CONFIG.currency:null],['طريقة الدفع',p.payment_method?typeLabel(p.payment_method):null],['ملاحظات',p.notes]].filter(x=>x[1]);
+    q('pvdBody').innerHTML=`<table style="width:100%"><thead><tr>${info.map(x=>`<th>${x[0]}</th>`).join('')}</tr></thead><tbody><tr>${info.map(x=>`<td>${esc(String(x[1]))}</td>`).join('')}</tr></tbody></table>
+      <table style="width:100%;margin-top:12px"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody>${
+        (items||[]).map(it=>`<tr><td class="ltr">${esc(it.product_code||'')}</td><td>${esc(it.product_name||'')}</td><td>${money(it.qty)}</td><td>${money(it.unit_cost)}</td><td><b>${money(it.line_total)}</b></td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف.</td></tr>'
+      }</tbody></table>`;
+    q('pvdModal').classList.add('show'); modalToTop(q('pvdModal'));
+  }catch(e){toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
 }
 function fillStockFilters(){
   const fill=(id,key,label)=>{
@@ -5586,7 +5666,7 @@ function updatePurchaseCostColor(tr){
   inp.classList.toggle('cost-up', oldCost>0 && val>oldCost);
   inp.classList.toggle('cost-down', oldCost>0 && val<oldCost);
   const note=tr.querySelector('.pi-cost-note');
-  if(note) note.textContent=oldCost>0 ? (val>oldCost?`أعلى من القديم ${money(oldCost)}`:(val<oldCost?`أقل من القديم ${money(oldCost)}`:`نفس السعر القديم ${money(oldCost)}`)) : '';
+  if(note) note.textContent=oldCost>0 ? money(oldCost) : '';  /* (1967) السعر القديم رقمًا فقط */
 }
 function getPurchaseItems(){
   return [...q('purchaseItemsBody').querySelectorAll('tr')].map(tr=>{
@@ -8211,8 +8291,12 @@ const CTX_BUILDERS={
     }
     return items;
   },
-  purchasesBody(tr){const id=ctxArg(tr.querySelector('button[onclick^="openPurchaseForEdit"]'),'openPurchaseForEdit'); if(!id) return [];
-    return [{head:'فاتورة شراء'},{label:'فتح / تعديل',icon:'ti-edit',action:()=>openPurchaseForEdit(id)}];
+  purchasesBody(tr){const id=tr.dataset.id; if(!id) return [];
+    return [{head:'فاتورة شراء — '+(tr.querySelector('td')?.innerText.trim()||'')},
+      {label:'مشاهدة',icon:'ti-eye',action:()=>viewPurchaseDetails(id)},
+      {label:'فتح / تعديل',icon:'ti-edit',action:()=>openPurchaseForEdit(id)},
+      {label:'إرجاع للمورد',icon:'ti-arrow-back-up',action:()=>openPurchaseReturn(id)},
+      {label:'حذف',icon:'ti-trash',action:()=>deletePurchase(id)}];
   },
   transfersBody(tr){const id=ctxArg(tr.querySelector('button[onclick^="openTransferForEdit"]'),'openTransferForEdit'); if(!id) return [];
     return [{head:'تحويل مخزون'},{label:'فتح / تعديل',icon:'ti-edit',action:()=>openTransferForEdit(id)}];

@@ -8,7 +8,7 @@
        كانت تُجلب من fonts.googleapis.com و cdn.jsdelivr.net، والعامل الخدمي
        يتجاهل كل ما هو خارج النطاق ⇒ خطّ نظام ومربّعات فارغة مكان الأيقونات. -->
   <link rel="preload" href="assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/app-fonts.css?v=20260929-1966">
+  <link rel="stylesheet" href="assets/app-fonts.css?v=20260929-1967">
   
   
   
@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260929-1966">
+<link rel="stylesheet" href="app.css?v=20260929-1967">
 </head>
 <body class="auth-locked">
   <header>
@@ -578,8 +578,15 @@
           </form>
         </div>
         <div class="panel">
-          <div class="tools"><h2>آخر فواتير الشراء</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
-          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>المورد</th><th>المكان</th><th>رقم فاتورة المورد</th><th>الإجمالي</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
+          <div class="tools"><h2>آخر فواتير الشراء</h2>
+            <button class="btn secondary" onclick="purchaseListAction('view')" title="محتويات الفاتورة المحددة — قراءة فقط">👁 مشاهدة</button>
+            <button class="btn secondary" onclick="purchaseListAction('edit')">✏️ فتح / تعديل</button>
+            <button class="btn secondary" onclick="purchaseListAction('return')" title="إرجاع بضاعة للفاتورة المحددة إلى المورد">↩ إرجاع</button>
+            <button class="btn danger" onclick="purchaseListAction('delete')">🗑 حذف</button>
+            <span class="mini" id="purchaseSelHint">حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها</span>
+            <button class="btn secondary" onclick="loadAll()">تحديث</button>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>المورد</th><th>المكان</th><th>رقم فاتورة المورد</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
         </div>
       </section>
 
@@ -1383,6 +1390,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260929-1966"></script>
+<script src="app.js?v=20260929-1967"></script>
 </body>
 </html>
