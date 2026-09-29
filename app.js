@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1964';
+const APP_BUILD='b20260929-1965';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -110,7 +110,18 @@ function colorChip(name){
 function fillProductNote(tr,sel,code){
   const p=productByCode(code); if(!p||!tr) return;
   const note=tr.querySelector(sel);
-  if(note) note.textContent=[[p.brand,p.model].filter(Boolean).join(' / '),p.supplier_name].filter(Boolean).join(' - ');
+  /* (0082) الماركة والموديل صارا عمودين مستقلّين بعد الاسم، فالسطر الصغير
+     تحت الكود يكتفي بالمورد — كان يكرّرهما. */
+  if(note) note.textContent=p.supplier_name||'';
+  fillLineAttrs(tr,p);
+}
+/* (0082) عمودا الماركة والموديل في سطر فاتورة البيع والشراء */
+function fillLineAttrs(tr,p){
+  if(!tr) return;
+  const b=tr.querySelector('.si-brand,.pi-brand');
+  const m=tr.querySelector('.si-model,.pi-model');
+  if(b){ b.textContent=p?.brand||''; b.title=p?.brand||''; }
+  if(m){ m.textContent=p?.model||''; m.title=p?.model||''; }
 }
 function cfgText(v){return esc(v)}
 function initBranding(){document.title=APP_CONFIG.businessName+' - '+APP_CONFIG.tagline;
@@ -1702,11 +1713,12 @@ function fillPurchaseRow(input){
   if(!p) return;
   const tr=input.closest('tr');
   tr.querySelector('.pi-code').value=p.code||'';
-  tr.querySelector('.pi-name').value=p.name||'';
+  { const _n=tr.querySelector('.pi-name'); _n.value=p.name||''; _n.title=p.name||''; }  /* (0082) الاسم كاملاً في التلميح */
   tr.querySelector('.pi-cost').value=Number(p.purchase_price||0);
-  const brandModel=[p.brand,p.model].filter(Boolean).join(' / ');
+  /* (0082) الماركة والموديل في عمودين مستقلّين الآن — لا نكرّرهما في السطر الصغير */
+  fillLineAttrs(tr,p);
   const note=tr.querySelector('.pi-product-note');
-  if(note) note.textContent = [brandModel, p.supplier_name, p.category].filter(Boolean).join(' - ');
+  if(note) note.textContent = [p.supplier_name, p.category].filter(Boolean).join(' - ');
   updatePurchaseTotal();
 }
 
@@ -4586,7 +4598,7 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
   const isReturn=Number(item.qty||1)<0 || item.line_type==='return'; const qv=Math.abs(Number(item.qty||1))||1;
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><select class="si-kind hidden" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><select class="si-kind hidden" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" title="${esc(item.product_name||'')}" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td class="si-brand line-attr"></td><td class="si-model line-attr ltr"></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
   q('saleItemsBody').appendChild(tr); fillProductNote(tr,'.si-product-note',item.product_code); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
 }
 function updateSaleLineKind(el){
@@ -4598,8 +4610,9 @@ function fillSaleRow(input){
   const tr=input.closest('tr');
   tr.querySelector('.si-code').value=p.code||''; tr.querySelector('.si-name').value=p.name||''; tr.querySelector('.si-price').value=Number(p.retail_price||0);
   if(mergeSaleDuplicateRows(tr,p.code)) return;
-  const brandModel=[p.brand,p.model].filter(Boolean).join(' / '); const note=tr.querySelector('.si-product-note');
-  if(note) note.textContent=[brandModel,p.category].filter(Boolean).join(' - ');
+  fillLineAttrs(tr,p);   /* (0082) الماركة والموديل عمودان مستقلّان */
+  const note=tr.querySelector('.si-product-note');
+  if(note) note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - ');
   updateSaleTotal(); updateSaleAvailable(input); renderSaleStockInfo(p.code);
 }
 function updateSaleAvailable(el){
@@ -5563,7 +5576,7 @@ function addPurchaseRow(item={}){
   const p=item.product_code?productByCode(item.product_code):null;
   const oldCost=Number(item.old_cost ?? p?.purchase_price ?? item.unit_cost ?? 0);
   tr.dataset.oldCost=oldCost;
-  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><textarea class="pi-name" readonly tabindex="-1" required placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
+  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><textarea class="pi-name" readonly tabindex="-1" required title="${esc(item.product_name||'')}" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td class="pi-brand line-attr"></td><td class="pi-model line-attr ltr"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
   q('purchaseItemsBody').appendChild(tr); fillProductNote(tr,'.pi-product-note',item.product_code); updatePurchaseCostColor(tr); updatePurchaseTotal();
 }
 function updatePurchaseCostColor(tr){
@@ -7936,6 +7949,17 @@ function printReports(){
 const COLS_KEY='posHiddenCols';
 var __hiddenCols={};
 try{ __hiddenCols=JSON.parse(localStorage.getItem(COLS_KEY)||'{}')||{}; }catch(_e){ __hiddenCols={}; }
+/* (0082) الأعمدة المخفية محفوظة **بالفهرس**. إضافة عمودَي الماركة والموديل
+   بعد الاسم تُزيح كل فهرس بعدهما باثنين، فتخفي تفضيلاتٌ قديمة أعمدةً
+   خاطئة بلا أن يفهم المستخدم لماذا. نُسقط تفضيل الجدولين مرّة واحدة. */
+try{
+  if(localStorage.getItem('posColsMigrated0082')!=='1'){
+    delete __hiddenCols['saleItemsBody'];
+    delete __hiddenCols['purchaseItemsBody'];
+    localStorage.setItem(COLS_KEY, JSON.stringify(__hiddenCols));
+    localStorage.setItem('posColsMigrated0082','1');
+  }
+}catch(_e){}
 /* جدول المنتجات له نظامه الخاص (لا يرسم العمود أصلاً) — لا نزاحمه */
 const COLS_SKIP=['productsBody'];
 
