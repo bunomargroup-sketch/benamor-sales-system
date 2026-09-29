@@ -199,8 +199,11 @@
 
 
     /* Sales margin toggle */
-    #sales.hide-margins .pos-items-card table thead th:nth-child(5),
-    #sales.hide-margins .pos-items-card table thead th:nth-child(6),
+    /* (تصحيح 1966) الفهرس 5/6 كان صحيحاً قبل إضافة عمودَي الماركة والموديل؛
+       صار الآن يخفي ترويسة الكمية وسعر البيع فيُختلّ ترتيب الأعمدة.
+       نستهدف الترويسة بفئة بدل الفهرس لتبقى ثابتة مع أي تغيير مستقبلي. */
+#sales.hide-margins .pos-items-card table thead th.th-margin,
+#sales.hide-margins .pos-items-card table thead th.th-margin-pct,
     #sales.hide-margins #saleItemsBody td.si-margin,
     #sales.hide-margins #saleItemsBody td.si-margin-pct{display:none!important}
     #sales .margin-toggle-active{background:linear-gradient(135deg,var(--blue),#1e3a8a)!important;color:#fff!important}
