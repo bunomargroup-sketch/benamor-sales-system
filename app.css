@@ -36,7 +36,7 @@
     nav{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow);height:max-content;position:sticky;top:86px}
     nav button{width:100%;border:0;background:transparent;color:var(--muted);font-weight:600;text-align:right;padding:11px 12px;border-radius:12px;cursor:pointer;margin:2px 0;font-size:14px;display:flex;align-items:center;justify-content:flex-start;gap:10px;font-family:inherit;transition:background .15s ease,color .15s ease}
     nav button i{font-size:19px;line-height:1;color:currentColor;opacity:.9;min-width:20px;text-align:center}
-    nav button span{flex:1;text-align:right}
+    nav button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
     nav button:hover{background:var(--hover);color:var(--text)}
     nav button.active{background:var(--accent-soft);color:var(--blue);font-weight:700}
     main{min-width:0}.section{display:none}.section.active{display:block}.grid{display:grid;gap:14px}.cards{grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -1069,7 +1069,7 @@ body.has-winbar{padding-bottom:52px}
 .winbar-all:hover{color:var(--bad);border-color:var(--bad)}
 
 /* زر «افتح في نافذة» في الشريط الجانبي */
-.nav-win-btn{opacity:0;margin-inline-start:auto;padding:2px 6px;border:0;border-radius:6px;
+.nav-win-btn{opacity:0;padding:2px 6px;border:0;border-radius:6px;
   background:transparent;color:inherit;font-size:12px;cursor:pointer;flex:0 0 auto}
 nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
 .nav-win-btn:hover{opacity:1 !important;background:color-mix(in srgb,var(--blue) 22%,transparent)}
@@ -1096,10 +1096,11 @@ nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
 .cat-row{display:flex;align-items:center;gap:5px;padding:5px 7px;margin:1px 0;border-radius:8px;cursor:pointer;color:var(--text)}
 .cat-node:hover>.cat-row{background:var(--accent-soft)}
 .cat-node.active>.cat-row{background:var(--accent-soft);color:var(--blue);font-weight:700}
-.cat-caret{flex:none;width:14px;font-size:10px;color:#8892a6;cursor:pointer;user-select:none}
-.cat-caret.open{color:var(--blue)}
+.cat-toggle{flex:none;width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--muted);font-size:12px;font-weight:700;line-height:1;cursor:pointer;user-select:none}
+.cat-toggle.on{border-color:var(--blue);color:var(--blue);background:color-mix(in srgb,var(--blue) 10%,transparent)}
+.cat-node:hover>.cat-row .cat-toggle{border-color:var(--blue)}
 .cat-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cat-row .count{flex:none;font-family:ui-monospace,monospace;color:var(--muted);font-size:12px}
 .cat-node.active .count{color:var(--blue)}
-html[data-theme="dark"] .cat-caret{color:#94a3b8}
+html[data-theme="dark"] .cat-toggle{background:transparent}
 html[data-theme="dark"] .cat-row .count{color:#cbd5e1}

@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1969';
+const APP_BUILD='b20260929-1970';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1768,21 +1768,49 @@ function categoryMatches(pCat,sel){ if(!sel) return true; const c=String(pCat==n
 function catAncestors(path){ const out=[]; let p=path; let i=p.lastIndexOf(CAT_SEP); while(i>=0){ p=p.slice(0,i); out.push(p); i=p.lastIndexOf(CAT_SEP); } return out; }
 function catAllPaths(td){ const out=[]; const walk=p=>{ out.push(p); const kids=[...td.nodes.get(p).children].sort((a,b)=>a.localeCompare(b,'ar')); for(const k of kids) walk(k); }; for(const r of td.roots) walk(r); return out; }
 /* [[CAT-TREE-LOGIC-END]] */
+/* (1970) ترتيب الجذور حسب كثرة حركة أصنافها: صافي الكمية المباعة
+   (أسطر البيع الموقّعة − مستندات المرتجع المنفصلة) — يُعاد الترتيب عند تغيّر البيانات */
+let _actMap=null,_actKey=null;
+function productActivityMap(){
+  const key=saleItems.length+'|'+saleReturnItems.length+'|'+(sales.length?String(sales[0]?sales[0].id:'')+'/'+String(sales[sales.length-1]?sales[sales.length-1].id:''):'');
+  if(_actMap&&_actKey===key) return _actMap;
+  const m=new Map();
+  for(const it of saleItems){ const c=it.product_code; if(c) m.set(c,(m.get(c)||0)+Number(it.qty||0)); }
+  for(const it of saleReturnItems){ const c=it.product_code; if(c) m.set(c,(m.get(c)||0)-Number(it.qty||0)); }
+  _actMap=m; _actKey=key;
+  return m;
+}
+function orderRootsByActivity(roots){
+  try{
+    const act=productActivityMap();
+    if(!act.size) return roots;
+    const scored=roots.map(r=>{
+      let a=0;
+      for(const p of products){ const c=p.category||''; if(c===r||c.startsWith(r+CAT_SEP)) a+=act.get(p.code)||0; }
+      return {r,a};
+    });
+    scored.sort((x,y)=>(y.a-x.a)||x.r.localeCompare(y.r,'ar'));
+    return scored.map(s=>s.r);
+  }catch(e){ return roots; }
+}
 function ensureCatTreeData(){
-  if(_catTreeData && _catTreeKey===_catFingerprint()) return _catTreeData;
+  productActivityMap(); /* (1970) بصمة النشاط تدخل مفتاح الشجرة */
+  const key=_catFingerprint()+'#'+_actKey;
+  if(_catTreeData && _catTreeKey===key) return _catTreeData;
   const counts={}; for(const p of products){ const c=p.category; if(c) counts[c]=(counts[c]||0)+1; }
   _catTreeData=buildCategoryTreeData(counts);
   _productCatCounts=counts;
-  _catTreeKey=_catFingerprint();
+  _catTreeData.roots=orderRootsByActivity(_catTreeData.roots);
+  _catTreeKey=key;
   return _catTreeData;
 }
 function catNodeHtml(path,td){
   const open=loadCatTreeOpen().has(path);
   const kids=[...td.nodes.get(path).children].sort((a,b)=>a.localeCompare(b,'ar'));
-  const caret=kids.length?(open?'<span class="cat-caret open">▾</span>':'<span class="cat-caret">▸</span>'):'<span class="cat-caret"></span>';
+  const toggle=kids.length?(open?'<span class="cat-toggle on">-</span>':'<span class="cat-toggle">+</span>'):'<span class="cat-toggle"></span>';
   const inner=open?kids.map(k=>catNodeHtml(k,td)).join(''):'';
   const depth=catAncestors(path).length;
-  return `<div class="cat-node" data-path="${esc(path)}"><div class="cat-row" style="padding-left:${8+depth*14}px">${caret}<span class="cat-name" title="${esc(path)}">${esc(td.nodes.get(path).name)}</span><span class="count">${td.branch.get(path)}</span></div>${inner}</div>`;
+  return `<div class="cat-node" data-path="${esc(path)}"><div class="cat-row" style="padding-left:${8+depth*14}px">${toggle}<span class="cat-name" title="${esc(path)}">${esc(td.nodes.get(path).name)}</span><span class="count">${td.branch.get(path)}</span></div>${inner}</div>`;
 }
 function renderProductCategoryTree(selCat=''){
   const box=q('productCategoryTree'); if(!box) return;
@@ -1794,7 +1822,7 @@ function renderProductCategoryTree(selCat=''){
     box._catListener=1;
     box.addEventListener('click',e=>{
       const node=e.target.closest('.cat-node'); if(!node) return;
-      if(e.target.closest('.cat-caret')){ toggleCatTreeNode(node.dataset.path); return; }
+      if(e.target.closest('.cat-toggle')){ toggleCatTreeNode(node.dataset.path); return; }
       selectProductCategory(node.dataset.path);
     });
   }
