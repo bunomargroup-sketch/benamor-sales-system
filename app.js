@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1967';
+const APP_BUILD='b20260929-1968';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -5689,6 +5689,238 @@ function updatePurchaseTotal(){
 /* 0450: updateStock (الشراء) أُزيل — كود ميت غير ذرّي؛ حفظ الشراء يمر عبر
    post_purchase_transaction الذرّي منذ 0047. */
 
+/* ══════════════════════ (0090) نظام النوافذ ══════════════════════
+   المنظومة كانت شاشةً واحدة في كل لحظة: كل الأقسام `.section` مخفيّة إلا
+   واحداً يحمل `.active`. فلا يمكن فتح فاتورة شراء ورؤية قائمة الفواتير
+   وحركات الصنف في آن.
+
+   الفكرة المنفّذة: **لا ننسخ الشاشة، ننقلها.** عقدة القسم نفسها تُنقل
+   داخل جسم نافذة عائمة، وتعود إلى `<main>` عند الإغلاق. لذلك تبقى كل
+   المعرّفات كما هي وتعمل كل نداءات `q('purchaseItemsBody')` بلا تعديل —
+   وهذا ما جعل الميزة ممكنة بلا إعادة كتابة التطبيق.
+
+   ⚠ حدّ جوهري: **نافذة واحدة لكل شاشة.** التطبيق يخاطب عناصره بمعرّفات
+   عالمية فريدة، ففتح فاتورتَي شراء معاً يجعل الاثنتين تكتبان في العقدة
+   نفسها. إعادة فتح شاشة مفتوحة تُبرزها بدل أن تُنشئ ثانية.
+   ═══════════════════════════════════════════════════════════════════ */
+
+const WIN_KEY='posWindows';
+var __wins={};            /* sec -> {el, min, max, prev} */
+var __winZ=300;
+var __winGeom={};
+try{ __winGeom=JSON.parse(localStorage.getItem(WIN_KEY)||'{}')||{}; }catch(_e){ __winGeom={}; }
+function saveWinGeom(){ try{ localStorage.setItem(WIN_KEY,JSON.stringify(__winGeom)); }catch(_e){} }
+
+function winTitle(sec){
+  const b=document.querySelector(`nav button[data-tab="${sec}"]`);
+  const t=b?.querySelector('span')?.textContent?.trim();
+  if(t) return t;
+  return document.getElementById(sec)?.querySelector('.tools h2')?.textContent?.trim() || sec;
+}
+function winIcon(sec){
+  const i=document.querySelector(`nav button[data-tab="${sec}"] i`);
+  return i? i.className : 'ti ti-app-window';
+}
+function winLayer(){
+  let l=document.getElementById('winLayer');
+  if(!l){ l=document.createElement('div'); l.id='winLayer'; document.body.appendChild(l); }
+  return l;
+}
+function winBar(){
+  let b=document.getElementById('winBar');
+  if(!b){ b=document.createElement('div'); b.id='winBar'; document.body.appendChild(b); }
+  return b;
+}
+
+/* موضع متدرّج حتى لا تتكدّس النوافذ الجديدة فوق بعضها */
+function nextWinPos(){
+  const n=Object.keys(__wins).length;
+  const w=Math.min(1100, Math.max(560, Math.round(innerWidth*0.62)));
+  const h=Math.min(760,  Math.max(380, Math.round(innerHeight*0.68)));
+  return { x: Math.min(40+n*28, Math.max(10, innerWidth-w-10)),
+           y: Math.min(64+n*26, Math.max(10, innerHeight-h-60)),
+           w, h };
+}
+
+function openWindow(sec){
+  if(!sec) return;
+  if(__wins[sec]){ focusWindow(sec); if(__wins[sec].min) unminimizeWindow(sec); return; }
+  const node=document.getElementById(sec);
+  if(!node || !node.classList.contains('section')) return;
+
+  const g=Object.assign(nextWinPos(), __winGeom[sec]||{});
+  const el=document.createElement('div');
+  el.className='win'; el.dataset.sec=sec;
+  el.style.cssText=`left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h}px;z-index:${++__winZ}`;
+  el.innerHTML=`
+    <div class="win-head">
+      <i class="${winIcon(sec)} win-ico"></i>
+      <span class="win-title"></span>
+      <div class="win-btns">
+        <button class="win-b" type="button" data-a="min" title="تصغير">&#8211;</button>
+        <button class="win-b" type="button" data-a="max" title="تكبير">&#9723;</button>
+        <button class="win-b win-x" type="button" data-a="close" title="إغلاق">&#10005;</button>
+      </div>
+    </div>
+    <div class="win-body"></div>
+    <div class="win-rz" data-d="e"></div><div class="win-rz" data-d="s"></div>
+    <div class="win-rz" data-d="w"></div><div class="win-rz" data-d="n"></div>
+    <div class="win-rz" data-d="se"></div><div class="win-rz" data-d="sw"></div>`;
+  el.querySelector('.win-title').textContent=winTitle(sec);
+  winLayer().appendChild(el);
+
+  /* ننقل العقدة ونحفظ موضعها الأصلي لنُعيدها تماماً عند الإغلاق */
+  const home=node.parentNode, anchor=node.nextSibling;
+  el.querySelector('.win-body').appendChild(node);
+  node.classList.add('active','in-window');
+
+  __wins[sec]={el, home, anchor, min:false, max:!!g.max, prev:null};
+  if(g.max) maximizeWindow(sec,true);
+
+  wireWindow(el, sec);
+  renderWinBar();
+  focusWindow(sec);
+  try{ renderTab(sec, true); }catch(_e){}
+  return el;
+}
+
+function closeWindow(sec){
+  const w=__wins[sec]; if(!w) return;
+  const node=document.getElementById(sec);
+  if(node){
+    node.classList.remove('in-window','win-max');
+    /* تعود الشاشة إلى مكانها في <main> بالترتيب نفسه */
+    if(w.anchor && w.anchor.parentNode===w.home) w.home.insertBefore(node,w.anchor);
+    else w.home.appendChild(node);
+    /* تبقى ظاهرة فقط إن كانت هي تبويب الشريط النشط */
+    if(activeTabId()!==sec) node.classList.remove('active');
+  }
+  w.el.remove();
+  delete __wins[sec];
+  renderWinBar();
+}
+
+function focusWindow(sec){
+  const w=__wins[sec]; if(!w) return;
+  w.el.style.zIndex=++__winZ;
+  Object.values(__wins).forEach(x=>x.el.classList.remove('win-focus'));
+  w.el.classList.add('win-focus');
+  renderWinBar();
+}
+function minimizeWindow(sec){
+  const w=__wins[sec]; if(!w) return;
+  w.min=true; w.el.classList.add('win-min');
+  __winGeom[sec]=Object.assign(__winGeom[sec]||{},{min:true}); saveWinGeom();
+  renderWinBar();
+}
+function unminimizeWindow(sec){
+  const w=__wins[sec]; if(!w) return;
+  w.min=false; w.el.classList.remove('win-min');
+  __winGeom[sec]=Object.assign(__winGeom[sec]||{},{min:false}); saveWinGeom();
+  focusWindow(sec);
+}
+function maximizeWindow(sec,silent){
+  const w=__wins[sec]; if(!w) return;
+  const el=w.el;
+  if(!w.max){
+    w.prev={left:el.style.left,top:el.style.top,width:el.style.width,height:el.style.height};
+    el.classList.add('win-max'); w.max=true;
+  }else{
+    el.classList.remove('win-max'); w.max=false;
+    if(w.prev) Object.assign(el.style,w.prev);
+  }
+  __winGeom[sec]=Object.assign(__winGeom[sec]||{},{max:w.max}); saveWinGeom();
+  if(!silent) focusWindow(sec);
+}
+
+function rememberGeom(sec){
+  const w=__wins[sec]; if(!w || w.max) return;
+  const r=w.el.getBoundingClientRect();
+  __winGeom[sec]=Object.assign(__winGeom[sec]||{},
+    {x:Math.round(r.left), y:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height)});
+  saveWinGeom();
+}
+
+function wireWindow(el, sec){
+  el.addEventListener('pointerdown',()=>focusWindow(sec),true);
+  el.querySelector('.win-btns').addEventListener('click',ev=>{
+    const a=ev.target.closest('[data-a]')?.dataset.a; if(!a) return;
+    ev.stopPropagation();
+    if(a==='min') minimizeWindow(sec);
+    else if(a==='max') maximizeWindow(sec);
+    else closeWindow(sec);
+  });
+  el.querySelector('.win-head').addEventListener('dblclick',e=>{
+    if(!e.target.closest('.win-btns')) maximizeWindow(sec);
+  });
+
+  /* السحب */
+  const head=el.querySelector('.win-head');
+  head.addEventListener('pointerdown',e=>{
+    if(e.target.closest('.win-btns') || __wins[sec]?.max) return;
+    const r=el.getBoundingClientRect();
+    const dx=e.clientX-r.left, dy=e.clientY-r.top;
+    head.setPointerCapture(e.pointerId);
+    el.classList.add('win-moving');
+    const mv=ev=>{
+      const x=Math.max(-r.width+90, Math.min(innerWidth-60, ev.clientX-dx));
+      const y=Math.max(0,           Math.min(innerHeight-46, ev.clientY-dy));
+      el.style.left=x+'px'; el.style.top=y+'px';
+    };
+    const up=()=>{ head.removeEventListener('pointermove',mv); head.removeEventListener('pointerup',up);
+                   el.classList.remove('win-moving'); rememberGeom(sec); };
+    head.addEventListener('pointermove',mv); head.addEventListener('pointerup',up);
+  });
+
+  /* التحجيم */
+  el.querySelectorAll('.win-rz').forEach(h=>{
+    h.addEventListener('pointerdown',e=>{
+      if(__wins[sec]?.max) return;
+      e.preventDefault(); e.stopPropagation();
+      const d=h.dataset.d, r=el.getBoundingClientRect();
+      const sx=e.clientX, sy=e.clientY;
+      h.setPointerCapture(e.pointerId);
+      const mv=ev=>{
+        let x=r.left, y=r.top, w=r.width, hh=r.height;
+        if(d.includes('e')) w=Math.max(360, r.width+(ev.clientX-sx));
+        if(d.includes('s')) hh=Math.max(220, r.height+(ev.clientY-sy));
+        if(d.includes('w')){ const nw=Math.max(360, r.width-(ev.clientX-sx)); x=r.left+(r.width-nw); w=nw; }
+        if(d.includes('n')){ const nh=Math.max(220, r.height-(ev.clientY-sy)); y=r.top+(r.height-nh); hh=nh; }
+        el.style.left=x+'px'; el.style.top=y+'px'; el.style.width=w+'px'; el.style.height=hh+'px';
+      };
+      const up=()=>{ h.removeEventListener('pointermove',mv); h.removeEventListener('pointerup',up); rememberGeom(sec); };
+      h.addEventListener('pointermove',mv); h.addEventListener('pointerup',up);
+    });
+  });
+}
+
+/* شريط المهام أسفل الشاشة */
+function renderWinBar(){
+  const bar=winBar();
+  const list=Object.keys(__wins);
+  if(!list.length){ bar.classList.add('hidden'); bar.innerHTML=''; document.body.classList.remove('has-winbar'); return; }
+  bar.classList.remove('hidden');
+  document.body.classList.add('has-winbar');
+  const top=[...Object.entries(__wins)].sort((a,b)=>Number(b[1].el.style.zIndex||0)-Number(a[1].el.style.zIndex||0))[0]?.[0];
+  bar.innerHTML=list.map(sec=>{
+    const w=__wins[sec];
+    const cls=['winbar-item', w.min?'is-min':'', (!w.min&&sec===top)?'is-top':''].filter(Boolean).join(' ');
+    return `<button type="button" class="${cls}" onclick="toggleWindowFromBar('${sec}')" title="${esc(winTitle(sec))}">
+      <i class="${winIcon(sec)}"></i><span>${esc(winTitle(sec))}</span>
+      <span class="winbar-x" onclick="event.stopPropagation();closeWindow('${sec}')" title="إغلاق">&#10005;</span></button>`;
+  }).join('') + `<button type="button" class="winbar-all" onclick="closeAllWindows()" title="إغلاق كل النوافذ">&#10005; الكل</button>`;
+}
+function toggleWindowFromBar(sec){
+  const w=__wins[sec]; if(!w) return;
+  if(w.min){ unminimizeWindow(sec); return; }
+  const top=[...Object.entries(__wins)].sort((a,b)=>Number(b[1].el.style.zIndex||0)-Number(a[1].el.style.zIndex||0))[0]?.[0];
+  if(top===sec) minimizeWindow(sec); else focusWindow(sec);
+}
+function closeAllWindows(){ Object.keys(__wins).forEach(closeWindow); }
+
+/* فتح الشاشة الحالية في نافذة */
+function windowCurrentTab(){ openWindow(activeTabId()); }
+
 function openTab(tab){const btn=document.querySelector(`nav button[data-tab="${tab}"]`); if(btn && btn.style.display!=='none') btn.click();}
 
 
@@ -5754,9 +5986,12 @@ q('saleForm')?.addEventListener('change',saveActiveSaleDraft);
 document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click',()=>{
   if(q('sales')?.classList.contains('active') && btn.dataset.tab!=='sales' && saleHasContent() && !confirm('يوجد فاتورة بيع غير محفوظة. هل تريد مغادرة الشاشة وفقدانها؟')) return;
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  /* (0090) الشاشة المفتوحة في نافذة عائمة تبقى ظاهرة: نزع active عنها كان يُفرغها */
+  document.querySelectorAll('.section').forEach(s=>{ if(!s.classList.contains('in-window')) s.classList.remove('active'); });
   btn.classList.add('active');
-  q(btn.dataset.tab).classList.add('active');
+  /* الشاشة المطلوبة إن كانت في نافذة: نُبرز نافذتها بدل عرضها مرّتين */
+  if(__wins[btn.dataset.tab]){ focusWindow(btn.dataset.tab); if(__wins[btn.dataset.tab].min) unminimizeWindow(btn.dataset.tab); }
+  else q(btn.dataset.tab).classList.add('active');
   if(btn.dataset.tab==='sales') document.body.classList.add('nav-collapsed');
   else document.body.classList.toggle('nav-collapsed', (localStorage.getItem('posNavCollapsed')==='1'));
   if(btn.dataset.tab==='sales'){ applySaleLayoutPrefs(); toggleSaleCustomerPanel(true); if(!editingSaleId && !saleHasContent()){q('saleItemsBody').innerHTML=''; ensureSaleInvoiceNo(false);} setTimeout(()=>{ autoResumeParkedSaleIfFlagged(); q('saleBarcodeInput')?.focus(); },50); }
@@ -8215,7 +8450,7 @@ function defaultCtxItemsForRow(tr,target){
   return items;
 }
 /* مكدّس النوافذ: آخر نافذة تُفتَح تطفو فوق ما قبلها — ولا تُغلق أي نافذة من تلقاء نفسها */
-let __modalTopZ=200;
+let __modalTopZ=1250; /* (1968) فوق طبقة النوافذ (300+): حوار يفتح من داخل نافذة لا يختفي خلفها */
 function modalToTop(m){
   const el=typeof m==='string'?q(m):m; if(!el)return;
   el.style.zIndex=String(++__modalTopZ);
@@ -9377,3 +9612,23 @@ async function retryConnection(){
 
 /* الوقت النسبي يشيخ: تحديث خفيف كل نصف دقيقة (نصّ فقط، بلا أي طلب شبكة) */
 setInterval(()=>{ try{ if(!navigator.onLine) renderOfflineBanner(); renderStatusBar(); }catch(_e){} }, 30000);
+
+
+/* (0090) زرّ صغير داخل كل عنصر في الشريط الجانبي يفتح الشاشة نافذةً عائمة،
+   واختصار Ctrl+Shift+N للشاشة الحالية. */
+function initWindowButtons(){
+  document.querySelectorAll('nav button[data-tab]').forEach(b=>{
+    if(b.querySelector('.nav-win-btn')) return;
+    const w=document.createElement('button');
+    w.type='button'; w.className='nav-win-btn'; w.title='افتح في نافذة مستقلّة';
+    w.innerHTML='&#9974;';
+    w.addEventListener('click',ev=>{ ev.stopPropagation(); ev.preventDefault(); openWindow(b.dataset.tab); });
+    b.appendChild(w);
+  });
+}
+document.addEventListener('keydown',ev=>{
+  if((ev.ctrlKey||ev.metaKey) && ev.shiftKey && (ev.key==='N'||ev.key==='n')){
+    ev.preventDefault(); windowCurrentTab();
+  }
+});
+try{ initWindowButtons(); }catch(_e){}

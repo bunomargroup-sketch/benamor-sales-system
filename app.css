@@ -999,3 +999,95 @@ th.sorted-asc.sortable:after,th.sorted-desc.sortable:after{color:var(--sec,var(-
 #purchaseItemsBody textarea.pi-name{
   height:36px;min-height:36px;padding:6px 10px;line-height:20px;   /* 36 = 20 سطر + 12 حشوة + 4 إطار */
   white-space:nowrap;overflow:hidden;resize:none}
+
+/* ══════════════════════ (0090) نظام النوافذ ══════════════════════
+   طبقة النوافذ لا تلتقط المؤشّر بنفسها — كل نافذة تلتقطه — فيبقى
+   التطبيق خلفها قابلاً للاستعمال. */
+#winLayer{position:fixed;inset:0;pointer-events:none;z-index:200}
+#winLayer .win{pointer-events:auto}
+
+.win{position:fixed;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 18px 50px rgba(15,23,42,.28),0 2px 8px rgba(15,23,42,.12);
+  min-width:360px;min-height:220px}
+.win.win-focus{border-color:color-mix(in srgb,var(--blue) 55%,var(--border));
+  box-shadow:0 22px 60px rgba(15,23,42,.34),0 0 0 2px color-mix(in srgb,var(--blue) 26%,transparent)}
+.win.win-min{display:none}
+.win.win-max{inset:0 !important;width:auto !important;height:auto !important;
+  border-radius:0;border-width:0 0 1px 0}
+.win.win-moving{user-select:none}
+.win.win-moving .win-body{pointer-events:none}   /* السحب لا يمرّ إلى محتوى الشاشة */
+
+.win-head{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:move;
+  background:var(--table-head);border-bottom:1px solid var(--border);flex:0 0 auto;touch-action:none}
+.win-head .win-ico{font-size:17px;color:var(--blue);flex:0 0 auto}
+.win-title{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;flex:1 1 auto;min-width:0}
+.win-btns{display:flex;gap:4px;flex:0 0 auto}
+.win-b{width:30px;height:26px;border:1px solid transparent;border-radius:7px;background:transparent;
+  color:var(--text-2);font-size:13px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.win-b:hover{background:var(--hover);color:var(--text)}
+.win-b.win-x:hover{background:var(--bad);color:#fff;border-color:var(--bad)}
+
+.win-body{flex:1 1 auto;overflow:auto;padding:10px;min-height:0;background:var(--bg)}
+/* الشاشة داخل نافذة: ارتفاعها من النافذة لا من الشاشة الكاملة */
+.win-body > .section.in-window{display:block;animation:none}
+.win-body > .section.in-window > .panel{height:auto !important;max-height:none !important;
+  box-shadow:none;border-width:1px}
+.win-body .table-scroll{max-height:none}
+.win-body .product-table-scroll,.win-body .sale-lines-scroll{max-height:56vh}
+.win-body .product-sidebar{max-height:none !important}
+
+/* مقابض التحجيم */
+.win-rz{position:absolute;touch-action:none}
+.win-rz[data-d="e"]{inset-inline-end:0;top:8px;bottom:8px;width:7px;cursor:ew-resize}
+.win-rz[data-d="w"]{inset-inline-start:0;top:8px;bottom:8px;width:7px;cursor:ew-resize}
+.win-rz[data-d="s"]{bottom:0;left:10px;right:10px;height:7px;cursor:ns-resize}
+.win-rz[data-d="n"]{top:0;left:10px;right:10px;height:6px;cursor:ns-resize}
+.win-rz[data-d="se"]{bottom:0;inset-inline-end:0;width:16px;height:16px;cursor:nwse-resize}
+.win-rz[data-d="sw"]{bottom:0;inset-inline-start:0;width:16px;height:16px;cursor:nesw-resize}
+.win-max .win-rz{display:none}
+
+/* شريط المهام */
+#winBar{position:fixed;inset-inline:0;bottom:0;z-index:260;display:flex;gap:6px;
+  align-items:center;padding:6px 10px;overflow-x:auto;
+  background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(10px);
+  border-top:1px solid var(--border);box-shadow:0 -6px 18px rgba(15,23,42,.10)}
+#winBar.hidden{display:none}
+body.has-winbar{padding-bottom:52px}
+.winbar-item{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
+  max-width:230px;padding:6px 10px;border:1px solid var(--border);border-radius:9px;
+  background:var(--input);color:var(--text);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.winbar-item span:not(.winbar-x){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.winbar-item:hover{background:var(--hover)}
+.winbar-item.is-top{border-color:var(--blue);box-shadow:inset 0 -2px 0 var(--blue)}
+.winbar-item.is-min{opacity:.62;font-weight:600}
+.winbar-x{opacity:.5;padding:0 2px;border-radius:5px}
+.winbar-x:hover{opacity:1;background:var(--bad);color:#fff}
+.winbar-all{flex:0 0 auto;margin-inline-start:auto;padding:6px 10px;border:1px dashed var(--border);
+  border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:12.5px;cursor:pointer}
+.winbar-all:hover{color:var(--bad);border-color:var(--bad)}
+
+/* زر «افتح في نافذة» في الشريط الجانبي */
+.nav-win-btn{opacity:0;margin-inline-start:auto;padding:2px 6px;border:0;border-radius:6px;
+  background:transparent;color:inherit;font-size:12px;cursor:pointer;flex:0 0 auto}
+nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
+.nav-win-btn:hover{opacity:1 !important;background:color-mix(in srgb,var(--blue) 22%,transparent)}
+
+@media(max-width:900px){
+  .win{inset:0 !important;width:auto !important;height:auto !important;border-radius:0}
+  .win-rz{display:none}
+}
+@media print{ #winLayer,#winBar{display:none !important} body.has-winbar{padding-bottom:0} }
+
+/* ══════ (0090) ترتيب الطبقات فوق النوافذ العائمة ══════
+   النوافذ العائمة تبدأ من z=300، والنوافذ الحوارية في المنظومة كانت
+   z=80 والقوائم السياقية 95. أي حوار يُفتح من داخل نافذة كان يختفي
+   خلفها — يضغط المستخدم «تعديل» فلا يرى شيئاً يحدث. الحوار والقائمة
+   طبقة فوق كل شيء بطبيعتهما، فنرفعهما فوق طبقة النوافذ. */
+.modal{z-index:1200}
+#productViewModal,#movementsModal{z-index:1220 !important}
+#longPickerModal{z-index:1240 !important}
+.ctx-menu{z-index:1300}
+.calc-panel{z-index:1210}
+#salePaymentScreen.payment-open{z-index:1205}
