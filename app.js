@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1970';
+const APP_BUILD='b20260929-1971';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1832,12 +1832,14 @@ function renderProductCategoryTree(selCat=''){
     addAll(catAncestors(selCat)); addAll([selCat]);
     if(changed){ persistCatTreeOpen(); _catOpenVer++; }
   }
+  const markActive=()=>{ if(!selCat) return; for(const n of box.querySelectorAll('.cat-node')) if(n.dataset.path===selCat){ n.classList.add('active'); break; } };
   if(box._catKey!==_catTreeKey || box._catOpenVer!==_catOpenVer){
     box.innerHTML=td.roots.map(p=>catNodeHtml(p,td)).join('');
     box._catKey=_catTreeKey; box._catOpenVer=_catOpenVer;
+    markActive(); /* (1971) كان الـ rebuild يفقد تمييز العقدة المحددة */
   }else{
     box.querySelectorAll('.cat-node.active').forEach(n=>n.classList.remove('active'));
-    if(selCat){ for(const n of box.querySelectorAll('.cat-node')) if(n.dataset.path===selCat){ n.classList.add('active'); break; } }
+    markActive();
   }
 }
 function toggleCatTreeNode(path){
@@ -9748,10 +9750,11 @@ setInterval(()=>{ try{ if(!navigator.onLine) renderOfflineBanner(); renderStatus
 function initWindowButtons(){
   document.querySelectorAll('nav button[data-tab]').forEach(b=>{
     if(b.querySelector('.nav-win-btn')) return;
-    const w=document.createElement('button');
-    w.type='button'; w.className='nav-win-btn'; w.title='افتح في نافذة مستقلّة';
+    const w=document.createElement('span'); /* (1971) span بدل button متداخل: button داخل button HTML غير صالح وبعض المتصفحات ترسمه خارج الصف */
+    w.className='nav-win-btn'; w.title='افتح في نافذة مستقلّة'; w.setAttribute('role','button'); w.setAttribute('tabindex','0');
     w.innerHTML='&#9974;';
     w.addEventListener('click',ev=>{ ev.stopPropagation(); ev.preventDefault(); openWindow(b.dataset.tab); });
+    w.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.stopPropagation(); ev.preventDefault(); openWindow(b.dataset.tab); } });
     b.appendChild(w);
   });
 }

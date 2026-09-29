@@ -1069,8 +1069,8 @@ body.has-winbar{padding-bottom:52px}
 .winbar-all:hover{color:var(--bad);border-color:var(--bad)}
 
 /* زر «افتح في نافذة» في الشريط الجانبي */
-.nav-win-btn{opacity:0;padding:2px 6px;border:0;border-radius:6px;
-  background:transparent;color:inherit;font-size:12px;cursor:pointer;flex:0 0 auto}
+.nav-win-btn{opacity:0;display:inline-flex;align-items:center;justify-content:center;min-width:18px;padding:2px 5px;border:0;border-radius:6px;
+  background:transparent;color:inherit;font-size:13px;cursor:pointer;flex:0 0 auto;touch-action:manipulation}
 nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
 .nav-win-btn:hover{opacity:1 !important;background:color-mix(in srgb,var(--blue) 22%,transparent)}
 
@@ -1093,10 +1093,10 @@ nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
 #salePaymentScreen.payment-open{z-index:1205}
 /* ═══ (1969) شجرة التصنيفات: عقدة قابلة للتوسيع، النقر على الاسم = فلترة الفرع كاملاً ═══ */
 .cat-node{font-size:13px}
-.cat-row{display:flex;align-items:center;gap:5px;padding:5px 7px;margin:1px 0;border-radius:8px;cursor:pointer;color:var(--text)}
+.cat-row{display:flex;align-items:center;gap:5px;padding:5px 7px;margin:1px 0;border-radius:8px;cursor:pointer;color:var(--text);touch-action:manipulation}
 .cat-node:hover>.cat-row{background:var(--accent-soft)}
 .cat-node.active>.cat-row{background:var(--accent-soft);color:var(--blue);font-weight:700}
-.cat-toggle{flex:none;width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--muted);font-size:12px;font-weight:700;line-height:1;cursor:pointer;user-select:none}
+.cat-toggle{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--muted);font-size:15px;font-weight:700;line-height:1;cursor:pointer;user-select:none;touch-action:manipulation}
 .cat-toggle.on{border-color:var(--blue);color:var(--blue);background:color-mix(in srgb,var(--blue) 10%,transparent)}
 .cat-node:hover>.cat-row .cat-toggle{border-color:var(--blue)}
 .cat-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
