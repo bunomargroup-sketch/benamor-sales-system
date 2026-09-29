@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1963';
+const APP_BUILD='b20260929-1964';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -251,7 +251,19 @@ function setupRightClickPaste(){
     const el=e.target.closest?.('input,textarea,[contenteditable]');
     if(!el || !isRightClickPasteTarget(el)) return; /* غير قابل للكتابة ⇒ نتركه كما هو */
     e.preventDefault(); e.stopPropagation(); /* قبل قوائم الصفوف وقائمة المتصفح */
-    rcpPaste(el).catch(err=>{ console.warn('right-click paste',err); toast('تعذّر اللصق من الحافظة','warn'); });
+    /* (2026-09-29 قرار المالك) اللصق المباشر عند الضغط بالزر الأيمن كان خطأً:
+       الزر الأيمن يعرض قائمة، واللصق يتم فقط باختيار «لصق» من القائمة. */
+    let cv='';
+    if(el.isContentEditable){
+      cv=String(window.getSelection?.()||'').trim()||String(el.innerText||'').trim();
+    } else {
+      const s2=el.selectionStart??0,en=el.selectionEnd??0;
+      cv=(s2!==en?el.value.slice(s2,en):el.value||'').trim();
+    }
+    const items=[];
+    if(cv) items.push({label:'نسخ',icon:'ti-copy',action:()=>copyText(cv)});
+    items.push({label:'لصق',icon:'ti-clipboard-check',action:()=>rcpPaste(el)});
+    showCtxMenu(e.clientX,e.clientY,items);
   },true);
 }
 function setSyncState(state,msg){const el=q('syncState'); if(!el)return;
