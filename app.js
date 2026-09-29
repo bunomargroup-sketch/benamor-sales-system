@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260928-1830';
+const APP_BUILD='b20260929-1963';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1037,8 +1037,8 @@ async function loadHeavy(){
     sales=bs.pos_sales||[]; saleItems=bs.pos_sale_items||[]; salePayments=bs.pos_sale_payments||[];
   } else {
     [sales,saleItems,salePayments]=await Promise.all([
-      apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('sales not setup yet',e); return []}),
-      apiAll('pos_sale_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('sale items not setup yet',e); return []}),
+      apiAll('pos_sales',`?select=*&sale_date=gte.${salesHorizonDate()}&order=sale_date.desc,created_at.desc,id.asc`).catch(e=>{console.warn('sales not setup yet',e); return []}),
+      apiAll('pos_sale_items',`?select=${SEL_SALE_ITEMS}&created_at=gte.${salesHorizonDate()}&order=created_at.desc,id.asc`).catch(e=>{console.warn('sale items not setup yet',e); return []}),
       apiAll('pos_sale_payments','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('sale payments not setup yet',e); return []}),
     ]);
   }
@@ -3285,16 +3285,351 @@ function returnListRowHtml(r){
   return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>—</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}</tr>`;
 }
 /**** تحديث خفيف بعد الحفظ/التعديل: يجلب جداول «البيع والمخزون» المتحركة فقط بدل loadAll الكامل الثقيل — ويُعاد رسم القوائم فوراً — ويشتغل أيضاً كل 60 ثانية آلياً فتظهر فواتير وتعديلات الأجهزة الأخرى دون تحديث الصفحة يدوياً ****/
+/* ══════════════════ (0080) المزامنة التفاضلية — خفض استهلاك النقل ══════════════════
+   كانت نبضة التحديث كل 60 ثانية تُعيد تنزيل **كل** تاريخ المبيعات:
+   pos_sales و pos_sale_items (54 ألف سطر) و pos_sale_payments و pos_stock
+   كاملةً — نحو 5 ميغابايت مضغوطة في كل مرة، لكل جهاز مفتوح. في محل يبيع،
+   البصمة تتغيّر كل دقيقة تقريباً، فكان ذلك ~2.4 جيجا لكل جهاز يومياً،
+   وحصّة Supabase المجانية 5 جيجا للشهر كلّه.
+
+   البديل هنا: لا نجلب إلا ما تغيّر منذ آخر مزامنة ناجحة.
+
+   المعالجات التي تجعل التفاضل صحيحاً لا سريعاً فقط:
+
+   • **تعديل الفاتورة**: update_sale_transaction يحذف سطور الفاتورة ثم يعيد
+     إدراجها. جلب السطور بـ created_at وحده يُضيف الجديدة ولا يحذف القديمة،
+     فتتضاعف. لذلك: كل فاتورة يتغيّر updated_at لها تُعاد سطورها ودفعاتها
+     **كاملةً** بـ sale_id=in.(...) وتُستبدل مجموعتها استبدالاً تامّاً.
+
+   • **الحذف**: التفاضل لا يرى صفّاً حُذف. لذلك تحديث كامل كل 15 دقيقة،
+     وعند الضغط على زر التحديث اليدوي، وعند أول تحميل.
+
+   • **تداخل زمني**: نرجع 90 ثانية قبل آخر مزامنة، لأن ساعة الخادم قد تسبق
+     أو تتأخّر عن ساعة الجهاز بثوانٍ، فلا يسقط صفّ في الشقّ.
+
+   • **ساعة الخادم هي المرجع**: نأخذ الطابع من أحدث صفّ وصلنا فعلاً لا من
+     Date.now() في المتصفّح.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var __deltaSince = null;                 /* ISO: آخر مزامنة ناجحة (بساعة الخادم) */
+var __lastFullSync = 0;                  /* ms محلية: آخر تحديث كامل */
+/* التحديث الكامل موجود لسبب واحد: التفاضل لا يرى صفّاً حُذف. لكن الحذف
+   نادر، وإعادة تنزيل النافذة كل ربع ساعة تلتهم ما وفّره التفاضل.
+   البديل: مجسّ عدّ رخيص (~200 بايت) — نطلب صفّاً واحداً مع count=exact
+   فيعيد الخادم العدد الكلّي في ترويسة Content-Range. إن نقص العدد عمّا
+   عندنا فقد حُذف شيء ⇒ عندها فقط نحدّث تحديثاً كاملاً. */
+const DELTA_FULL_EVERY_MS = 6*60*60*1000;   /* حزام أمان بعيد، لا آلية أساسية */
+const DELTA_COUNT_EVERY_MS = 5*60*1000;
+var __lastCountProbe = 0;
+
+/* عدد الصفوف من ترويسة Content-Range بلا تنزيل الصفوف */
+async function countOf(table, filter){
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=id${filter||''}`,
+      { method:'GET', headers:{...H, Range:'0-0', Prefer:'count=exact'} });
+    const cr=res.headers.get('content-range')||'';
+    const n=Number(String(cr).split('/')[1]);
+    return Number.isFinite(n)?n:null;
+  }catch(e){ return null; }
+}
+/* هل حُذف شيء منذ آخر مزامنة؟ */
+async function deletionsSuspected(hz){
+  if(Date.now()-__lastCountProbe < DELTA_COUNT_EVERY_MS) return false;
+  __lastCountProbe=Date.now();
+  const [nSales,nItems]=await Promise.all([
+    countOf('pos_sales', `&sale_date=gte.${hz}`),
+    countOf('pos_sale_items', `&created_at=gte.${hz}`)
+  ]);
+  if(nSales===null && nItems===null) return false;      /* الشبكة — لا قرار */
+  if(nSales!==null && nSales < sales.length) return true;
+  if(nItems!==null && nItems < saleItems.length) return true;
+  return false;
+}
+const DELTA_OVERLAP_MS = 90*1000;
+
+function deltaWindowStart(){
+  if(!__deltaSince) return null;
+  return new Date(new Date(__deltaSince).getTime() - DELTA_OVERLAP_MS).toISOString();
+}
+/* أحدث طابع في مجموعة صفوف — بساعة الخادم لا المتصفّح */
+function maxStamp(rows, ...fields){
+  let m='';
+  for(const r of (rows||[])) for(const f of fields){
+    const v=r && r[f]; if(v && String(v)>m) m=String(v);
+  }
+  return m;
+}
+/* دمج بالمعرّف: الوارد يغلب الموجود، ثم ترتيب ثابت */
+function mergeRows(cur, incoming, cmp){
+  if(!incoming || !incoming.length) return cur;
+  const m=new Map();
+  for(const r of (cur||[])) if(r && r.id!==undefined) m.set(r.id,r);
+  for(const r of incoming)  if(r && r.id!==undefined) m.set(r.id,r);
+  const out=[...m.values()];
+  if(cmp) out.sort(cmp);
+  return out;
+}
+/* استبدال مجموعات كاملة: كل صفوف المفاتيح المذكورة تُحذف ثم تُوضع الواردة */
+function replaceGroups(cur, incoming, keyField, keys){
+  const ks=new Set(keys);
+  const kept=(cur||[]).filter(r=>!ks.has(r && r[keyField]));
+  return kept.concat(incoming||[]);
+}
+const cmpDesc = f => (a,b)=>String(b[f]||'').localeCompare(String(a[f]||''));
+const cmpSale = (a,b)=>String(b.sale_date||'').localeCompare(String(a.sale_date||''))
+                    || String(b.created_at||'').localeCompare(String(a.created_at||''));
+
+/* PostgREST: in.(...) — نقسّم إلى دفعات فلا يطول الرابط بلا حدّ */
+async function fetchByKeys(table, keyField, keys, select, order){
+  const out=[]; const arr=[...new Set(keys)].filter(k=>k!==undefined&&k!==null);
+  for(let i=0;i<arr.length;i+=120){
+    const chunk=arr.slice(i,i+120).map(k=>`"${String(k).replace(/"/g,'\\"')}"`).join(',');
+    const rows=await apiAll(table, `?select=${select}&${keyField}=in.(${chunk})&order=${order}`);
+    if(rows && rows.length) out.push(...rows);
+  }
+  return out;
+}
+
+/* ══════════════════ (0080) نافذة تاريخ المبيعات ══════════════════
+   كان كل تحميل يجلب تاريخ المبيعات كلَّه (10.5 ألف فاتورة و54 ألف سطر).
+   العمل اليومي لا يحتاج إلا الأشهر الأخيرة، والتقارير القديمة تُطلب نادراً.
+   فنبدأ بـ 90 يوماً، ونُنزل الأقدم **عند الطلب فقط**: حين يختار المستخدم
+   فترة تقرير أقدم، أو يضغط «تحميل الأقدم» في قائمة الفواتير.
+
+   ensureSalesHistory تجلب الشقّ الناقص مرّة واحدة وتدمجه، فلا يتكرّر
+   التنزيل لو عاد المستخدم إلى الفترة نفسها. */
+
+const SALES_WINDOW_DAYS = 90;
+var __salesHorizon = null;      /* أقدم تاريخ بيع مُحمَّل فعلاً (YYYY-MM-DD) */
+var __historyBusy = false;
+
+function salesHorizonDate(){
+  const d=new Date(Date.now() - SALES_WINDOW_DAYS*864e5).toISOString().slice(0,10);
+  if(!__salesHorizon || d < __salesHorizon) __salesHorizon = d;
+  return d;
+}
+
+/* هل نملك المبيعات ابتداءً من هذا التاريخ؟ وإن لا، أنزل الناقص. */
+async function ensureSalesHistory(fromDate){
+  const from=String(fromDate||'').slice(0,10);
+  if(!from || !navigator.onLine) return false;
+  if(__salesHorizon && from >= __salesHorizon) return false;   /* موجود أصلاً */
+  if(__historyBusy) return false;
+  __historyBusy=true;
+  const until = __salesHorizon || new Date().toISOString().slice(0,10);
+  try{
+    setSyncState?.('syncing','جارٍ تنزيل مبيعات أقدم…');
+    const older = await apiAll('pos_sales',
+      `?select=*&sale_date=gte.${from}&sale_date=lt.${until}&order=sale_date.desc,created_at.desc,id.asc`);
+    if(older && older.length){
+      const ids=older.map(x=>x.id);
+      const [items,pays] = await Promise.all([
+        fetchByKeys('pos_sale_items','sale_id',ids,SEL_SALE_ITEMS,'created_at.asc,id.asc'),
+        fetchByKeys('pos_sale_payments','sale_id',ids,'*','created_at.asc,id.asc')
+      ]);
+      sales        = mergeRows(sales, older, cmpSale);
+      saleItems    = replaceGroups(saleItems, items, 'sale_id', ids);
+      salePayments = replaceGroups(salePayments, pays, 'sale_id', ids);
+      const rets = await apiAll('pos_sale_returns',
+        `?select=*&return_date=gte.${from}&return_date=lt.${until}&order=return_date.desc,id.asc`).catch(()=>[]);
+      if(rets && rets.length){
+        const rids=rets.map(x=>x.id);
+        const ritems=await fetchByKeys('pos_sale_return_items','return_id',rids,'*','created_at.asc,id.asc');
+        saleReturns     = mergeRows(saleReturns, rets, cmpDesc('return_date'));
+        saleReturnItems = replaceGroups(saleReturnItems, ritems, 'return_id', rids);
+      }
+    }
+    __salesHorizon = from;
+    if(legacyCostMap||!costViewMap){ try{buildProductCostIndex();}catch(_e){} }
+    saveEssentialCache?.();
+    setSyncState?.('online','متصل - تم تنزيل المبيعات الأقدم');
+    return true;
+  }catch(e){
+    console.warn('تعذّر تنزيل المبيعات الأقدم', e);
+    setSyncState?.('online','متصل');
+    return false;
+  }finally{ __historyBusy=false; }
+}
+
+/* ══════════════════ (0081) ملخّص التقرير من الخادم ══════════════════
+   التقرير عن فترة أقدم من النافذة المحمَّلة كان يعني تنزيل عشرات الآلاف
+   من سطور البيع ليجمعها المتصفّح. الملخّص الناتج بضعة كيلوبايت.
+
+   فبدل التنزيل: نسأل الخادم pos_report_summary فيُجمّع هناك ويعيد
+   الإجماليات وأعلى الأصناف والبيع حسب البائع والفرع في استجابة واحدة.
+   التفاصيل الكاملة تبقى على بُعد ضغطة زر لمن يحتاجها.
+
+   لو لم تُنصَّب الدالة (SQL 0081) نعود تلقائياً إلى التنزيل — لا كسر. */
+
+var __repServerCache = {};
+
+async function reportSummaryFromServer(from, to, loc){
+  const key=[from,to,loc||''].join('|');
+  if(__repServerCache[key]) return __repServerCache[key];
+  const body={p_from:from, p_to:to||new Date().toISOString().slice(0,10), p_top:50};
+  if(loc) body.p_location=loc;
+  const r=await rpc('pos_report_summary', body);
+  const data=Array.isArray(r)?r[0]:r;
+  if(!data || typeof data!=='object') throw new Error('رد غير متوقَّع');
+  __repServerCache[key]=data;
+  return data;
+}
+
+function renderServerSummary(d){
+  const box=q('repServerBanner'); if(!box) return;
+  const t=d.totals||{};
+  const net=Number(t.revenue||0)-Number(t.returns_total||0);
+  const rows=(d.top||[]).slice(0,12).map(x=>
+    `<tr><td class="ltr"><span class="code">${esc(String(x.code||'').toUpperCase())}</span></td>`
+    +`<td>${esc(x.name||'')}</td><td class="amount">${money(x.qty)}</td>`
+    +`<td class="amount">${money(x.sales)}</td><td class="amount">${money(x.cost)}</td>`
+    +`<td class="amount ${profitClass(Number(x.profit||0))}">${money(x.profit)}</td></tr>`).join('');
+  box.classList.remove('hidden');
+  box.innerHTML=`<div class="tools"><h2>ملخّص محسوب على الخادم</h2>
+      <button class="btn secondary" type="button" onclick="loadReportDetails()" style="margin-inline-start:auto">
+        <i class="ti ti-download"></i> نزّل التفاصيل الكاملة</button></div>
+    <p class="mini">الفترة ${esc(String(d.from||''))} ← ${esc(String(d.to||''))} تسبق ما هو محمَّل في الجهاز.
+      جُمِّعت على الخادم بدل تنزيل آلاف السطور. التقارير التفصيلية أدناه لا تشمل هذه الفترة حتى تنزّلها.</p>
+    <div class="grid cards">
+      <div class="card"><h3>عدد الفواتير</h3><div class="num">${money(t.sales_count)}</div></div>
+      <div class="card"><h3>المبيعات</h3><div class="num">${money(t.revenue)}</div></div>
+      <div class="card"><h3>المرتجعات</h3><div class="num">${money(t.returns_total)}</div></div>
+      <div class="card"><h3>الصافي</h3><div class="num">${money(net)}</div></div>
+      <div class="card"><h3>التكلفة</h3><div class="num">${money(t.cost)}</div></div>
+      <div class="card"><h3>الربح</h3><div class="num ${profitClass(Number(d.profit||0))}">${money(d.profit)}</div></div>
+      <div class="card"><h3>غير محصَّل</h3><div class="num ${Number(t.due)>0.004?'stock-negative':''}">${money(t.due)}</div></div>
+    </div>
+    ${rows?`<div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th>
+      <th>المبيعات</th><th>التكلفة</th><th>الربح</th></tr></thead><tbody>${rows}</tbody></table></div>`:''}`;
+}
+
+function hideServerSummary(){ q('repServerBanner')?.classList.add('hidden'); }
+
+/* يُستدعى من فلتر التاريخ في شاشة التقارير */
+async function ensureReportRange(){
+  const from=q('reportFrom')?.value||'';
+  if(!from){ hideServerSummary(); return; }
+  if(__salesHorizon && from >= __salesHorizon){ hideServerSummary(); return; }  /* محمَّل أصلاً */
+  const to=q('reportTo')?.value||new Date().toISOString().slice(0,10);
+  const loc=q('reportLocation')?.value||'';
+  try{
+    const d=await reportSummaryFromServer(from,to,loc);
+    renderServerSummary(d);
+  }catch(e){
+    /* الدالة غير منصَّبة أو تعذّرت ⇒ السلوك القديم: نزّل التفاصيل */
+    console.warn('pos_report_summary غير متاحة — نعود إلى تنزيل التفاصيل', e);
+    hideServerSummary();
+    const got=await ensureSalesHistory(from);
+    if(got){ try{ renderReportsDetail(); }catch(_e){} try{ renderSales(); }catch(_e){} }
+  }
+}
+
+/* زر «نزّل التفاصيل الكاملة» */
+async function loadReportDetails(){
+  const from=q('reportFrom')?.value||''; if(!from) return;
+  const got=await ensureSalesHistory(from);
+  if(got){
+    hideServerSummary();
+    try{ renderReportsDetail(); }catch(_e){}
+    try{ renderSales(); }catch(_e){}
+  }
+}
+
+
+/* (0080) أعمدة صريحة بدل select=* للجدولين الأثقل.
+   pos_sale_items وحده ~54 ألف سطر؛ الأعمدة غير المستعملة تُنقل بلا فائدة.
+   أعِد LEAN_SELECT إلى false لو ظهر عمود ناقص — يعود كل شيء إلى select=*. */
+const LEAN_SELECT = true;
+const SEL_SALE_ITEMS = LEAN_SELECT
+  ? 'id,sale_id,product_code,product_name,qty,unit_price,line_total,discount,unit_cost_at_sale,price_edited,created_at'
+  : '*';
+const SEL_STOCK = LEAN_SELECT
+  ? 'id,location_id,product_code,product_name,qty,updated_at'
+  : '*';
+
 async function refreshSalesDomain(o={}){
   if(!navigator.onLine) return false;
   const cutoff90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+  const since=deltaWindowStart();
+  const hzNow = __salesHorizon || salesHorizonDate();
+  let wantFull = o.full || !since || !sales.length
+                 || (Date.now()-__lastFullSync) > DELTA_FULL_EVERY_MS;
+  /* مجسّ العدّ: ~200 بايت بدل إعادة تنزيل النافذة كلّها بحثاً عن محذوف */
+  if(!wantFull && await deletionsSuspected(hzNow)){
+    console.info('[sync] نقص في عدد الصفوف ⇒ تحديث كامل');
+    wantFull = true;
+  }
+
+  /* ─────────── المسار التفاضلي: لا نجلب إلا ما تغيّر ─────────── */
+  if(!wantFull){
+    try{
+      const [chSales, chStock, chLedger, chReturns] = await Promise.all([
+        apiAll('pos_sales', `?select=*&updated_at=gte.${encodeURIComponent(since)}&order=updated_at.asc,id.asc`),
+        apiAll('pos_stock', `?select=${SEL_STOCK}&updated_at=gte.${encodeURIComponent(since)}&order=updated_at.asc,id.asc`),
+        apiAll('pos_customer_ledger', `?select=*&created_at=gte.${encodeURIComponent(since)}&entry_date=gte.${cutoff90}&order=created_at.asc,id.asc`),
+        apiAll('pos_sale_returns', `?select=*&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc,id.asc`)
+      ]);
+
+      /* الفواتير المتغيّرة: تُعاد سطورها ودفعاتها كاملةً لا تفاضلياً،
+         لأن تعديل الفاتورة يحذف السطور ويعيد إدراجها. */
+      const saleIds=(chSales||[]).map(s=>s.id);
+      const retIds =(chReturns||[]).map(r=>r.id);
+      const [items, pays, retItems] = await Promise.all([
+        saleIds.length ? fetchByKeys('pos_sale_items','sale_id',saleIds,SEL_SALE_ITEMS,'created_at.asc,id.asc') : [],
+        saleIds.length ? fetchByKeys('pos_sale_payments','sale_id',saleIds,'*','created_at.asc,id.asc') : [],
+        retIds.length  ? fetchByKeys('pos_sale_return_items','return_id',retIds,'*','created_at.asc,id.asc') : []
+      ]);
+
+      sales           = mergeRows(sales, chSales, cmpSale);
+      stock           = mergeRows(stock, chStock, cmpDesc('updated_at'));
+      customerLedger  = mergeRows(customerLedger, chLedger, cmpDesc('entry_date'));
+      saleReturns     = mergeRows(saleReturns, chReturns, cmpDesc('return_date'));
+      if(saleIds.length){
+        saleItems    = replaceGroups(saleItems, items, 'sale_id', saleIds);
+        salePayments = replaceGroups(salePayments, pays, 'sale_id', saleIds);
+      }
+      if(retIds.length) saleReturnItems = replaceGroups(saleReturnItems, retItems, 'return_id', retIds);
+
+      /* أرصدة الزبائن مشتقّة من الدفتر، والخزينة محدودة أصلاً — تُجلب فقط
+         حين تغيّر الدفتر أو الفواتير، لا في كل نبضة. */
+      if((chLedger||[]).length || saleIds.length){
+        const [bal, fin] = await Promise.all([
+          apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc').catch(()=>null),
+          api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc&limit=200'}).catch(()=>null)
+        ]);
+        if(bal) customers=bal;
+        if(fin) financeMovements=fin;
+      }
+
+      /* الطابع من ساعة الخادم: أحدث صفّ وصلنا فعلاً */
+      const st=[maxStamp(chSales,'updated_at'), maxStamp(chStock,'updated_at'),
+                maxStamp(chLedger,'created_at'), maxStamp(chReturns,'created_at')]
+               .filter(Boolean).sort().slice(-1)[0];
+      if(st) __deltaSince=st;
+
+      const touched=(chSales||[]).length+(chStock||[]).length+(chLedger||[]).length+(chReturns||[]).length;
+      if(touched && !costViewMap){ try{buildProductCostIndex();}catch(_e){} }
+      if(touched && !o.skipRender) refreshSalesDomainRender();
+      saveEssentialCache?.();
+      markSynced();
+      return true;
+    }catch(e){
+      console.warn('المزامنة التفاضلية تعذّرت — نعود إلى التحديث الكامل', e);
+      /* ونكمل إلى المسار الكامل أدناه */
+    }
+  }
+
+  /* ─────────── المسار الكامل: أول تحميل، أو كل 15 دقيقة لالتقاط المحذوف ─────────── */
+  /* (0080) التحديث الكامل الدوري يحترم الأفق المحمَّل: بلا هذا كان يُعيد
+     تنزيل التاريخ كلّه كل 15 دقيقة فيلتهم ما وفّرته النافذة. */
+  const hz = __salesHorizon || salesHorizonDate();
   const r=await Promise.all([
-    apiAll('pos_sales','?select=*&order=sale_date.desc,created_at.desc,id.asc').catch(()=>null),
-    apiAll('pos_sale_items','?select=*&order=created_at.desc,id.asc').catch(()=>null),
-    apiAll('pos_sale_payments','?select=*&order=created_at.desc,id.asc').catch(()=>null),
-    apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc').catch(()=>null),
-    apiAll('pos_sale_returns','?select=*&order=return_date.desc,created_at.desc,id.asc').catch(()=>null),
-    apiAll('pos_sale_return_items','?select=*&order=created_at.desc,id.asc').catch(()=>null),
+    apiAll('pos_sales',`?select=*&sale_date=gte.${hz}&order=sale_date.desc,created_at.desc,id.asc`).catch(()=>null),
+    apiAll('pos_sale_items',`?select=${SEL_SALE_ITEMS}&created_at=gte.${hz}&order=created_at.desc,id.asc`).catch(()=>null),
+    apiAll('pos_sale_payments',`?select=*&created_at=gte.${hz}&order=created_at.desc,id.asc`).catch(()=>null),
+    apiAll('pos_stock',`?select=${SEL_STOCK}&order=updated_at.desc,id.asc`).catch(()=>null),
+    apiAll('pos_sale_returns',`?select=*&return_date=gte.${hz}&order=return_date.desc,created_at.desc,id.asc`).catch(()=>null),
+    apiAll('pos_sale_return_items',`?select=*&created_at=gte.${hz}&order=created_at.desc,id.asc`).catch(()=>null),
     api('pos_stock_movements',{qs:'?select=*&order=movement_date.desc&limit=50'}).catch(()=>null),
     apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc,id.asc').catch(()=>null),
     api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc&limit=200'}).catch(()=>null),
@@ -3305,17 +3640,28 @@ async function refreshSalesDomain(o={}){
   sales=r[0]; saleItems=r[1]||saleItems; salePayments=r[2]||salePayments; stock=r[3];
   saleReturns=r[4]||saleReturns; saleReturnItems=r[5]||saleReturnItems; stockMovements=r[6]||stockMovements;
   customerLedger=r[7]||customerLedger; financeMovements=r[8]||financeMovements; customers=r[9]||customers; stockCounts=r[10]||stockCounts;
-  if(!costViewMap){try{buildProductCostIndex();}catch(_e){}} /* (0076) وجهة نظر الخادم أولوية — لا محاكاة محلية بلا داعي */
-  if(!o.skipRender){
-    try{renderSales();}catch(_e){}
-    try{renderStatusBar();}catch(_e){}
-    if(q('stock')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{renderStock();}catch(_e){} }
-    if(q('stockCount')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{ if(q('stockCountLists')?.style.display!=='none') renderStockCountLists(); else renderStockCount(); }catch(_e){} }
-  }
+
+  __lastFullSync=Date.now();
+  if(!__salesHorizon) __salesHorizon=hz;
+  const st=[maxStamp(sales,'updated_at'), maxStamp(stock,'updated_at')].filter(Boolean).sort().slice(-1)[0];
+  __deltaSince = st || new Date().toISOString();
+
+  if(legacyCostMap||!costViewMap){try{buildProductCostIndex();}catch(_e){}} /* (0076) وجهة نظر الخادم أولوية — لا محاكاة محلية بلا داعي */
+  if(!o.skipRender) refreshSalesDomainRender();
   saveEssentialCache?.();
   markSynced();   /* (العمل دون اتصال) */
   return true;
 }
+
+/* الرسم مشترك بين المسارين */
+function refreshSalesDomainRender(){
+  try{renderSales();}catch(_e){}
+  try{renderStatusBar();}catch(_e){}
+  if(q('stock')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{renderStock();}catch(_e){} }
+  if(q('stockCount')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{ if(q('stockCountLists')?.style.display!=='none') renderStockCountLists(); else renderStockCount(); }catch(_e){} }
+}
+
+
 /* ══════ (0077) مجسّ التغيير قبل التحديث الدوري ══════
    refreshSalesDomain يكلّف 33 طلباً و~14.5 ثانية على بيانات الإنتاج، وكان يعمل
    كل دقيقة سواء تغيّر شيء أم لا — وهو السبب الأول لـ«جاري التحميل» الدائم.
@@ -3393,7 +3739,7 @@ function renderSales(){
   entries.sort((a,b)=>{const d=b.date.localeCompare(a.date);return d||b.key.localeCompare(a.key,'ar',{numeric:true});});
   const more=entries.length-salesListLimit;
   q('salesBody').innerHTML=(entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('')
-    +(more>0?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="salesListLimit+=300;renderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'')
+    +(more>0?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'')
   ) || '<tr><td colspan="10">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
@@ -7387,6 +7733,17 @@ function renderSellerSales(){
     return `<tr><td class="ltr"><span class="code">${esc(sl.invoice_no||String(sl.id).slice(0,8))}</span></td><td>${esc(sl.sale_date||'')}</td><td>${esc(l?.name||'')}</td><td>${esc(c?.name||'زبون نقدي')}</td><td>${money(sl.total)}</td><td>${money(sl.paid_amount)}</td><td class="${Number(sl.balance_due)>0.004?'stock-negative':''}">${money(sl.balance_due)}</td><td class="${profitClass(prof)}">${money(prof)}</td></tr>`;
   }).join('') || '<tr><td colspan="8">لا فواتير.</td></tr>';
 }
+
+/* (0080) الفترة المطلوبة قد تسبق ما حُمِّل (نافذة 90 يوماً) — ننزّل الناقص
+   عند الطلب لا دائماً. */
+function loadOlderSales(){
+  salesListLimit+=300;
+  const oldest=__salesHorizon||new Date().toISOString().slice(0,10);
+  const back=new Date(new Date(oldest).getTime()-180*864e5).toISOString().slice(0,10);
+  ensureSalesHistory(back).then(got=>{ renderSales(); }).catch(()=>renderSales());
+  renderSales();
+}
+
 function reportContext(){
   const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'', loc=q('reportLocation')?.value||'';
   const filteredSales=sales.filter(sl=>inDateRange(sl.sale_date,from,to)&&(!loc||sl.location_id===loc));
