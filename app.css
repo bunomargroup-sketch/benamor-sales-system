@@ -1107,3 +1107,35 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
 /* (1972) زرّا فلتر أرصدة الزبائن (نشط) */
 #custFilterDebt.active{background:var(--blue);border-color:var(--blue);color:#fff}
 #custFilterCredit.active{background:#059669;border-color:#059669;color:#fff}
+
+/* ── (1973) قائمة المصاريف: شريط فلاتر مضغوط + جدول مدمج — مقيّد بشاشة المصاريف فقط ── */
+#expensesQuick .exp-filters{display:flex;flex-wrap:wrap;gap:5px 8px;align-items:center;margin:6px 0}
+#expensesQuick .exp-range{display:inline-flex;gap:4px;flex-wrap:wrap}
+#expensesQuick .exp-range-chip{border:1px solid var(--border);background:var(--card);color:var(--muted);font-family:inherit;font-weight:700;font-size:12px;line-height:1.35;padding:4px 11px;border-radius:999px;cursor:pointer;transition:all .12s ease}
+#expensesQuick .exp-range-chip:hover{color:var(--text);border-color:color-mix(in srgb,var(--blue) 35%,var(--border))}
+#expensesQuick .exp-range-chip.active{background:var(--blue);border-color:var(--blue);color:#fff}
+#expensesQuick .exp-reset{margin-inline-start:auto;padding:5px 12px;font-size:12.5px;border-radius:9px}
+#expensesQuick .exp-f-label{font-size:11.5px;color:var(--muted);font-weight:700;margin:0}
+#expensesQuick .exp-filters input[type=date],#expensesQuick .exp-filters select{width:auto;min-width:0;padding:5px 8px;font-size:12.5px;border-radius:9px}
+#expensesQuick .exp-filters input[type=date]{flex:0 0 auto}
+#expensesQuick .exp-filters select{flex:1 1 132px;max-width:200px}
+#expensesQuick .exp-filters #expenseListSearch{flex:2 1 150px;max-width:300px}
+#expensesQuick .expenses-table{font-size:12.5px;margin-top:4px}
+#expensesQuick .expenses-table th,#expensesQuick .expenses-table td{padding:6px 9px}
+#expensesQuick .expenses-table th{font-size:11.5px}
+#expensesQuick .exp-date{white-space:nowrap;color:var(--muted);font-size:11.5px}
+#expensesQuick .exp-sub{margin-top:1px}
+#expensesQuick .exp-acc{color:var(--muted)}
+#expensesQuick .exp-amt{white-space:nowrap;font-weight:800}
+#expensesQuick .exp-by{color:var(--muted);font-size:11.5px;white-space:nowrap}
+#expensesQuick .exp-act{white-space:nowrap}
+#expensesQuick .ibtn{border:1px solid var(--border);background:var(--card);color:var(--muted);border-radius:8px;padding:3px 7px;cursor:pointer;line-height:1;display:inline-flex;align-items:center;vertical-align:middle}
+#expensesQuick .ibtn i{font-size:14px}
+#expensesQuick .ibtn:hover{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 40%,var(--border));background:var(--accent-soft)}
+#expensesQuick .ibtn.ibtn-danger:hover{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,var(--border))}
+@media(max-width:900px){
+  #expensesQuick .expenses-table .exp-by,#expensesQuick .expenses-table th.exp-by-th{display:none}
+  #expensesQuick .exp-filters select{max-width:none}
+  #expensesQuick .exp-filters #expenseListSearch{flex-basis:100%;max-width:none}
+  #expensesQuick .exp-reset{margin-inline-start:0}
+}

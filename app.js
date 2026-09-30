@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1972';
+const APP_BUILD='b20260929-1973';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -6635,17 +6635,52 @@ function canEditExpenseRow(x){
 }
 function canDeleteExpenseRow(){ return currentRole?.role==='admin'; }
 function debouncedExpenseSearch(){ clearTimeout(expensesSearchTimer); expensesSearchTimer=setTimeout(fetchExpensesList,250); }
-function initExpensesListTab(){
-  if(expensesListInit) return; expensesListInit=true;
-  const now=new Date();
-  if(q('expenseListFrom')) q('expenseListFrom').value=now.toISOString().slice(0,8)+'01'; /* الشهر الحالي */
-  if(q('expenseListTo')) q('expenseListTo').value=now.toISOString().slice(0,10);
-  if(q('expenseListBranch')){
-    q('expenseListBranch').innerHTML='<option value="">كل الفروع</option>'+locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
-    /* فلتر راحة فقط (لا قيد صلاحية): يبدأ على فرع المستخدم ويمكن تغييره */
-    if(appUser?.branch_id && locations.some(l=>l.id===appUser.branch_id)) q('expenseListBranch').value=appUser.branch_id;
+/* (1973) خيارات الفرع تُبقي متزامنة مع البيانات عند كل جلب: إن وصلت الفروع بعد فتح
+   التبويب كان الفلتر سابقاً عالقاً على «كل الفروع» فقط ⇒ «فلتر الفرع لا يعمل».
+   الخيار «بدون فرع» يغطي المصاريف القديمة بلا فرع (location_id=null) — قبل 1973 كانت
+   تختفي عند اختيار أي فرع فتبدو القائمة كأن الفلتر مكسور. */
+function syncExpenseFilterOptions(){
+  const br=q('expenseListBranch');
+  if(br){
+    const cur=br.value, hadOptions=br.options.length>1;
+    br.innerHTML='<option value="">كل الفروع</option><option value="__no_branch__">بدون فرع (قديم)</option>'+locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    if(cur && [...br.options].some(o=>o.value===cur)) br.value=cur;      /* نحافظ على اختيار المستخدم */
+    else if(!hadOptions) br.value=expenseDefaultBranchValue();          /* أول تهيئة فقط */
   }
   fillExpenseCategoryFilter();
+}
+function expenseDefaultBranchValue(){
+  /* المدير يرى كل الفروع افتراضياً. الباقي يبدأ على فرعه (فلتر راحة — لا قيد صلاحية). */
+  if(currentRole?.role==='admin') return '';
+  return (appUser?.branch_id && locations.some(l=>l.id===appUser.branch_id)) ? appUser.branch_id : '';
+}
+function expenseRangeDates(kind){
+  const now=new Date(), iso=now.toISOString();
+  if(kind==='month') return [iso.slice(0,8)+'01', iso.slice(0,10)];
+  if(kind==='30d') return [new Date(Date.now()-29*864e5).toISOString().slice(0,10), iso.slice(0,10)];
+  if(kind==='year') return [iso.slice(0,5)+'01-01', iso.slice(0,10)];
+  return ['', ''];
+}
+function setExpenseRange(kind){
+  const [f,t]=expenseRangeDates(kind);
+  if(q('expenseListFrom')) q('expenseListFrom').value=f;
+  if(q('expenseListTo')) q('expenseListTo').value=t;
+  updateExpenseRangeChips();
+  fetchExpensesList();
+}
+function updateExpenseRangeChips(){
+  const from=q('expenseListFrom')?.value, to=q('expenseListTo')?.value;
+  let active='';
+  for(const k of ['month','30d','year','all']){ const [f,t]=expenseRangeDates(k); if(f===from && t===to){ active=k; break; } }
+  document.querySelectorAll('.exp-range-chip').forEach(b=>b.classList.toggle('active', b.dataset.range===active));
+}
+function initExpensesListTab(){
+  if(expensesListInit) return; expensesListInit=true;
+  const [f,t]=expenseRangeDates('month'); /* الشهر الحالي */
+  if(q('expenseListFrom')) q('expenseListFrom').value=f;
+  if(q('expenseListTo')) q('expenseListTo').value=t;
+  syncExpenseFilterOptions();
+  updateExpenseRangeChips();
 }
 function fillExpenseCategoryFilter(){
   const opts='<option value="">كل التصنيفات</option>'+(expenseCategories||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
@@ -6656,33 +6691,37 @@ function expenseMatchesListFilters(x){
   if(from && String(x.expense_date||'')<from) return false;
   if(to && String(x.expense_date||'')>to) return false;
   if(cat && x.category_id!==cat) return false;
-  if(br && x.location_id!==br) return false;
+  if(br==='__no_branch__'){ if(x.location_id!=null) return false; }
+  else if(br && x.location_id!==br) return false;
   if(sr && !String(x.title||'').includes(sr)) return false;
   return true;
 }
 function resetExpenseListFilters(){
-  const now=new Date();
-  if(q('expenseListFrom')) q('expenseListFrom').value=now.toISOString().slice(0,8)+'01';
-  if(q('expenseListTo')) q('expenseListTo').value=now.toISOString().slice(0,10);
+  const [f,t]=expenseRangeDates('month');
+  if(q('expenseListFrom')) q('expenseListFrom').value=f;
+  if(q('expenseListTo')) q('expenseListTo').value=t;
   if(q('expenseListCategory')) q('expenseListCategory').value='';
-  if(q('expenseListBranch')) q('expenseListBranch').value=(appUser?.branch_id&&locations.some(l=>l.id===appUser.branch_id))?appUser.branch_id:'';
+  if(q('expenseListBranch')) q('expenseListBranch').value=expenseDefaultBranchValue();
   if(q('expenseListSearch')) q('expenseListSearch').value='';
+  updateExpenseRangeChips();
   fetchExpensesList();
 }
 async function fetchExpensesList(){
   initExpensesListTab();
+  syncExpenseFilterOptions(); /* (1973) إن وصلت الفروع بعد فتح التبويب — الخيارات متاحة دائماً */
   const qs=['select=*&order=expense_date.desc,created_at.desc,id.asc'];
   const from=q('expenseListFrom')?.value, to=q('expenseListTo')?.value, cat=q('expenseListCategory')?.value, br=q('expenseListBranch')?.value, sr=q('expenseListSearch')?.value?.trim();
   if(from) qs.push('expense_date=gte.'+from);
   if(to) qs.push('expense_date=lte.'+to);
   if(cat) qs.push('category_id=eq.'+cat);
-  if(br) qs.push('location_id=eq.'+br);
+  if(br==='__no_branch__') qs.push('location_id=is.null');
+  else if(br) qs.push('location_id=eq.'+br);
   if(sr) qs.push('title=ilike.*'+encodeURIComponent(sr)+'*');
   qs.push('limit='+expensesListLimit);
   try{
     expensesListCache=await api('pos_expenses',{qs:'?'+qs.join('&')})||[];
     renderExpensesList();
-  }catch(err){ console.warn('فشل جلب قائمة المصاريف — تُعرض آخر قائمة متاحة',err); }
+  }catch(err){ console.warn('فشل جلب قائمة المصاريف — تُعرض آخر قائمة متاحة',err); if(q('expensesListInfo')) q('expensesListInfo').textContent='⚠ تعذّر الجلب — تُعرض آخر نتيجة متاحة'; }
 }
 function onExpensesTabOpen(){ initExpensesListTab(); renderExpensesList(); fetchExpensesList(); }
 function expensesLoadMore(){ expensesListLimit+=500; fetchExpensesList(); }
@@ -6692,10 +6731,13 @@ function renderExpensesList(){
   const locMap=new Map(locations.map(l=>[l.id,l.name]));
   const accMap=new Map(financeAccounts.map(a=>[a.id,a.name]));
   const catMap=new Map((expenseCategories||[]).map(c=>[c.id,c.name]));
+  /* (1973) حالة فلتر الفرع ظاهرة دائماً — لا «فلتر بلا أثر»: نعرف أي فرع معروض */
+  const bv=q('expenseListBranch')?.value||'';
+  const brLabel= bv==='__no_branch__' ? 'بدون فرع' : (bv ? (locMap.get(bv)||'؟') : '');
   if(!expensesListCache.length){
-    body.innerHTML='<tr><td colspan="8">لا توجد مصاريف مطابقة للفلاتر.</td></tr>';
-    if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML='<tr><td colspan="8" class="mini">—</td></tr>';
-    if(q('expensesListInfo')) q('expensesListInfo').textContent='';
+    body.innerHTML='<tr><td colspan="7">لا توجد مصاريف مطابقة للفلاتر.</td></tr>';
+    if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML='<tr><td colspan="7" class="mini">—</td></tr>';
+    if(q('expensesListInfo')) q('expensesListInfo').textContent=brLabel?`لا توجد نتائج · الفرع: ${brLabel}`:'لا توجد نتائج';
     q('expensesMoreBtn')?.classList.add('hidden');
     return;
   }
@@ -6703,10 +6745,17 @@ function renderExpensesList(){
   body.innerHTML=expensesListCache.map(x=>{
     const safe=String(x.id).replace(/'/g,"\\'");
     const canEdit=canEditExpenseRow(x), canDel=canDeleteExpenseRow(); /* الأزرار غير المتاحة تُخفى */
-    return `<tr><td>${esc(x.expense_date)}</td><td>${esc(x.title)}${x.notes?`<div class="mini">${esc(x.notes)}</div>`:''}</td><td>${esc(catMap.get(x.category_id)||'—')}</td><td>${esc(locMap.get(x.location_id)||'—')}</td><td>${esc(accMap.get(x.account_id)||'—')}</td><td><b>${money(x.amount)}</b></td><td>${esc(x.created_by||'—')}</td><td style="white-space:nowrap">${canEdit?`<button class="btn secondary" type="button" onclick="editExpense('${safe}')">تعديل</button>`:''}${canDel?` <button class="btn danger" type="button" onclick="deleteExpense('${safe}')">حذف</button>`:''}</td></tr>`;
+    const cat=catMap.get(x.category_id);
+    const sub=[cat,x.notes?String(x.notes):''].filter(Boolean).map(esc).join(' · ');
+    const locName=locMap.get(x.location_id);
+    const acts=[
+      canEdit?`<button class="ibtn" type="button" title="تعديل" onclick="editExpense('${safe}')"><i class="ti ti-pencil"></i></button>`:'',
+      canDel?`<button class="ibtn ibtn-danger" type="button" title="حذف" onclick="deleteExpense('${safe}')"><i class="ti ti-trash"></i></button>`:''
+    ].join('');
+    return `<tr><td class="exp-date">${esc(x.expense_date)}</td><td>${esc(x.title)}${sub?`<div class="mini exp-sub">${sub}</div>`:''}</td><td>${locName?`<span class="${branchChip(x.location_id)}">${esc(locName)}</span>`:'<span class="muted">—</span>'}</td><td class="exp-acc">${esc(accMap.get(x.account_id)||'—')}</td><td class="exp-amt"><b>${money(x.amount)}</b></td><td class="exp-by">${esc(x.created_by||'—')}</td><td class="exp-act">${acts}</td></tr>`;
   }).join('');
-  if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML=`<tr><td colspan="5"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="2" class="mini">${expensesListCache.length} مصروفاً</td></tr>`;
-  if(q('expensesListInfo')) q('expensesListInfo').textContent=`النتائج: ${expensesListCache.length}${expensesListCache.length>=expensesListLimit?'+ (يوجد المزيد)':''}`;
+  if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML=`<tr><td colspan="4"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="2" class="mini">${expensesListCache.length} مصروفاً</td></tr>`;
+  if(q('expensesListInfo')) q('expensesListInfo').textContent=`النتائج: ${expensesListCache.length}${expensesListCache.length>=expensesListLimit?'+ (يوجد المزيد)':''}${brLabel?' · الفرع: '+brLabel:''}`;
   q('expensesMoreBtn')?.classList.toggle('hidden', expensesListCache.length<expensesListLimit);
 }
 function editExpense(id){
