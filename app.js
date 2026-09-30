@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1971';
+const APP_BUILD='b20260929-1972';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2737,11 +2737,15 @@ function badgeCustomer(balance){
   return `<span class="badge gray">متوازن</span>`;
 }
 let customersListLimit=200; /* (0076) أول 200 زبون ثم «تحميل الأقدم» */
+/* (1972) فلتر الأرصدة: زبائن عليهم ديون (موجب) / زبائن لديهم رصيد (سالب) — زرّان فوق القائمة */
+let customerBalanceFilter=''; /* '' | 'debt' | 'credit' */
+function customerBalanceKind(balance){ const b=Number(balance||0); if(b>0.001) return 'debt'; if(b<-0.001) return 'credit'; return 'balanced'; }
+function toggleCustomerBalanceFilter(kind){ customerBalanceFilter=(customerBalanceFilter===kind)?'':kind; renderCustomers(); }
 function renderCustomers(){
   const term=(q('customerSearch')?.value||'').trim();
   const showInactive=q('customerShowInactive')?.checked;
   const isAdmin=currentRole?.role==='admin';
-  const rows=customers.filter(c=>(!term || (c.name||'').includes(term) || (c.phone||'').includes(term)) && (showInactive || c.active!==false));
+  const rows=customers.filter(c=>(!term || (c.name||'').includes(term) || (c.phone||'').includes(term)) && (showInactive || c.active!==false) && (customerBalanceFilter==='' || customerBalanceKind(c.balance)===customerBalanceFilter));
   const more=rows.length-customersListLimit;
   q('customersBody').innerHTML = rows.slice(0,customersListLimit).map(c=>{
     const inactive=c.active===false;
@@ -2750,7 +2754,16 @@ function renderCustomers(){
     else if(isAdmin) actions.push(`<button class="btn danger" onclick="deleteCustomer('${c.id}')">حذف</button>`);
     return `<tr${inactive?' style="opacity:.55"':''}><td class="ltr"><b>${esc(c.customer_no)}</b></td><td><b>${c.name}</b>${inactive?' <span class="badge gray">معطّل</span>':''}<div class="muted">${c.notes||''}</div></td><td class="ltr">${c.phone||''}${c.phone2?'<div class="mini ltr">'+c.phone2+'</div>':''}</td><td>${c.address||''}</td><td><b>${money(c.balance)}</b></td><td>${badgeCustomer(c.balance)}</td><td><div class="row">${actions.join('')}</div></td></tr>`;
   }).join('')+(more>0?`<tr><td colspan="7" style="text-align:center;padding:10px"><button class="btn secondary" onclick="customersListLimit+=400;renderCustomers()">⬇ تحميل الأقدم (${more} زبون)</button></td></tr>`:'')
-    || '<tr><td colspan="7">لا يوجد زبائن بعد.</td></tr>';
+    || `<tr><td colspan="7">${customerBalanceFilter==='debt'?'لا يوجد زبائن عليهم ديون.':(customerBalanceFilter==='credit'?'لا يوجد زبائن لديهم رصيد.':'لا يوجد زبائن بعد.')}</td></tr>`;
+  /* (1972) تحديث الزرّين: العدد الفعلي + حالة النشاط */
+  {
+    const vis=c=>showInactive||c.active!==false;
+    const debtN=customers.filter(c=>vis(c)&&customerBalanceKind(c.balance)==='debt').length;
+    const creditN=customers.filter(c=>vis(c)&&customerBalanceKind(c.balance)==='credit').length;
+    const bd=q('custFilterDebt'), bc=q('custFilterCredit');
+    if(bd){ bd.textContent=`🔴 عليهم ديون (${debtN})`; bd.classList.toggle('active',customerBalanceFilter==='debt'); }
+    if(bc){ bc.textContent=`🟢 لديهم رصيد (${creditN})`; bc.classList.toggle('active',customerBalanceFilter==='credit'); }
+  }
 }
 async function openCustomerLedger(id){document.querySelector('[data-tab="customers"]').click(); q('customerLedgerCustomer').value=id;
   try{ const rows=await api('pos_customer_ledger',{qs:`?select=*&customer_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(customerLedger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) customerLedger.push(r); }); }catch(e){ console.warn('ledger history fetch failed — using loaded rows',e); }

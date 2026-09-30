@@ -8,7 +8,7 @@
        كانت تُجلب من fonts.googleapis.com و cdn.jsdelivr.net، والعامل الخدمي
        يتجاهل كل ما هو خارج النطاق ⇒ خطّ نظام ومربّعات فارغة مكان الأيقونات. -->
   <link rel="preload" href="assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/app-fonts.css?v=20260929-1971">
+  <link rel="stylesheet" href="assets/app-fonts.css?v=20260929-1972">
   
   
   
@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20260929-1971">
+<link rel="stylesheet" href="app.css?v=20260929-1972">
 </head>
 <body class="auth-locked">
   <header>
@@ -533,7 +533,7 @@
         </div>
 
         <div class="panel">
-          <div class="tools"><h2>قائمة الزبائن والديون</h2><input id="customerSearch" placeholder="بحث عن زبون..." style="max-width:300px" oninput="renderCustomers()"><label style="display:flex;align-items:center;gap:6px;margin:0"><input id="customerShowInactive" type="checkbox" style="width:auto" onchange="renderCustomers()"> إظهار المعطّلين</label></div>
+          <div class="tools"><h2>قائمة الزبائن والديون</h2><input id="customerSearch" placeholder="بحث عن زبون..." style="max-width:300px" oninput="renderCustomers()"><button class="btn secondary" id="custFilterDebt" type="button" onclick="toggleCustomerBalanceFilter('debt')" title="إظهار الزبائن المديونين فقط (رصيد موجب) — الضغط مرة أخرى يعيد الكل">🔴 عليهم ديون</button><button class="btn secondary" id="custFilterCredit" type="button" onclick="toggleCustomerBalanceFilter('credit')" title="إظهار الزبائن أصحاب الرصيد فقط (رصيد سالب) — الضغط مرة أخرى يعيد الكل">🟢 لديهم رصيد</button><label style="display:flex;align-items:center;gap:6px;margin:0"><input id="customerShowInactive" type="checkbox" style="width:auto" onchange="renderCustomers()"> إظهار المعطّلين</label></div>
           <div class="table-scroll"><table><thead><tr><th>رقم</th><th>الزبون</th><th>الهاتف</th><th>العنوان</th><th>الرصيد</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="customersBody"></tbody></table></div>
         </div>
 
@@ -1390,6 +1390,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20260929-1971"></script>
+<script src="app.js?v=20260929-1972"></script>
 </body>
 </html>

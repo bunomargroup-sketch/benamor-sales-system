@@ -1104,3 +1104,6 @@ nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
 .cat-node.active .count{color:var(--blue)}
 html[data-theme="dark"] .cat-toggle{background:transparent}
 html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
+/* (1972) زرّا فلتر أرصدة الزبائن (نشط) */
+#custFilterDebt.active{background:var(--blue);border-color:var(--blue);color:#fff}
+#custFilterCredit.active{background:#059669;border-color:#059669;color:#fff}
