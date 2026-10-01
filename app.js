@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261001-1510';
+const APP_BUILD='b20261001-1728';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -6275,6 +6275,7 @@ let suppressSaleDraftSave=false, saleDraftTimer=null;
 function collectSaleDraft(){
   return {
     ts:Date.now(),
+    editing_sale_id:editingSaleId||null,
     location_id:q('saleLocation')?.value||appUser?.branch_id||'',
     sale_date:q('saleDate')?.value||'',
     customer_id:q('saleCustomer')?.value||'',
@@ -6293,8 +6294,21 @@ function collectSaleDraft(){
     })).filter(x=>x.product_code||x.product_name)
   };
 }
-function restoreSaleDraft(d){
-  if(!d) return;
+/* (1978) الدفعة التي كانت تُسترجع بلا سياق التعديل (editingSaleId) كانت
+   تُحفظ كفاتورة جديدة → تكرار. الآن: إن كان المسودة من فاتورة تحت
+   التعديل، نُعيد فتح سياق التعديل أولاً ثم نطبق قيم المسودة فوقه.
+   يعيد true عند النجاح فقط (المستدعي يحذف المسودة عند النجاح وحده). */
+async function restoreSaleDraft(d){
+  if(!d) return false;
+  if(d.editing_sale_id){
+    const hadContent=saleHasContent();
+    await openSaleForEdit(d.editing_sale_id);
+    if(editingSaleId!==d.editing_sale_id){
+      if(!hadContent) resetSaleForm(); /* تنظيف حالة فتح التعديل الناقص */
+      toast('تعذّر استرجاع هذه المسودة في وضع التعديل — الفاتورة المعلّقة ما زالت في قائمتها (بانتظار المزامنة أو غير صالحة)','warn');
+      return false;
+    }
+  }
   suppressSaleDraftSave=true;
   q('saleItemsBody').innerHTML='';
   if(q('saleLocation')) q('saleLocation').value=d.location_id||appUser?.branch_id||'';
@@ -6310,6 +6324,7 @@ function restoreSaleDraft(d){
   updateSaleTotal(); refreshSaleAvailability();
   suppressSaleDraftSave=false;
   saveActiveSaleDraft();
+  return true;
 }
 function saveActiveSaleDraft(){
   if(suppressSaleDraftSave) return;
@@ -6319,11 +6334,19 @@ function saveActiveSaleDraft(){
   },180);
 }
 function clearActiveSaleDraft(){try{localStorage.removeItem(saleDraftStorageKey())}catch(e){}}
-function tryRestoreActiveSaleDraft(){
+async function tryRestoreActiveSaleDraft(){
   try{
     const raw=localStorage.getItem(saleDraftStorageKey()); if(!raw) return;
     const d=JSON.parse(raw); if(!d?.items?.length) return;
-    if(confirm('توجد فاتورة بيع غير محفوظة. هل تريد استرجاعها؟')) restoreSaleDraft(d); else clearActiveSaleDraft();
+    if(!confirm('توجد فاتورة بيع غير محفوظة. هل تريد استرجاعها؟')){ clearActiveSaleDraft(); return; }
+    if(d.editing_sale_id){
+      /* (1978) استرجاع مسودة تعديل يتطلب تسجيل الدخول وجاهزية الدور
+         — إن لم يكتملا بعد (إقلاع التطبيق) ننتظر قليلاً، ولا نسترجع
+         مسودة تعديل أثناء الخروج (تبقى وتُعرض مرة أخرى). */
+      if(!appUser?.id) return;
+      for(let i=0;i<6 && !currentRole;i++) await new Promise(r=>setTimeout(r,1000));
+    }
+    await restoreSaleDraft(d);
   }catch(e){console.warn('draft restore failed',e)}
 }
 function resetSaleFormWithConfirm(){
@@ -6338,15 +6361,18 @@ function parkCurrentSale(){
   localStorage.setItem(parkedSalesKey(),JSON.stringify(arr.slice(0,30)));
   clearActiveSaleDraft(); clearDraftKey('sale'); resetSaleForm(); toast('تم تعليق الفاتورة','success');
 }
-function resumeParkedSale(){
+async function resumeParkedSale(){
   const arr=JSON.parse(localStorage.getItem(parkedSalesKey())||'[]');
   if(!arr.length){toast('لا توجد فواتير معلقة','info');return;}
   const label=arr.map((d,i)=>`${i+1}) ${new Date(d.ts).toLocaleString('ar-LY')} - ${d.items.length} صنف - ${d.customer_name||'زبون نقدي'}`).join('\n');
   const n=Number(prompt('اختر رقم الفاتورة المعلقة:\n'+label,'1'));
   if(!n||!arr[n-1]) return;
   if(saleHasContent() && !confirm('سيتم استبدال الفاتورة الحالية. متابعة؟')) return;
-  const [d]=arr.splice(n-1,1); localStorage.setItem(parkedSalesKey(),JSON.stringify(arr));
-  restoreSaleDraft(d); openTab('sales'); toast('تم استرجاع الفاتورة المعلقة','success');
+  const d=arr[n-1];
+  const ok=await restoreSaleDraft(d);
+  if(!ok) return; /* (1978) عند تعذّر الاسترجاع تبقى المعلّقة في قائمتها */
+  arr.splice(n-1,1); localStorage.setItem(parkedSalesKey(),JSON.stringify(arr));
+  openTab('sales'); toast('تم استرجاع الفاتورة المعلقة','success');
 }
 function saleHasContent(){ return q('saleItemsBody') && getSaleItems().length>0; }
 
@@ -6362,15 +6388,16 @@ function openSalesListFromSale(){
   }
   openTab('salesList');
 }
-function autoResumeParkedSaleIfFlagged(){
+async function autoResumeParkedSaleIfFlagged(){
   if(!__autoResumeParkedOnSaleTab) return;
   __autoResumeParkedOnSaleTab=false;
   try{
     const arr=JSON.parse(localStorage.getItem(parkedSalesKey())||'[]');
     if(!arr.length) return;
-    const [d]=arr.splice(0,1); /* أحدث معلّقة = التي علّقناها للتو */
-    localStorage.setItem(parkedSalesKey(),JSON.stringify(arr));
-    restoreSaleDraft(d);
+    const d=arr[0]; /* أحدث معلّقة = التي علّقناها للتو */
+    const ok=await restoreSaleDraft(d);
+    if(!ok) return; /* (1978) تبقى في القائمة عند التعذّر */
+    arr.splice(0,1); localStorage.setItem(parkedSalesKey(),JSON.stringify(arr));
     toast('استُرجعت الفاتورة الجارية تلقائياً','success');
   }catch(e){ console.warn('auto resume failed',e); }
 }
