@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261001-2120">
+<link rel="stylesheet" href="app.css?v=20261002-0006">
 </head>
 <body class="auth-locked">
   <header>
@@ -846,6 +846,12 @@
             <select id="expenseListCategory" onchange="fetchExpensesList()"></select>
             <input id="expenseListSearch" type="search" placeholder="بحث في البيان…" oninput="debouncedExpenseSearch()">
           </div>
+          <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn secondary" type="button" id="expensesViewBtn" onclick="expenseToolbarAction('view')" disabled>👁 مشاهدة</button>
+            <button class="btn secondary" type="button" id="expensesEditBtn" onclick="expenseToolbarAction('edit')" disabled title="المدير، أو مَن سجّل المصروف في نفس يوم تسجيله">✏️ تعديل</button>
+            <button class="btn danger" type="button" id="expensesDeleteBtn" onclick="expenseToolbarAction('delete')" disabled title="المدير وحده">🗑️ حذف</button>
+            <span class="mini muted" id="expensesSelInfo">اضغط على سطر لتحديده (نقرتان = مشاهدة)</span>
+          </div>
           <div class="table-scroll">
             <table class="expenses-table">
               <thead><tr><th>التاريخ</th><th>البيان</th><th>الفرع</th><th>الخزينة / الحساب</th><th>المبلغ</th><th class="exp-by-th">مَن سجّل</th><th title="حالة الإرسال إلى شيت SmartBalance — ✓ = مؤكد، ☐ = أوّشّر للإرسال (المدير)">في الشيت</th><th>إجراءات</th></tr></thead>
@@ -1401,6 +1407,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261001-2120"></script>
+<script src="app.js?v=20261002-0006"></script>
 </body>
 </html>

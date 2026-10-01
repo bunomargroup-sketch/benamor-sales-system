@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261001-2120';
+const APP_BUILD='b20261002-0006';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1188,7 +1188,7 @@ const REFRESH_SOURCES={
   purchases:        {tabs:['purchases','stock','ledger'],                       run:async()=>{ const [a,b]=await Promise.all([apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc,id.asc'),apiAll('pos_purchase_items','?select=*&order=created_at.desc,id.asc')]); if(a) purchases=a; if(b) purchaseItems=b; }},
   transfers:        {tabs:['transfers','stock'],                                run:async()=>{ const r=await api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}); if(r) transfers=r; }},
   proformas:        {tabs:['proformas'],                                        run:async()=>{ const c60=new Date(Date.now()-60*864e5).toISOString().slice(0,10), c60i=new Date(Date.now()-60*864e5).toISOString(); const [a,b]=await Promise.all([apiAll('pos_proformas','?select=*&proforma_date=gte.'+c60+'&order=proforma_date.desc,created_at.desc,id.asc'),apiAll('pos_proforma_items','?select=*&created_at=gte.'+c60i+'&order=created_at.desc,id.asc')]); if(a) proformas=a; if(b) proformaItems=b; }},
-  customers:        {tabs:['customers','salesList','payments','sales'],         run:async()=>{ const r=await apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc'); if(r){ customers=r; try{rebuildSaleCustomerOptions();}catch(_e){} } }},
+  customers:        {tabs:['customers','salesList','payments','sales'],         run:async()=>{ const r=await apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc'); if(r){ customers=r; try{rebuildSaleCustomerOptions(); rebuildCustomerSelects();}catch(_e){} } }},
   customerLedger:   {tabs:['customers','payments'],                             run:async()=>{ const c90=new Date(Date.now()-90*864e5).toISOString().slice(0,10); const r=await apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+c90+'&order=entry_date.desc,created_at.desc,id.asc'); if(r) customerLedger=r; }},
   financeAccounts:  {tabs:['finance','dailyCashClosing','expensesQuick'],       run:async()=>{ const r=await apiAll('pos_finance_account_balances','?select=*&order=name.asc'); if(r) financeAccounts=r; }},
   financeMovements: {tabs:['finance','dailyCashClosing'],                       run:async()=>{ const r=await api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc,id.asc&limit=200'}); if(r) financeMovements=r; }},
@@ -3018,6 +3018,22 @@ async function deleteDupePayment(i,side){
   finally{showLoading(false);}
 }
 
+/* (20261001) منتقيات الزبائن في نوافذ الدفع/الكشف/الفاتورة المبدئية —
+   كانت تُمَلأ فقط من fillSupplierSelects وقت التحميل ⇒ زبون جديد (أو اسم
+   معيّن) لا يظهر في نافذة «تسجيل دفعة من زبون» دون إعادة تحميل التطبيق.
+   الآن تُعاد بناتها كلما تغيّرت قائمة الزبائن، مع الحفاظ على الاختيار. */
+function customerOptionList(placeholder){
+  return `<option value="">${placeholder}</option>` + (customers||[]).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.phone?' - '+esc(c.phone):''}</option>`).join('');
+}
+function rebuildCustomerSelects(){
+  ['customerPaymentCustomer','customerLedgerCustomer'].forEach(id=>{
+    const el=q(id); if(!el) return; const prev=el.value;
+    el.innerHTML=customerOptionList('اختر الزبون');
+    if(prev && [...el.options].some(o=>o.value===prev)) el.value=prev;
+  });
+  const pc=q('proformaCustomer');
+  if(pc){ const prev=pc.value; pc.innerHTML=customerOptionList('بدون زبون'); if(prev && [...pc.options].some(o=>o.value===prev)) pc.value=prev; }
+}
 function fillSupplierSelects(){
   const options = '<option value="">اختر المورد</option>' + suppliers.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
   q('ledgerSupplier').innerHTML = options;
@@ -3034,11 +3050,8 @@ function fillSupplierSelects(){
   const savedLoc=localStorage.getItem('posLastSaleLocation');
   if(savedLoc && [...q('saleLocation').options].some(o=>o.value===savedLoc)) q('saleLocation').value=savedLoc;
   rebuildSaleCustomerOptions();
-  if(q('proformaCustomer')) q('proformaCustomer').innerHTML = '<option value="">بدون زبون</option>' + customers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.phone?' - '+esc(c.phone):''}</option>`).join('');
+  rebuildCustomerSelects();
   if(q('proformaLocation')) q('proformaLocation').innerHTML = '<option value="">اختر الفرع</option>' + locations.filter(l=>l.is_sales_location).map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
-  const customerOptions = '<option value="">اختر الزبون</option>' + customers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.phone?' - '+esc(c.phone):''}</option>`).join('');
-  q('customerPaymentCustomer').innerHTML = customerOptions;
-  q('customerLedgerCustomer').innerHTML = customerOptions;
   q('reportLocation').innerHTML = '<option value="">كل الفروع</option>' + locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
   if(q('paymentFinanceAccount')) q('paymentFinanceAccount').innerHTML=financeAccountOptionsFor(q('paymentMethod')?.value||'cash','تلقائي حسب الطريقة');
   if(q('customerPaymentFinanceAccount')) q('customerPaymentFinanceAccount').innerHTML=financeAccountOptionsFor(q('customerPaymentMethod')?.value||'cash','تلقائي حسب الطريقة');
@@ -6872,6 +6885,87 @@ async function sendExpensesToSheet(){
   }catch(err){ console.error(err); toast('تعذّر الإرسال: '+String(err.message||err).slice(0,120),'error'); }
   finally{ if(btn) btn.disabled=false; }
 }
+/* ═══ (20261001) تحديد سطر في سجل المصاريف + شريط «مشاهدة/تعديل/حذف» فوق القائمة
+   — نمط قوائم الفواتير: نقرة = تحديد، نقرتان = مشاهدة. الأزرار تعمل على
+   المحدد مع صلاحيات نفس أزرار الصف: مشاهدة للجميع، تعديل للمدير أو
+   منشئ المصروف في نفس يوم تسجيله، حذف للمدير وحده (والخادم يتحقق من جديد). */
+let selectedExpenseId=null, __lastExpenseRowClick={id:null,t:0};
+function selectExpenseRow(id){
+  const now=Date.now();
+  if(__lastExpenseRowClick.id===id && now-__lastExpenseRowClick.t<600){
+    __lastExpenseRowClick={id:null,t:0};
+    selectedExpenseId=id; markExpenseRowSelectedUi(); updateExpenseToolbar();
+    viewExpense(id); /* نقرتان = مشاهدة */
+    return;
+  }
+  __lastExpenseRowClick={id,t:now};
+  selectedExpenseId=(selectedExpenseId===id)?null:id;
+  markExpenseRowSelectedUi(); updateExpenseToolbar();
+}
+function markExpenseRowSelectedUi(){
+  const body=q('expensesBody'); if(!body) return;
+  [...body.querySelectorAll('tr[data-id]')].forEach(tr=>tr.classList.toggle('selected-row', String(tr.dataset.id)===String(selectedExpenseId)));
+}
+function selectedExpenseObj(){
+  return selectedExpenseId?(expensesListCache.find(e=>e.id===selectedExpenseId)||expenses.find(e=>e.id===selectedExpenseId)||null):null;
+}
+function expenseToolbarAction(kind){
+  const x=selectedExpenseObj();
+  if(!x){toast('حدد مصروفاً من القائمة أولاً','warn');return;}
+  if(kind==='view'){ viewExpense(x.id); return; }
+  if(kind==='edit'){
+    if(!canEditExpenseRow(x)){toast('لا يمكنك تعديل هذا المصروف — المدير، أو منشئه في نفس يوم تسجيله فقط','warn');return;}
+    editExpense(x.id); return;
+  }
+  if(kind==='delete'){
+    if(!canDeleteExpenseRow()){toast('الحذف للمدير وحده','warn');return;}
+    deleteExpense(x.id); return;
+  }
+}
+function updateExpenseToolbar(){
+  const x=selectedExpenseObj();
+  const vb=q('expensesViewBtn'), eb=q('expensesEditBtn'), db=q('expensesDeleteBtn'), info=q('expensesSelInfo');
+  if(vb) vb.disabled=!x;
+  if(eb) eb.disabled=!(x&&canEditExpenseRow(x));
+  if(db) db.disabled=!(x&&canDeleteExpenseRow());
+  if(info) info.textContent=x?`المحدد: ${x.title||'—'} · ${money(x.amount)}`:'اضغط على سطر لتحديده (نقرتان = مشاهدة)';
+}
+function ensureExpenseViewModal(){
+  if(q('expenseViewModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='expenseViewModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:440px">
+    <div class="modal-head"><div><h2 style="margin:0">👁 تفاصيل المصروف</h2><div class="mini" id="evSub">—</div></div><button class="btn secondary" type="button" onclick="q('expenseViewModal').classList.remove('show')">إغلاق</button></div>
+    <div id="evBody" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn secondary" type="button" id="evEditBtn" onclick="expenseToolbarAction('edit')">✏️ تعديل</button><button class="btn danger hidden" type="button" id="evDeleteBtn" onclick="expenseToolbarAction('delete')">🗑️ حذف</button></div>
+  </div>`;
+  document.body.appendChild(d);
+}
+function viewExpense(id){
+  const x=expensesListCache.find(e=>e.id===id)||expenses.find(e=>e.id===id); if(!x){toast('لم يتم العثور على المصروف','warn');return;}
+  ensureExpenseViewModal();
+  const cat=(expenseCategories||[]).find(c=>c.id===x.category_id);
+  const acc=(financeAccounts||[]).find(a=>a.id===x.account_id);
+  const loc=(locations||[]).find(l=>l.id===x.location_id);
+  const sentAt=expensesSheetSentMap.get(x.id), pending=expensesSheetPending.has(x.id);
+  const sheetState = sentAt?`✓ في الشيت منذ ${String(sentAt).slice(0,10)}`:(pending?'🕓 قيد التأكيد':'غير مُرسَل');
+  const row=(k,v)=>`<div class="row" style="justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="muted" style="white-space:nowrap">${k}</span><b style="text-align:left">${v}</b></div>`;
+  q('evSub').textContent=`${x.title||''} · ${x.expense_date||''}`;
+  q('evBody').innerHTML=[
+    row('التاريخ', esc(x.expense_date||'—')),
+    row('البيان', esc(x.title||'—')),
+    row('المبلغ', money(x.amount)+' '+APP_CONFIG.currency),
+    row('الخزينة / الحساب', esc(acc?.name||'—')),
+    row('التصنيف', esc(cat?.name||'بدون تصنيف')),
+    row('الفرع', esc(loc?.name||'—')),
+    row('مَن سجّل', esc(x.created_by||'—')),
+    row('وقت التسجيل', esc(String(x.created_at||'').replace('T',' ').slice(0,19))),
+    row('شيت SmartBalance', esc(sheetState)),
+    x.notes?row('ملاحظات', esc(x.notes)):''
+  ].filter(Boolean).join('');
+  q('evEditBtn').classList.toggle('hidden', !canEditExpenseRow(x));
+  q('evDeleteBtn').classList.toggle('hidden', !canDeleteExpenseRow());
+  q('expenseViewModal').classList.add('show');
+}
 function renderExpensesList(){
   const body=q('expensesBody'); if(!body) return;
   /* خرائط مسبقة — لا بحث خطي داخل map (درس أداء منتقي المنتجات) */
@@ -6889,6 +6983,7 @@ function renderExpensesList(){
     if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML='<tr><td colspan="8" class="mini">—</td></tr>';
     if(q('expensesListInfo')) q('expensesListInfo').textContent=brLabel?`لا توجد نتائج · الفرع: ${brLabel}`:'لا توجد نتائج';
     q('expensesMoreBtn')?.classList.add('hidden');
+    if(selectedExpenseId){ selectedExpenseId=null; } updateExpenseToolbar();
     return;
   }
   const total=expensesListCache.reduce((a,x)=>a+Number(x.amount||0),0);
@@ -6905,17 +7000,18 @@ function renderExpensesList(){
       : pending
       ? `<span class="exp-sent-pend" title="أُرسل — التأكيد النهائي في الدورة الساعية">🕓 قيد التأكيد</span>`
       : (isAdmin
-        ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت"><input type="checkbox" data-expid="${x.id}" ${expenseSheetSel.has(x.id)?'checked':''} onchange="expenseSheetToggle(this)"></label><span class="muted">—</span>`
+        ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-expid="${x.id}" ${expenseSheetSel.has(x.id)?'checked':''} onchange="expenseSheetToggle(this)"></label><span class="muted">—</span>`
         : '<span class="muted">—</span>');
     const acts=[
-      canEdit?`<button class="ibtn" type="button" title="تعديل" onclick="editExpense('${safe}')"><i class="ti ti-pencil"></i></button>`:'',
-      canDel?`<button class="ibtn ibtn-danger" type="button" title="حذف" onclick="deleteExpense('${safe}')"><i class="ti ti-trash"></i></button>`:''
+      canEdit?`<button class="ibtn" type="button" title="تعديل" onclick="event.stopPropagation();editExpense('${safe}')"><i class="ti ti-pencil"></i></button>`:'',
+      canDel?`<button class="ibtn ibtn-danger" type="button" title="حذف" onclick="event.stopPropagation();deleteExpense('${safe}')"><i class="ti ti-trash"></i></button>`:''
     ].join('');
-    return `<tr><td class="exp-date">${esc(x.expense_date)}</td><td>${esc(x.title)}${sub?`<div class="mini exp-sub">${sub}</div>`:''}</td><td>${locName?`<span class="${branchChip(x.location_id)}">${esc(locName)}</span>`:'<span class="muted">—</span>'}</td><td class="exp-acc">${esc(accMap.get(x.account_id)||'—')}</td><td class="exp-amt"><b>${money(x.amount)}</b></td><td class="exp-by">${esc(x.created_by||'—')}</td><td class="exp-sheet">${sheetCell}</td><td class="exp-act">${acts}</td></tr>`;
+    return `<tr data-id="${safe}" class="${selectedExpenseId===x.id?'selected-row':''}" onclick="selectExpenseRow('${safe}')" title="نقرة: تحديد · نقرتان: مشاهدة"><td class="exp-date">${esc(x.expense_date)}</td><td>${esc(x.title)}${sub?`<div class="mini exp-sub">${sub}</div>`:''}</td><td>${locName?`<span class="${branchChip(x.location_id)}">${esc(locName)}</span>`:'<span class="muted">—</span>'}</td><td class="exp-acc">${esc(accMap.get(x.account_id)||'—')}</td><td class="exp-amt"><b>${money(x.amount)}</b></td><td class="exp-by">${esc(x.created_by||'—')}</td><td class="exp-sheet">${sheetCell}</td><td class="exp-act">${acts}</td></tr>`;
   }).join('');
   if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML=`<tr><td colspan="4"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="3" class="mini">${expensesListCache.length} مصروفاً</td></tr>`;
   if(q('expensesListInfo')) q('expensesListInfo').textContent=`النتائج: ${expensesListCache.length}${expensesListCache.length>=expensesListLimit?'+ (يوجد المزيد)':''}${brLabel?' · الفرع: '+brLabel:''}`;
   q('expensesMoreBtn')?.classList.toggle('hidden', expensesListCache.length<expensesListLimit);
+  updateExpenseToolbar();
 }
 function editExpense(id){
   const x=expensesListCache.find(e=>e.id===id)||expenses.find(e=>e.id===id); if(!x){toast('لم يتم العثور على المصروف','warn');return;}
@@ -7097,6 +7193,7 @@ async function deleteCustomer(id){
       toast('تم حذف الزبون نهائيًا','success');
     }
     if(editingCustomerId===id) resetCustomerForm();
+    customers=customers.filter(x=>x.id!==id); rebuildCustomerSelects();
     await refreshParts(['customers','customerLedger']);
   }catch(err){console.error(err);toast('تعذر حذف الزبون: '+friendlyError(err)+' — تأكد من تشغيل ملف صلاحية حذف الزبائن للمدير','error')}
   finally{showLoading(false);window.__busy=false}
@@ -7133,6 +7230,7 @@ q('customerForm').addEventListener('submit', async e=>{
       }
       toast('تم حفظ الزبون','success');
     }
+    rebuildCustomerSelects(); /* الزبون الجديد (أو اسمُه المعدّل) متاح فوراً في نوافذ الدفع/الكشف */
     resetCustomerForm(); refreshAfterLocalUpdate();
   }catch(err){console.error(err);toast('خطأ في حفظ الزبون: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false}
