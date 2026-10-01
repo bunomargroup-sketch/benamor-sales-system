@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261001-1218';
+const APP_BUILD='b20261001-1357';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7229,7 +7229,28 @@ function selectDefaultExpenseAccount(){
 }
 function renderSettingsExpenseCategories(){
   const body=q('settingsExpenseCategoriesBody'); if(!body)return;
-  body.innerHTML=(expenseCategories||[]).map(c=>`<tr><td>${esc(c.name)}</td><td>${c.active===false?'<span class="badge gray">متوقف</span>':'<span class="badge green">نشط</span>'}</td></tr>`).join('')||'<tr><td colspan="2">لا توجد تصنيفات بعد.</td></tr>';
+  /* (1975) عمود تعديل: تسمية التصنيف من الإعدادات (اسم فريد — تحقَّق قبل الإرسال) */
+  body.innerHTML=(expenseCategories||[]).map(c=>{const safe=String(c.id).replace(/'/g,"\\'"); return `<tr><td>${esc(c.name)}</td><td>${c.active===false?'<span class="badge gray">متوقف</span>':'<span class="badge green">نشط</span>'}</td><td><button class="btn secondary" type="button" onclick="renameExpenseCategory('${safe}')" title="تعديل اسم التصنيف">✏️ تعديل</button></td></tr>`}).join('')||'<tr><td colspan="3">لا توجد تصنيفات بعد.</td></tr>';
+}
+/* (1975) تعديل اسم تصنيف المصاريف: prompt بنمط التطبيق (مثل تعديل السعر 6388)
+   ثم PATCH — الاسم unique في القاعدة، فيُرفض المكرر محليًا برسالة أوضح. */
+async function renameExpenseCategory(id){
+  const c=(expenseCategories||[]).find(x=>x.id===id); if(!c) return;
+  if(window.__busy) return;
+  const raw=prompt('اسم التصنيف الجديد:', c.name); if(raw===null) return;
+  const name=String(raw).trim();
+  if(!name){ toast('اسم التصنيف لا يمكن أن يكون فارغًا','warn'); return; }
+  if(name===String(c.name||'').trim()) return;
+  if((expenseCategories||[]).some(x=>x.id!==id && String(x.name||'').trim().toLowerCase()===name.toLowerCase())){ toast('يوجد تصنيف بهذا الاسم مسبقًا','error'); return; }
+  window.__busy=true;
+  try{
+    showLoading(true);
+    await api('pos_expense_categories',{method:'PATCH',qs:`?id=eq.${id}`,body:{name}});
+    c.name=name; /* تحديث فوري محليًا ثم رسم كل القوائم المرتبطة */
+    toast('تم تعديل اسم التصنيف');
+    await refreshParts(['expenseCategories']);
+  }catch(err){ console.error(err); toast('خطأ في تعديل التصنيف: '+friendlyError(err),'error'); }
+  finally{ showLoading(false); window.__busy=false; }
 }
 function renderProductOptionSettings(){
   const render=(id,arr)=>{const el=q(id); if(el) el.innerHTML=(arr&&arr.length)?arr.map(x=>`<span class="badge gray" style="margin:2px">${esc(x)}</span>`).join(''):'لا توجد إضافات';};
