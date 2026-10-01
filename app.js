@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20260929-1973';
+const APP_BUILD='b20261001-1218';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1610,6 +1610,13 @@ function smartMatch(query, fields){
   const q=normText(query); if(!q) return true;
   const hay=normText(Array.isArray(fields)?fields.join(' '):fields);
   if(hay.includes(q)) return true;
+  /* (1974) كود كامل بلا فواصل: normText يحول الفواصل (- / . …) في الكود المخزَّن
+     إلى مسافات، فيفشل includes() إذا كُتب الكود بلا الفاصلة (AASB30094 مقابل
+     AASB-30094) بينما ينجح العكس — مقارنة مضغوطة (بلا مسافات) للجانبين. */
+  if(!q.includes(' ')){
+    const compact=hay.replace(/\s+/g,'');
+    if(compact.includes(q)) return true;
+  }
   const hayWords=hay.split(' ').filter(Boolean);
   return q.split(' ').filter(Boolean).every(tok=>{
     if(!tok) return true;
@@ -2284,7 +2291,7 @@ function viewSelectedProduct(){
     <div class="card"><h3>الإجمالي</h3><div class="num">${money(liveTotalQty(p.code))}</div></div>
   </div>
   <div id="productViewMoves" class="pv-moves"><div class="mini">جارٍ تحميل الحركات…</div></div>`;
-  q('productViewModal').classList.add('show');
+  q('productViewModal').classList.add('show'); modalToTop(q('productViewModal')); /* (1974) بدل القفل الثابت 1220 */
   loadProductViewMovements(p.code);
 }
 
@@ -2463,6 +2470,13 @@ function renderSaleProductPicker(){
   const loc=(productPickerTarget==='noInvoiceReturn'?(appUser?.branch_id||''):(productPickerTarget==='count'?q('stockCountLocation')?.value:(productPickerTarget==='proforma'?q('proformaLocation')?.value:(productPickerTarget==='purchase'?q('purchaseLocation')?.value:(productPickerTarget==='transfer'?q('transferFrom')?.value:(canSelectSaleBranch()?q('saleLocation')?.value:(appUser?.branch_id||q('saleLocation')?.value)))))))||'';
   const maps=pickerPerfMaps(loc);
   rows.sort((a,b)=>{const av=key==='available'?(maps.availableMap.get(String(a.code))||0):(key==='margin_value'?(maps.mvMap.get(String(a.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(a.code))||0):(a[key]??''))); const bv=key==='available'?(maps.availableMap.get(String(b.code))||0):(key==='margin_value'?(maps.mvMap.get(String(b.code))||0):(key==='margin_pct'?(maps.mpMap.get(String(b.code))||0):(b[key]??''))); const na=parseFloat(av), nb=parseFloat(bv); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(av).localeCompare(String(bv),'ar'); return pickerSortDir==='asc'?c:-c;});
+  /* (1974) كُتب الكود/الباركود كاملًا: الصنف المتطابق حرفيًا يأتي أول النتائج
+     (ترتيب مستقر — يحافظ على ترتيب العمود داخل كل مجموعة). */
+  const __tq=normText(term);
+  if(__tq && !__tq.includes(' ')){
+    const __rank=p=>(normText(p.code)===__tq||normText(p.barcode)===__tq||normText(p.product_no)===__tq)?0:1;
+    rows.sort((a,b)=>__rank(a)-__rank(b));
+  }
   const shown=rows.slice(0,250);
   if(!shown.length) pickerSelectedIndex=-1; else if(pickerSelectedIndex>=shown.length) pickerSelectedIndex=shown.length-1;
 q('salePickerBody').innerHTML=shown.map((p,i)=>{const safe=String(p.code||'').replace(/'/g,"\\'"); const isComp=isCompositeProduct(p.code); const available=isComp?(getCompositeVStockByLocation(p.code,loc)||0):(loc?(maps.availableMap.get(String(p.code))||0):0); const isCount=productPickerTarget==='count'; const inCountList=isCount&&stockCountData[String(p.code)]!==undefined; return `<tr class="${i===pickerSelectedIndex?'selected-row':''}" ${isComp?'style="box-shadow:inset 3px 0 0 var(--br-sr)"':''} onclick="selectSalePickerRow(${i},this)" ondblclick="addSaleProductFromPicker('${safe}',1)"><td class="ltr"><span class="code">${esc(p.code||'')}</span><div class="mini ltr">${esc(p.barcode||p.product_no||'')}</div></td><td><span class="name">${esc(p.name)}</span>${isComp?' <span class="chip br-sr">مركّب</span>':''}${inCountList?' <span class="chip" style="color:#4ade80" title="موجود في قائمة الجرد الحالية">✓ في قائمة الجرد</span>':''}</td><td>${brandChip(p.brand)}${modelChip(p.model)}</td><td>${esc(p.color)}</td><td>${esc(p.supplier_name)}</td><td class="mini" style="max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.description||'')}">${esc(p.description||'')}</td><td class="amount"><b>${money(available)}</b></td><td class="amount">${money(p.retail_price)}</td><td class="amount">${money(p._mv)}</td><td class="amount">${money(p._mp)}%</td><td><button class="btn ${isCount?'':'secondary'}" type="button" onclick="event.stopPropagation();addSaleProductFromPicker('${safe}')">${isCount?(inCountList?'✓ مضاف':'إضافة للجرد'):'إضافة'}</button></td></tr>`}).join('') || '<tr><td colspan="12">لا توجد منتجات مطابقة للبحث أو الفلاتر.</td></tr>';
@@ -2581,7 +2595,7 @@ function openMovementDocument(table,id){
   toast('نوع المستند غير معروف','warn');
 }
 
-let __movCode='',__movRows=[],__movLevels=[];
+let __movCode='',__movRows=[],__movLevels=[],__movCustMap=new Map();
 /* الرصيد بمحاذاة كل حركة.
    كان يُستنتج رجوعاً من pos_stock وحده، فإن غاب صفّ الفرع (ترتيب غير مستقر،
    أو صنف بلا صفّ مخزون) ظهرت كل أسطر ذلك الفرع مزاحة أو صفراً بلا أي إشارة
@@ -2654,8 +2668,10 @@ function renderMovementsModalRows(){
   const list=__movRows.map((m,i)=>({m,lvl:__movLevels[i]})).filter(x=>(!fb||String(x.m.location_id||'')===fb)&&(!ft||String(x.m.movement_type||'')===ft));
   q('movementsBody').innerHTML = list.map(({m,lvl})=>{
     const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
-    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><span class="code">${esc(info.no)}</span></td><td>${esc(info.seller)}</td><td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount">${(()=>{const v=movementValue(m); return v===null?'—':`<b>${money(v)}</b> <span class="mini">${esc(APP_CONFIG.currency)}</span>`;})()}</td><td class="amount"><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
-  }).join('') || '<tr><td colspan="9">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
+    /* (1974) الزبون: يظهر في أسطر الفواتير فقط (reference_table=pos_sales) */
+    const cust=info.table==='pos_sales'?(__movCustMap.get(info.id)||''):'';
+    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><span class="code">${esc(info.no)}</span></td><td>${esc(cust)}</td><td>${esc(info.seller)}</td><td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount">${(()=>{const v=movementValue(m); return v===null?'—':`<b>${money(v)}</b> <span class="mini">${esc(APP_CONFIG.currency)}</span>`;})()}</td><td class="amount"><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
+  }).join('') || '<tr><td colspan="10">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
 }
 async function openProductMovements(code){
   try{
@@ -2674,6 +2690,37 @@ async function openProductMovements(code){
         return api('pos_stock_movements',{qs:`${__mvSel}&order=movement_date.desc,created_at.desc,id.desc&limit=300`}); });
     __movRows=rows;
     __movLevels=computeMovementLevels(rows,code);
+    /* (1974) اسم الزبون في أسطر الفواتير: الفاتورة (reference_id) → customer_id
+       بدفعة واحدة مقسّمة (100/طلب — حد طول URL)، ثم الاسم من customers
+       (كامل في الذاكرة بعد تحميل تبويب البيع) مع طلب احتياطي للنقص. */
+    __movCustMap=new Map();
+    const __saleIds=[...new Set(rows.filter(m=>m.reference_table==='pos_sales'&&m.reference_id).map(m=>String(m.reference_id)))];
+    if(__saleIds.length){
+      const __custOfSale=new Map();
+      for(let __i=0;__i<__saleIds.length;__i+=100){
+        const __chunk=__saleIds.slice(__i,__i+100);
+        try{
+          const __ss=await api('pos_sales',{qs:`?select=id,customer_id&or=${encodeURIComponent('('+__chunk.map(c=>'id.eq.'+c).join(',')+')')}`});
+          for(const __s of __ss) if(__s&&__s.customer_id) __custOfSale.set(__s.id,__s.customer_id);
+        }catch(__e){ console.warn('زبون الحركات: طلب الفواتير',__e); }
+      }
+      const __cidSet=[...new Set(__custOfSale.values())];
+      if(__cidSet.length){
+        const __nameById=new Map();
+        for(const __cid of __cidSet){ const __c=customers.find(x=>x.id===__cid); if(__c) __nameById.set(__cid,__c.name); }
+        const __missing=__cidSet.filter(__id=>!__nameById.has(__id));
+        if(__missing.length){
+          for(let __i=0;__i<__missing.length;__i+=100){
+            const __chunk=__missing.slice(__i,__i+100);
+            try{
+              const __cs=await api('pos_customers',{qs:`?select=id,name&or=${encodeURIComponent('('+__chunk.map(c=>'id.eq.'+c).join(',')+')')}`});
+              for(const __c of __cs) if(__c) __nameById.set(__c.id,__c.name);
+            }catch(__e){ console.warn('زبون الحركات: طلب الزبائن',__e); }
+          }
+        }
+        for(const [__sid,__cid] of __custOfSale) __movCustMap.set(__sid,__nameById.get(__cid)||'');
+      }
+    }
     const lb=q('movFilterBranch'), lt=q('movFilterType');
     if(lb){const branches=[...new Set(rows.map(m=>m.location_id).filter(Boolean))]; lb.innerHTML='<option value="">كل الفروع</option>'+branches.map(lid=>{const l=locations.find(x=>x.id===lid); return `<option value="${lid}">${esc(l?l.name:lid)}</option>`}).join('');}
     if(lt){const types=[...new Set(rows.map(m=>m.movement_type).filter(Boolean))]; lt.innerHTML='<option value="">كل الأنواع</option>'+types.map(t=>`<option value="${t}">${esc(typeLabel(t))}</option>`).join('');}

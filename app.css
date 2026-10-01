@@ -408,7 +408,8 @@
     #sales .pos-items-card th:nth-child(2),#sales .pos-items-card td:nth-child(2){min-width:300px;width:34%}
     #saleItemsBody textarea.si-name{resize:none;white-space:nowrap;overflow:hidden}  /* (0082) الارتفاع انتقل إلى القاعدة الموحّدة أسفل الملف */
     .print-preview-card{width:min(980px,98vw);height:92vh;display:flex;flex-direction:column;padding:12px}
-    #productViewModal,#movementsModal{z-index:120!important}
+    /* (1974) أزيل القفل z-index:120!important هنا — كان يسحب النافذةين إلى
+       تحت كل النوافذ عند هذه العرضة؛ الترتيب تديره modalToTop وحدودها. */
     .print-preview-frame{width:100%;flex:1;border:1px solid var(--border);border-radius:12px;background:#fff}
     #sales .pos-head-grid{gap:8px;grid-template-columns:repeat(6,minmax(0,1fr))}
     #sales #saleInvoiceNo{font-weight:900;font-size:20px;text-align:center;color:var(--blue);background:var(--accent-soft);border-color:color-mix(in srgb,var(--blue) 35%,var(--border))}
@@ -1086,11 +1087,17 @@ nav button:hover .nav-win-btn,nav button:focus-within .nav-win-btn{opacity:.75}
    خلفها — يضغط المستخدم «تعديل» فلا يرى شيئاً يحدث. الحوار والقائمة
    طبقة فوق كل شيء بطبيعتهما، فنرفعهما فوق طبقة النوافذ. */
 .modal{z-index:1200}
-#productViewModal,#movementsModal{z-index:1220 !important}
+/* (1974) أزيل قفل z-index:1220!important عن #movementsModal و#productViewModal —
+   !important في ورقة الأسلوب يهزم z-index السطري الذي ترفعه modalToTop (1250+)،
+   فكانت «حركات المنتج» تفتح خلف نافذة F3 التي فُتحت بعدها. الآن الترتيب
+   ديناميكي: آخر ما يُفتح أعلى. #longPickerModal بلا modalToTop، فبقي مقفولًا. */
 #longPickerModal{z-index:1240 !important}
 .ctx-menu{z-index:1300}
 .calc-panel{z-index:1210}
 #salePaymentScreen.payment-open{z-index:1205}
+/* (1974) «حركات المنتج»: قائمة أكبر — بطاقة تعشّق الشاشة عموديًا وجدول قابل للتمرير */
+#movementsModal .modal-card{width:min(1480px,98vw);height:min(94vh,1100px);display:flex;flex-direction:column}
+#movementsModal .table-scroll{flex:1;min-height:0;max-height:none}
 /* ═══ (1969) شجرة التصنيفات: عقدة قابلة للتوسيع، النقر على الاسم = فلترة الفرع كاملاً ═══ */
 .cat-node{font-size:13px}
 .cat-row{display:flex;align-items:center;gap:5px;padding:5px 7px;margin:1px 0;border-radius:8px;cursor:pointer;color:var(--text);touch-action:manipulation}
