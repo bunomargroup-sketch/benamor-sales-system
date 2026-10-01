@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261001-1750">
+<link rel="stylesheet" href="app.css?v=20261001-2120">
 </head>
 <body class="auth-locked">
   <header>
@@ -826,7 +826,10 @@
         </div>
 
         <div class="panel">
-          <h2>سجل المصاريف</h2>
+          <div class="row" style="justify-content:space-between;align-items:center;gap:8px">
+            <h2>سجل المصاريف</h2>
+            <button class="btn secondary hidden" type="button" id="expensesSendSheetBtn" onclick="sendExpensesToSheet()" title="يُرسل ما أوّشّرته إلى شيت SmartBalance — يرى الزرّ المدير وحده">📤 إرسال للجدول</button>
+          </div>
           <div class="exp-filters">
             <div class="exp-range" role="group" aria-label="الفترة">
               <button type="button" class="exp-range-chip active" data-range="month" onclick="setExpenseRange('month')" title="من أول الشهر الحالي إلى اليوم">هذا الشهر</button>
@@ -845,9 +848,9 @@
           </div>
           <div class="table-scroll">
             <table class="expenses-table">
-              <thead><tr><th>التاريخ</th><th>البيان</th><th>الفرع</th><th>الخزينة / الحساب</th><th>المبلغ</th><th class="exp-by-th">مَن سجّل</th><th>إجراءات</th></tr></thead>
+              <thead><tr><th>التاريخ</th><th>البيان</th><th>الفرع</th><th>الخزينة / الحساب</th><th>المبلغ</th><th class="exp-by-th">مَن سجّل</th><th title="حالة الإرسال إلى شيت SmartBalance — ✓ = مؤكد، ☐ = أوّشّر للإرسال (المدير)">في الشيت</th><th>إجراءات</th></tr></thead>
               <tbody id="expensesBody"></tbody>
-              <tfoot id="expensesTotalFoot"><tr><td colspan="7" class="mini">—</td></tr></tfoot>
+              <tfoot id="expensesTotalFoot"><tr><td colspan="8" class="mini">—</td></tr></tfoot>
             </table>
           </div>
           <div class="row" style="justify-content:space-between;margin-top:8px">
@@ -1398,6 +1401,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261001-1750"></script>
+<script src="app.js?v=20261001-2120"></script>
 </body>
 </html>

@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261001-1750';
+const APP_BUILD='b20261001-2120';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -6737,6 +6737,8 @@ q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(wind
    القاعدة: من سجّل المصروف يعدّله في نفس يوم تسجيله فقط — والمدير يعدّل ويحذف الكل.
    العبرة بـ created_at (وقت التسجيل) لا expense_date. الحذف لغير المدير ممنوع. */
 let expensesListCache=[], expensesListLimit=500, expensesListInit=false, expensesSearchTimer=null, editingExpenseId=null;
+/* (0103) المصاريف → شيت SmartBalance: خريطة المؤكَّد (expense_id→sent_at) + المعلق محلياً + الاختيار */
+let expensesSheetSentMap=new Map(), expensesSheetPending=new Set(), expenseSheetSel=new Set();
 function expenseTodayUTC(){ return new Date().toISOString().slice(0,10); } /* مطابق لـ current_date بتوقيت الخادم */
 function canEditExpenseRow(x){
   if(currentRole?.role==='admin') return true;
@@ -6830,11 +6832,46 @@ async function fetchExpensesList(){
   qs.push('limit='+expensesListLimit);
   try{
     expensesListCache=await api('pos_expenses',{qs:'?'+qs.join('&')})||[];
+    await loadExpensesSheetStatus(); /* (0103) حالة «في الشيت» لكل صف */
     renderExpensesList();
   }catch(err){ console.warn('فشل جلب قائمة المصاريف — تُعرض آخر قائمة متاحة',err); if(q('expensesListInfo')) q('expensesListInfo').textContent='⚠ تعذّر الجلب — تُعرض آخر نتيجة متاحة'; }
 }
 function onExpensesTabOpen(){ initExpensesListTab(); renderExpensesList(); fetchExpensesList(); }
 function expensesLoadMore(){ expensesListLimit+=500; fetchExpensesList(); }
+/* (0103) حالة مزامنة المصاريف مع شيت SmartBalance — قراءة خفيفة (عمودان، بلا select=*) */
+async function loadExpensesSheetStatus(){
+  try{
+    const rows=await api('pos_sheet_expense_sent',{qs:'?select=expense_id,sent_at&limit=10000'});
+    expensesSheetSentMap=new Map((rows||[]).map(r=>[r.expense_id,String(r.sent_at)]));
+  }catch(e){ expensesSheetSentMap=new Map(); /* الجدول غير موجود بعد (قبل تشغيل 0103) — العمود يعرض — */ }
+  try{
+    const p=await api('pos_sheet_expense_outbox',{qs:'?select=expense_id&limit=10000'});
+    expensesSheetPending=new Set((p||[]).map(r=>r.expense_id));
+  }catch(e){ expensesSheetPending=new Set(); }
+}
+function expenseSheetToggle(cb){
+  const id=cb?.dataset?.expid; if(!id) return;
+  if(cb.checked) expenseSheetSel.add(id); else expenseSheetSel.delete(id);
+}
+async function sendExpensesToSheet(){
+  if(currentRole?.role!=='admin'){toast('هذه العملية للمدير وحده','warn');return;}
+  const ids=[...expenseSheetSel];
+  if(!ids.length){toast('أوّلاً اوّشّر المصاريف المراد إرسالها (المربّعات في عمود «في الشيت»)','warn');return;}
+  const btn=q('expensesSendSheetBtn'); if(btn) btn.disabled=true;
+  try{
+    const res=await rpc('pos_sheet_expense_send',{p_ids:ids});
+    if(res&&res.ok){
+      /* تحديث محلي كما localMovement — بلا إعادة تحميل القائمة:
+         المؤشَّر ينتقل إلى «قيد التأكيد» ويصير ✓ عند تأكيد الشيت في الدورة الساعية */
+      ids.forEach(id=>{ expensesSheetPending.add(id); expenseSheetSel.delete(id); });
+      renderExpensesList();
+      toast(`أُرسل ${res.queued} سطر — التأكيد النهائي في الدورة الساعية`,'success');
+    }else{
+      toast((res&&res.error)||'تعذّر الإرسال','error');
+    }
+  }catch(err){ console.error(err); toast('تعذّر الإرسال: '+String(err.message||err).slice(0,120),'error'); }
+  finally{ if(btn) btn.disabled=false; }
+}
 function renderExpensesList(){
   const body=q('expensesBody'); if(!body) return;
   /* خرائط مسبقة — لا بحث خطي داخل map (درس أداء منتقي المنتجات) */
@@ -6844,9 +6881,12 @@ function renderExpensesList(){
   /* (1973) حالة فلتر الفرع ظاهرة دائماً — لا «فلتر بلا أثر»: نعرف أي فرع معروض */
   const bv=q('expenseListBranch')?.value||'';
   const brLabel= bv==='__no_branch__' ? 'بدون فرع' : (bv ? (locMap.get(bv)||'؟') : '');
+  /* (0103) زر «إرسال للجدول» يراه المدير وحده — والخادم يتحقق مرة أخرى */
+  const isAdmin=currentRole?.role==='admin';
+  q('expensesSendSheetBtn')?.classList.toggle('hidden',!isAdmin);
   if(!expensesListCache.length){
-    body.innerHTML='<tr><td colspan="7">لا توجد مصاريف مطابقة للفلاتر.</td></tr>';
-    if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML='<tr><td colspan="7" class="mini">—</td></tr>';
+    body.innerHTML='<tr><td colspan="8">لا توجد مصاريف مطابقة للفلاتر.</td></tr>';
+    if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML='<tr><td colspan="8" class="mini">—</td></tr>';
     if(q('expensesListInfo')) q('expensesListInfo').textContent=brLabel?`لا توجد نتائج · الفرع: ${brLabel}`:'لا توجد نتائج';
     q('expensesMoreBtn')?.classList.add('hidden');
     return;
@@ -6858,13 +6898,22 @@ function renderExpensesList(){
     const cat=catMap.get(x.category_id);
     const sub=[cat,x.notes?String(x.notes):''].filter(Boolean).map(esc).join(' · ');
     const locName=locMap.get(x.location_id);
+    /* (0103) عمود «في الشيت»: ✓ تاريخ التأكد · 🕓 قيد التأكيد · ☐ للمدير على غير المُرسَل */
+    const sentAt=expensesSheetSentMap.get(x.id), pending=expensesSheetPending.has(x.id);
+    const sheetCell = sentAt
+      ? `<span class="exp-sent-ok" title="في شيت SmartBalance منذ ${esc(sentAt)}">✓ ${esc(String(sentAt).slice(0,10))}</span>`
+      : pending
+      ? `<span class="exp-sent-pend" title="أُرسل — التأكيد النهائي في الدورة الساعية">🕓 قيد التأكيد</span>`
+      : (isAdmin
+        ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت"><input type="checkbox" data-expid="${x.id}" ${expenseSheetSel.has(x.id)?'checked':''} onchange="expenseSheetToggle(this)"></label><span class="muted">—</span>`
+        : '<span class="muted">—</span>');
     const acts=[
       canEdit?`<button class="ibtn" type="button" title="تعديل" onclick="editExpense('${safe}')"><i class="ti ti-pencil"></i></button>`:'',
       canDel?`<button class="ibtn ibtn-danger" type="button" title="حذف" onclick="deleteExpense('${safe}')"><i class="ti ti-trash"></i></button>`:''
     ].join('');
-    return `<tr><td class="exp-date">${esc(x.expense_date)}</td><td>${esc(x.title)}${sub?`<div class="mini exp-sub">${sub}</div>`:''}</td><td>${locName?`<span class="${branchChip(x.location_id)}">${esc(locName)}</span>`:'<span class="muted">—</span>'}</td><td class="exp-acc">${esc(accMap.get(x.account_id)||'—')}</td><td class="exp-amt"><b>${money(x.amount)}</b></td><td class="exp-by">${esc(x.created_by||'—')}</td><td class="exp-act">${acts}</td></tr>`;
+    return `<tr><td class="exp-date">${esc(x.expense_date)}</td><td>${esc(x.title)}${sub?`<div class="mini exp-sub">${sub}</div>`:''}</td><td>${locName?`<span class="${branchChip(x.location_id)}">${esc(locName)}</span>`:'<span class="muted">—</span>'}</td><td class="exp-acc">${esc(accMap.get(x.account_id)||'—')}</td><td class="exp-amt"><b>${money(x.amount)}</b></td><td class="exp-by">${esc(x.created_by||'—')}</td><td class="exp-sheet">${sheetCell}</td><td class="exp-act">${acts}</td></tr>`;
   }).join('');
-  if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML=`<tr><td colspan="4"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="2" class="mini">${expensesListCache.length} مصروفاً</td></tr>`;
+  if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML=`<tr><td colspan="4"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="3" class="mini">${expensesListCache.length} مصروفاً</td></tr>`;
   if(q('expensesListInfo')) q('expensesListInfo').textContent=`النتائج: ${expensesListCache.length}${expensesListCache.length>=expensesListLimit?'+ (يوجد المزيد)':''}${brLabel?' · الفرع: '+brLabel:''}`;
   q('expensesMoreBtn')?.classList.toggle('hidden', expensesListCache.length<expensesListLimit);
 }
@@ -7968,6 +8017,7 @@ function dailyCashCustomerNameForMovement(m){
   let cid;
   if(m.reference_table==='pos_customer_ledger') cid=customerLedger.find(l=>l.id===m.reference_id)?.customer_id;
   if(!cid && m.reference_table==='pos_sale_returns') cid=saleReturns.find(x=>x.id===m.reference_id)?.customer_id;
+  if(!cid && m.reference_table==='pos_sales'){ cid=sales.find(s=>s.id===m.reference_id)?.customer_id; if(!cid) cid=customerLedger.find(l=>l.reference_table==='pos_sales'&&l.reference_id===m.reference_id)?.customer_id; } /* (إغلاق 20261001) تحصيل فاتورة قائمة */
   return cid?(customers.find(c=>c.id===cid)?.name||'زبون'):'';
 }
 function dailyCashSupplierNameForMovement(m){
@@ -8016,6 +8066,14 @@ function getDailyCashData(opts={}){
     const a=financeAccounts.find(x=>x.id===m.account_id); if(branch && a?.location_id!==branch) return;
     const method=dailyCashMethodFromAccount(m.account_id);
     if(m.movement_type==='customer_payment' && m.direction==='in'){ dailyCashAdd(customerPay,method,m.amount); dayCustomerPayMoves.push({m,method}); }
+    /* (إغلاق 20261001 — مستعجل) تحصيل على فاتورة قائمة عليها دين (post_invoice_payment ⇒
+       حركة sale_payment بتاريخ الدفع على فاتورة ليست من هذا اليوم): كان يدخل الصندوق
+       ولا يدخل أي حوض في التقرير — المبيعات تُعدّ فواتير اليوم فقط (sale_date)،
+       ودفعات الزبائن تُعدّ customer_payment فقط ⇒ فرق (عجز) يساوي مبلغ التحصيل.
+       تُحسب هنا «دفعات زبائن» لأن كاش اليوم دخل فعلاً بسبب زبون. استثناء !salesById:
+       تحصيل فواتير اليوم عدّده قسم المبيعات عبر salePayments فلا يُكرر. */
+    if(m.movement_type==='sale_payment' && m.direction==='in' && m.reference_table==='pos_sales'
+       && m.reference_id && !salesById[m.reference_id]){ dailyCashAdd(customerPay,method,m.amount); dayCustomerPayMoves.push({m,method}); }
     if(m.movement_type==='supplier_payment' && m.direction==='out'){ dailyCashAdd(supplierPay,method,m.amount); daySupplierPayMoves.push({m,method}); }
     if(m.movement_type==='customer_refund' && m.direction==='out') dailyCashAdd(refundsPay,method,m.amount);
     if(m.movement_type==='cash_shortage' && m.direction==='out') settlementShortage+=Number(m.amount||0);
@@ -8035,7 +8093,7 @@ function getDailyCashData(opts={}){
     const ed=dt=>{ if(!dt) return null; const dd=String(dt).slice(0,10); if(!inR(dd)) return null; if(!dm[dd]) dm[dd]={date:dd,invoiceCount:0,salesTotal:0,cashIn:0,cashOut:0}; return dm[dd]; };
     daySalesArr.forEach(s=>{ const D=ed(s.sale_date); if(!D)return; D.invoiceCount++; D.salesTotal+=Number(s.total||0); const rows=salePayments.filter(p=>p.sale_id===s.id); let cin=0; if(rows.length) rows.forEach(p=>{if(p.payment_method==='cash')cin+=Number(p.amount||0);}); else if(Number(s.paid_amount||0)>0&&s.payment_method==='cash') cin+=Math.abs(Number(s.paid_amount||0)); D.cashIn+=cin; });
     dayExpenses.forEach(e=>{ const D=ed(e.expense_date); if(!D)return; if(dailyCashMethodFromAccount(e.account_id)==='cash') D.cashOut+=Number(e.amount||0); });
-    financeMovements.filter(m=>inR(m.movement_date)).forEach(m=>{ const a=financeAccounts.find(x=>x.id===m.account_id); if(branch&&a?.location_id!==branch)return; if(dailyCashMethodFromAccount(m.account_id)!=='cash')return; const D=ed(m.movement_date); if(!D)return; if(m.movement_type==='customer_payment'&&m.direction==='in')D.cashIn+=Number(m.amount||0); if((m.movement_type==='supplier_payment'&&m.direction==='out')||(m.movement_type==='customer_refund'&&m.direction==='out')||(m.movement_type==='cash_shortage'&&m.direction==='out'))D.cashOut+=Number(m.amount||0); if(m.movement_type==='cash_surplus'&&m.direction==='in')D.cashIn+=Number(m.amount||0); });
+    financeMovements.filter(m=>inR(m.movement_date)).forEach(m=>{ const a=financeAccounts.find(x=>x.id===m.account_id); if(branch&&a?.location_id!==branch)return; if(dailyCashMethodFromAccount(m.account_id)!=='cash')return; const D=ed(m.movement_date); if(!D)return; if(m.movement_type==='customer_payment'&&m.direction==='in')D.cashIn+=Number(m.amount||0); /* (إغلاق 20261001) تحصيل فاتورة صدرت خارج الفترة — يُعدّ يوم دفعه (فواتير داخل الفترة عدّدها سطر الفواتير أعلاه) */ if(m.movement_type==='sale_payment'&&m.direction==='in'&&m.reference_table==='pos_sales'&&m.reference_id&&!salesById[m.reference_id])D.cashIn+=Number(m.amount||0); if((m.movement_type==='supplier_payment'&&m.direction==='out')||(m.movement_type==='customer_refund'&&m.direction==='out')||(m.movement_type==='cash_shortage'&&m.direction==='out'))D.cashOut+=Number(m.amount||0); if(m.movement_type==='cash_surplus'&&m.direction==='in')D.cashIn+=Number(m.amount||0); });
     days=Object.values(dm).sort((a,b)=>a.date<b.date?-1:1);
     days.forEach(D=>D.cashRemaining=D.cashIn-D.cashOut);
   }
