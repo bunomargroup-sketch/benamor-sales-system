@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261001-1357';
+const APP_BUILD='b20261001-1420';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3573,11 +3573,15 @@ function returnListRowHtml(r){
   const rec=ctx.recMap?.get(r.id) ?? returnRecorder(r.id);
   const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
   let act='';
-  if(r.sale_id && (isAdm||mine)) act+=`<button class="btn secondary" type="button" style="padding:4px 8px" title="تعديل فاتورة الإرجاع هذه" onclick="event.stopPropagation();openEditReturnModal('${safe}')">✏</button>`;
+  /* (1976) 👁 متاح للجميع: مستند المرتجع كان غير قابل للمشاهدة من قائمة الفواتير.
+     (كان يُبنى act هنا ولا يُدرج في السطر أبداً — عيب «لا يمكن تعديله».) */
+  act+=`<button class="btn secondary" type="button" style="padding:4px 8px" title="مشاهدة فاتورة الإرجاع" onclick="event.stopPropagation();openEditReturnModal('${safe}',true)">👁</button>`;
+  if(r.sale_id && (isAdm||mine)) act+=` <button class="btn secondary" type="button" style="padding:4px 8px" title="تعديل فاتورة الإرجاع هذه" onclick="event.stopPropagation();openEditReturnModal('${safe}')">✏</button>`;
   if(isAdm) act+=` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف فاتورة الإرجاع نهائياً — للمدير فقط" onclick="event.stopPropagation();deleteReturnAdmin('${safe}')">🗑</button>`;
-  const osafe=orig?String(orig.id).replace(/'/g,"\\'"):'';
   const noOrig=r.sale_id?'':' <span class="chip due" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
-  return `<tr ${orig?`ondblclick="viewSaleDetails('${osafe}')"`:'ondblclick="openEditReturnModal(\''+safe+'\')"'} title="فاتورة إرجاع${orig?' — اضغط مرتين لمشاهدة الفاتورة الأصلية':' — اضغط مرتين لفتح تعديلها'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>—</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}</tr>`;
+  /* (1976) السطر قابل للتحديد مثل أي فاتورة (data-id + اختيار بنقرة)،
+     والنقر المزدوج يعالجه selectSaleRow حسب النوع — بلا ondblclick مكرر هنا. */
+  return `<tr class="${selectedSaleId===r.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="فاتورة إرجاع${orig?' — انقر مرة للمحدد ومرتين للفاتورة الأصلية':' — انقر مرة للمحدد ومرتين لمشاهدة المرتجع'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>${act}</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}</tr>`;
 }
 /**** تحديث خفيف بعد الحفظ/التعديل: يجلب جداول «البيع والمخزون» المتحركة فقط بدل loadAll الكامل الثقيل — ويُعاد رسم القوائم فوراً — ويشتغل أيضاً كل 60 ثانية آلياً فتظهر فواتير وتعديلات الأجهزة الأخرى دون تحديث الصفحة يدوياً ****/
 /* ══════════════════ (0080) المزامنة التفاضلية — خفض استهلاك النقل ══════════════════
@@ -4110,10 +4114,15 @@ function printSalesList(){
 }
 /* تحديد/مضاعف الضغط على سطر الفاتورة — بلا إعادة رسم للإبقاء على ترتيب الأعمدة الحالي */
 let __lastSaleRowClick={id:null,t:0};
+/* (1976) المحدد قد يكون مرتجعًا — كل دوال الشريط تستفسر من هنا */
+function selectedSaleReturn(){ return selectedSaleId ? saleReturns.find(r=>r.id===selectedSaleId) : null; }
 function refreshSelectedSaleInfo(){
   const sl=selectedSaleId?sales.find(x=>x.id===selectedSaleId):null;
+  const ret=selectedSaleReturn();
   const n=(window.__salesListCount!=null)?window.__salesListCount:[...(q('salesBody')?.querySelectorAll('tr')||[])].filter(r=>r.children.length>1).length;
-  if(q('selectedSaleInfo')) q('selectedSaleInfo').textContent=sl?`المحدد: ${sl.sale_date} - ${money(sl.total)} ${APP_CONFIG.currency} | النتائج: ${n}`:`النتائج: ${n}`;
+  if(q('selectedSaleInfo')) q('selectedSaleInfo').textContent = ret
+    ? `المحدد: مرتجع ${String(ret.id).slice(0,8)}${ret.sale_id?' — على فاتورة '+(sales.find(x=>x.id===ret.sale_id)?.invoice_no||'—'):''} — −${money(ret.total)} ${APP_CONFIG.currency} | النتائج: ${n}`
+    : sl?`المحدد: ${sl.sale_date} - ${money(sl.total)} ${APP_CONFIG.currency} | النتائج: ${n}`:`النتائج: ${n}`;
 }
 function markSaleRowSelectedUi(){
   const body=q('salesBody'); if(!body) return;
@@ -4124,7 +4133,11 @@ function selectSaleRow(id){
   if(__lastSaleRowClick.id===id && now-__lastSaleRowClick.t<600){
     __lastSaleRowClick={id:null,t:0};
     selectedSaleId=id; markSaleRowSelectedUi(); refreshSelectedSaleInfo();
-    viewSaleDetails(id); return;
+    /* (1976) نقر مزدوج: فاتورة → مشاهدها، مرتجع → الفاتورة الأصلية (أو مشاهدة المرتجع إن لم يوجد أصل) */
+    const ret=saleReturns.find(r=>r.id===id);
+    if(ret){ if(ret.sale_id) viewSaleDetails(ret.sale_id); else openEditReturnModal(id,true); }
+    else viewSaleDetails(id);
+    return;
   }
   __lastSaleRowClick={id,t:now};
   selectedSaleId=id; markSaleRowSelectedUi(); refreshSelectedSaleInfo();
@@ -4237,7 +4250,7 @@ function ensureReturnEditModal(){
   if(q('returnEditModal')) return;
   const d=document.createElement('div'); d.className='modal'; d.id='returnEditModal';
   d.innerHTML=`<div class="modal-card" style="max-width:min(920px,96vw)">
-    <div class="modal-head"><div><h2 style="margin:0">✏️ تعديل المرتجع</h2><div class="mini" id="reSub">—</div></div><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="modal-head"><div><h2 style="margin:0" id="reTitle">✏️ تعديل المرتجع</h2><div class="mini" id="reSub">—</div></div><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">إغلاق</button></div>
     <div class="form" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
       <div><label>التاريخ</label><input id="reDate" type="date"></div>
       <div><label>طريقة التعويض</label><select id="reMethod"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option><option value="credit_reduction">تخفيض دين الزبون</option><option value="none">بدون تعويض نقدي</option></select></div>
@@ -4248,7 +4261,7 @@ function ensureReturnEditModal(){
       <thead><tr><th>الكود</th><th>الصنف</th><th>المعاد الآن</th><th>الحد المتاح</th><th>السعر</th><th>الإجمالي</th></tr></thead>
       <tbody id="reItemsBody"></tbody></table></div>
     <div class="row" style="justify-content:space-between;margin-top:10px"><b>الإجمالي: <span class="ltr" id="reTotal">0.00</span></b>
-      <div class="row"><button class="btn" type="button" onclick="submitReturnEdit()">💾 حفظ التعديل</button><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">✖ إلغاء التعديل</button></div>
+      <div class="row"><button class="btn" type="button" id="reSaveBtn" onclick="submitReturnEdit()">💾 حفظ التعديل</button><button class="btn secondary" type="button" onclick="q('returnEditModal').classList.remove('show')">✖ إغلاق</button></div>
     </div>
     <div class="mini" style="margin-top:6px">🔒 الكمية لا تتجاوز (المباع من الفاتورة الأصلية − ما عُيد في مرتجعات أخرى) · السعر لا يتجاوز سعر البيع الأصلي · الخصم الموزَّع يبقى محفوظاً بنسبة الصف · تعديل المال/الدفتر/المخزون يعكس أثر القديم في معاملة واحدة بالخادم.</div>
   </div>`;
@@ -4270,12 +4283,13 @@ function reRecalc(){
   });
   if(q('reTotal')) q('reTotal').textContent=money(t);
 }
-function openEditReturnModal(id){
-  const r=saleReturns.find(x=>x.id===id); if(!r){toast('مرتجع بفاتورة سالبة تاريخية — لا مستند له ولا يعدّل من هنا','info');return;}
+function openEditReturnModal(id, viewOnly=false){
+  const r=saleReturns.find(x=>x.id===id); if(!r){toast('مرتجع بفاتورة سالبة تاريخية — لا مستند له ولا يُعرض من هنا','info');return;}
   const rec=returnRecorder(id);
   const isAdm=currentRole?.role==='admin';
   const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
-  if(!isAdm && !mine){toast('التعديل للمدير أو للموظف الذي سجّل هذا المرتجع فقط','warn');return;}
+  /* (1976) viewOnly: مشاهدة مفتوحة للجميع (👁 من صف الإرجاع) — التعديل يبقى للمخوّل */
+  if(!viewOnly && !isAdm && !mine){toast('التعديل للمدير أو للموظف الذي سجّل هذا المرتجع فقط','warn');return;}
   const orig=sales.find(x=>x.id===r.sale_id); const cust=customers.find(c=>c.id===r.customer_id);
   const items=saleReturnItems.filter(i=>i.return_id===id);
   if(!items.length){toast('لا توجد أسطر لهذا المرتجع','warn');return;}
@@ -4303,6 +4317,12 @@ function openEditReturnModal(id){
       <td class="re-line ltr">${money(it.line_total)}</td></tr>`;
   }).join('');
   reRecalc();
+  /* (1976) وضع المشاهدة: عنوان + قفل كل الحقول وإخفاء الحفظ
+     (يعاد الفتح تلقائيًا عند فتح أي مرتجع آخر). */
+  if(q('reTitle')) q('reTitle').textContent=viewOnly?'👁️ مشاهدة المرتجع':'✏️ تعديل المرتجع';
+  [q('reDate'),q('reMethod'),q('reAccount'),q('reNotes')].forEach(el=>{ if(el) el.disabled=!!viewOnly; });
+  q('reItemsBody').querySelectorAll('input').forEach(i=>{ i.readOnly=!!viewOnly; });
+  if(q('reSaveBtn')) q('reSaveBtn').style.display=viewOnly?'none':'';
   q('returnEditModal').classList.add('show');
 }
 async function submitReturnEdit(){
@@ -4834,13 +4854,15 @@ q('salesBody')?.addEventListener('contextmenu',e=>{
   showCtxMenu(e.clientX,e.clientY,items);
 });
 function getSelectedSaleId(){if(!selectedSaleId){toast('اختر فاتورة من الجدول أولاً');return null;} return selectedSaleId}
-function openSelectedSaleForEdit(){const id=getSelectedSaleId(); if(id) openSaleForEdit(id)}
-function printSelectedSale(){const id=getSelectedSaleId(); if(id) printSale(id)}
-function openSelectedSaleReturn(){const id=getSelectedSaleId(); if(id) openSaleReturn(id)}
+/* (1976) الشريط يميّز المحدد: إذا كان مرتجعًا فالفتح/التعديل يفتح مستند المرتجع
+   وزر «مرتجع» يعيد فتح مرتجعات الفاتورة الأصلية، ولا تحصيل على الإرجاع. */
+function openSelectedSaleForEdit(){const id=getSelectedSaleId(); if(!id) return; const ret=selectedSaleReturn(); if(ret) openEditReturnModal(id); else openSaleForEdit(id);}
+function printSelectedSale(){const id=getSelectedSaleId(); if(!id) return; const ret=selectedSaleReturn(); if(ret){toast('الطباعة من مشاهدة المرتجع (👁 على صف الإرجاع)','info'); return;} printSale(id)}
+function openSelectedSaleReturn(){const id=getSelectedSaleId(); if(!id) return; const ret=selectedSaleReturn(); if(ret){ if(ret.sale_id) openSaleReturn(ret.sale_id); else toast('هذا المرتجع بلا فاتورة أصلية','info'); return;} openSaleReturn(id)}
 /* «تحصيل» كان زراً داخل عمود «إجراء» في كل صف. أُلغي العمود (القائمة صارت
    مضغوطة) وزر «إرجاع» فيه كان مكرراً مع «مرتجع» في الشريط أصلاً — أما
    «تحصيل» فلم يكن له نظير فوق، فانتقل إلى هنا. */
-function collectSelectedSale(){const id=getSelectedSaleId(); if(id) openInvoicePayment(id)}
+function collectSelectedSale(){const id=getSelectedSaleId(); if(!id) return; if(selectedSaleReturn()){toast('لا تحصيل على فواتير الإرجاع — التعويض سُجّل وقت الإرجاع','info'); return;} openInvoicePayment(id)}
 /* «نقدي — نقدي: 30.00 د.ل»: طريقة الدفع تتكرر حين تكون الفاتورة بدفعة
    واحدة. تُعرض مرة واحدة ويبقى التفصيل للمختلط. */
 function payCellText(sl,ctx){
