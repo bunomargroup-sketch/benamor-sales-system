@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261001-1420';
+const APP_BUILD='b20261001-1510';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4355,11 +4355,12 @@ async function submitReturnEdit(){
     console.error(e);
     const m=String(e?.message||'');
     let t='تعذّر التعديل: '+friendlyError(e);
-    if(m.includes('RETURN_EDIT_NOT_ALLOWED'))t='مسموح للمدير أو للموظف الذي سجّل هذا المرتجع فقط';
+    if(m.includes('STOCK_INVARIANT_VIOLATION'))t='حارس المخزون (0070) منع التعديل: يوجد فرق بين رصيد المخزون وسجل حركاته لواحد من أصناف المرتجع — يُعالج من طرف المشرف (سجل الحارس في قاعدة البيانات)';
+    else if(m.includes('RETURN_EDIT_NOT_ALLOWED'))t='مسموح للمدير أو للموظف الذي سجّل هذا المرتجع فقط';
     else if(m.includes('RETURN_QTY_EXCEEDS_SOLD_QTY'))t='الكمية تتجاوز المتبقي في أحد أصناف الفاتورة الأصلية';
     else if(m.includes('RETURN_PRICE_MUST_BE_BETWEEN_0_AND_SOLD_PRICE'))t='السعر يجب أن يكون ≤ سعر البيع الأصلي';
-    else if(m.includes('INSUFFICIENT')||m.includes('STOCK'))t+=' — لو بيعت الكمية المعادة بعد المرتجع فالعكس يتطلب تصحيح المخزون أولاً';
-    else if(m.includes('does not exist'))t+=' — شغّل ملف 0060_return_edit_delete.sql في Supabase أولاً';
+    else if(m.includes('INSUFFICIENT'))t+=' — لو بيعت الكمية المعادة بعد المرتجع فالعكس يتطلب تصحيح المخزون أولاً';
+    else if(m.includes('does not exist'))t+=' — شغّل ملف 0060_return_edit_delete.sql (أو 0100) في Supabase أولاً';
     toast(t,'error');
   }finally{showLoading(false);window.__busy=false;}
 }
@@ -4382,8 +4383,10 @@ async function deleteReturnAdmin(id){
     console.error(e);
     const m=String(e?.message||'');
     let t='تعذّر الحذف: '+friendlyError(e);
-    if(m.includes('ONLY_ADMIN'))t='هذه العملية للمدير فقط';
-    if(m.includes('does not exist'))t+=' — شغّل ملف 0060_return_edit_delete.sql في Supabase أولاً';
+    if(m.includes('STOCK_INVARIANT_VIOLATION'))t='حارس المخزون (0070) منع الحذف: يوجد فرق بين رصيد المخزون وسجل حركاته لواحد من أصناف المرتجع — يُعالج من طرف المشرف (سجل الحارس في قاعدة البيانات)';
+    else if(m.includes('ONLY_ADMIN'))t='هذه العملية للمدير فقط';
+    else if(m.includes('INSUFFICIENT'))t+=' — المخزون الحالي أقل من كمية المرتجع (لو وُظِّف يدوياً فعلاً فعوَّض ذلك أولاً)';
+    else if(m.includes('does not exist'))t+=' — شغّل ملف 0060_return_edit_delete.sql (أو 0100) في Supabase أولاً';
     toast(t,'error');
   }finally{showLoading(false);window.__busy=false;}
 }
