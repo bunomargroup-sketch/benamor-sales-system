@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261001-1728';
+const APP_BUILD='b20261001-1750';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4088,7 +4088,7 @@ function exportSalesListCsv(){
   const head=['رقم الفاتورة','التاريخ','الفرع','الزبون','الهاتف','الحالة','طريقة الدفع','الإجمالي','المدفوع','الدين','ملاحظات'];
   const lines=rows.map(sl=>{
     const l=locations.find(x=>x.id===sl.location_id), c=customers.find(x=>x.id===sl.customer_id);
-    return [sl.invoice_no||String(sl.id).slice(0,8), sl.sale_date, l?.name||'', c?.name||'زبون نقدي', c?.phone||'', saleStatusText(salePaymentStatus(sl)), typeLabel(sl.payment_method||''), Number(sl.total||0), Number(sl.paid_amount||0), Number(sl.balance_due||0), String(sl.notes||'').replace(/\s+/g,' ').trim()];
+    return [sl.invoice_no||String(sl.id).slice(0,8), sl.sale_date, l?.name||'', c?.name||'زبون نقدي', c?.phone||'', saleStatusText(salePaymentStatus(sl)), salePaymentMethodLabel(sl), Number(sl.total||0), Number(sl.paid_amount||0), Number(sl.balance_due||0), String(sl.notes||'').replace(/\s+/g,' ').trim()];
   });
   const csv='\ufeff'+[head,...lines].map(row=>row.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
@@ -4868,15 +4868,26 @@ function openSelectedSaleReturn(){const id=getSelectedSaleId(); if(!id) return; 
 function collectSelectedSale(){const id=getSelectedSaleId(); if(!id) return; if(selectedSaleReturn()){toast('لا تحصيل على فواتير الإرجاع — التعويض سُجّل وقت الإرجاع','info'); return;} openInvoicePayment(id)}
 /* «نقدي — نقدي: 30.00 د.ل»: طريقة الدفع تتكرر حين تكون الفاتورة بدفعة
    واحدة. تُعرض مرة واحدة ويبقى التفصيل للمختلط. */
-function payCellText(sl,ctx){
+/* (1979) طريقة الدفع المحفوظة «لقطة» لحظة حفظ الفاتورة: فاتورة سُجّلت
+   «آجل/دين» ثم سُدِّدت كاملًا (أو استُوردت من النظام القديم مسدَّدة —
+   فواتير «وصلة رقم») تظل تُعرض «آجل / دين» وهي متضادة مع شارة «مدفوعة».
+   الحالة الآن هي المرجع:
+   • مدفوعة ⇒ التكوين الفعلي للدفعات (أو «مدفوعة» إن لا سجل دفعات — استيراد).
+   • جزئيًا/غير مدفوعة ⇒ الطريقة المحفوظة + ما دُفع. */
+function salePaymentMethodLabel(sl,detail){
+  if(detail===undefined) detail=paymentBreakdownText((salePayments||[]).filter(p=>p.sale_id===sl.id));
   const head=typeLabel(sl.payment_method);
-  const detail=(ctx&&ctx.payMap&&ctx.payMap.get(sl.id)) || paymentBreakdownText(salePayments.filter(p=>p.sale_id===sl.id));
-  if(!detail) return head;                       /* آجل: لا دفعات ⇒ بلا شرطة معلّقة */
-  if(detail.indexOf('|')<0){                     /* دفعة واحدة */
+  if(salePaymentStatus(sl)==='paid' && Number(sl.total||0)>0) return detail||'مدفوعة';
+  if(!detail) return head;
+  if(detail.indexOf('|')<0){
     const i=detail.indexOf(':');
     if(i>0 && detail.slice(0,i).trim()===head) return head+' — '+detail.slice(i+1).trim();
   }
   return head+' — '+detail;
+}
+function payCellText(sl,ctx){
+  const detail=(ctx&&ctx.payMap&&ctx.payMap.get(sl.id)) || paymentBreakdownText((salePayments||[]).filter(p=>p.sale_id===sl.id));
+  return salePaymentMethodLabel(sl,detail);
 }
 function convertSelectedSaleToProforma(){const id=getSelectedSaleId(); if(id) convertSaleToProforma(id)}
 async function adjustStockDoc(location_id, item, qtyChange, movementType, referenceTable, referenceId, notes){
@@ -5507,13 +5518,13 @@ ${mode==='view'?'':'<div class="bar"><button class="pbtn" onclick="window.print(
     <div class="f"><div class="lbl">الزبون</div><div class="val">${esc(cust?.name||'زبون نقدي')}</div></div>
     <div class="f"><div class="lbl">الهاتف</div><div class="val" dir="ltr" style="text-align:right">${esc(cust?.phone||'—')}</div></div>
     <div class="f"><div class="lbl">الفرع</div><div class="val">${esc(loc?.name||'-')}</div></div>
-    <div class="f"><div class="lbl">طريقة الدفع</div><div class="val">${esc(typeLabel(sl.payment_method))}</div></div>
+    <div class="f"><div class="lbl">طريقة الدفع</div><div class="val">${esc(salePaymentMethodLabel(sl))}</div></div>
   </div>
   <table class="items"><thead><tr><th class="n">#</th><th style="text-align:center">الكود</th><th>الصنف</th><th class="n">الكمية</th><th class="n">السعر</th><th class="n">الخصم</th><th class="n">الإجمالي</th></tr></thead><tbody>${rows}</tbody></table>
   <div class="summary">
     <div class="pay">
       <div class="sec-t">تفاصيل الدفع</div>
-      <div class="row">طريقة الدفع: <b>${esc(typeLabel(sl.payment_method))}</b></div>
+      <div class="row">طريقة الدفع: <b>${esc(salePaymentMethodLabel(sl))}</b></div>
       <div class="row">المدفوع: <b>${money(paid)} ${esc(APP_CONFIG.currency)}</b></div>
       <div class="row">إجمالي القطع: <b>${money(itemCount)}</b></div>
       <div class="row">عدد الأصناف: <b>${items.length}</b></div>
@@ -5655,7 +5666,7 @@ function renderSaleViewDetailsData(sl,items,linkedReturns){
         <div class="schip schip-date" title="تاريخ الفاتورة"><span class="schip-lbl">${esc(sl.sale_date)}</span></div>
         <div class="schip schip-customer" title="الزبون"><span class="schip-lbl">${esc(cust?.name||'زبون نقدي')}</span><span class="schip-sub ltr">${esc(cust?.phone||'')}</span></div>
         <div class="schip" title="الفرع"><span class="schip-lbl">${esc(loc?.name||'—')}</span></div>
-        <div class="schip" title="طريقة الدفع"><span class="schip-lbl">${esc(typeLabel(sl.payment_method))}</span></div>
+        <div class="schip" title="طريقة الدفع"><span class="schip-lbl">${esc(salePaymentMethodLabel(sl))}</span></div>
       </div>
       <div class="sale-topbar-total"><span>الإجمالي</span><b>${money(sl.total)}</b></div>
     </div>
