@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261003-1349';
+const APP_BUILD='b20261003-1959';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -779,6 +779,7 @@ async function finalizeOfflineSale(entry,serverRow){
     financeMovements.forEach(x=>{ if(x.reference_id===tempId){ x.reference_id=realId; } });
     stockMovements.forEach(x=>{ if(x.reference_id===tempId) x.reference_id=realId; });
     await offQueueDelete(entry.key); /* لا تُحذف من الطابور إلا بعد تأكيد نجاحها من الخادم */
+    queueServerMarker(entry,'synced'); /* المرآة (0106): السجل يُغلق على الخادم أيضًا */
     logAction('sale_offline_sync','pos_sales',realId,`مزامنة فاتورة كانت محلية ${invoiceNo||realId.slice(0,8)} - ${money(serverRow.total)} ${APP_CONFIG.currency} - أنشأها ${entry.user_identifier||''}`);
   }finally{ __finalizingKeys.delete(entry.key); }
 }
@@ -811,9 +812,10 @@ async function syncOfflineQueue(){
   let synced=0, reviewCount=0;
   try{
     const items=(await offQueueAll()).filter(x=>x&&x.payload&&x.payload.p_sale).sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    await applyRemoteQueueResolutions().catch(()=>{});                                           /* قرارات المدير البعيدة (0106) */
     for(const it of items){
       if(it.status==='review') continue;                                                          /* تنتظر قرار المدير */
-      if(!(it.user_identifier===appUser?.identifier||currentRole?.role==='admin')) continue;      /* طابور غيري لا يُرفع بجلستي — صاحبها أو المدير */
+      if(!(it.user_identifier===appUser?.identifier||isManager())) continue;      /* طابور غيري لا يُرفع بجلستي — صاحبها أو المدير */
       if(Number(it.next_try_at||0)>Date.now()) continue;                                          /* تراجع تصاعدي */
       let res=null;
       try{
@@ -835,7 +837,7 @@ async function syncOfflineQueue(){
       synced++;
     }
   }catch(e){ console.warn('خطأ مزامنة الطابور المحلي',e); }
-  finally{ __offlineSyncing=false; }
+  finally{ __offlineSyncing=false; mirrorOfflineQueue().catch(()=>{}); }
   if(synced||reviewCount){
     try{ buildProductCostIndex(); }catch(e){}
     renderAll();
@@ -851,6 +853,7 @@ async function saveSaleOfflineQueued(rpcPromise,payload,body,items,paymentsForRp
   const entry=await enqueueOfflineSale(payload,{total:body.total,customer_name:cust?.name||'زبون نقدي',sale_date:body.sale_date,location_id:body.location_id,items_count:items.length});
   clearDraftKey('sale'); /* ضروري: حتى لا يتشارك مفتاح idempotency مع الفاتورة التالية */
   clearActiveSaleDraft();
+  mirrorOfflineQueue().catch(()=>{}); /* المرآة (0106): فور توفر اتصال — وإلا عند أول مزامنة */
   logAction('sale_offline_queue','pos_offline_queue',entry.temp_id,`فاتورة محلية بانتظار الاتصال - ${money(body.total)} ${APP_CONFIG.currency}`);
   const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new';
   closeSalePaymentScreen(); resetSaleForm();
@@ -871,9 +874,41 @@ async function openOfflineQueueModal(){ q('offlineQueueModal')?.classList.add('s
 async function renderOfflineQueueModal(){
   const body=q('offlineQueueBody'); if(!body) return;
   const items=(await offQueueAll()).filter(x=>x&&x.payload).sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')));
-  if(!items.length){ body.innerHTML='<div class="mini" style="padding:16px;text-align:center">لا توجد فواتير محلية — كل شيء متزامن ✓</div>'; return; }
-  const isAdmin=currentRole?.role==='admin';
-  body.innerHTML=items.map(it=>{
+  const isAdmin=isManager();
+  let remoteHtml='';
+  if(isAdmin&&navigator.onLine){
+    try{
+      const remoteRows=await api('pos_offline_queue',{qs:'?select=*&status=eq.rejected&order=created_at.desc&limit=50'});
+      const localIds=new Set(items.map(x=>x.temp_id));
+      const remote=(Array.isArray(remoteRows)?remoteRows:[]).filter(r=>r&&r.temp_id&&!localIds.has(r.temp_id));
+      if(remote.length){
+        remoteHtml='<div class="mini" style="margin:14px 2px 8px;font-weight:800;color:var(--bad)">⚠ مرفوضة على أجهزة أخرى — تتطلب قرار المدير (من أي جهاز)</div>'+remote.map(r=>{
+          const pl=r.payload||{};
+          const loc=locations.find(x=>x.id===r.location_id);
+          const itemsTxt=(pl.p_items||[]).map(x=>esc(x.product_code)+' ×'+money(x.qty)).join('، ');
+          const total=(pl.p_sale&&Number(pl.p_sale.total))||0;
+          const t=String(r.temp_id||'').replace(/'/g,"\\'");
+          return `<div class="card" style="margin-bottom:10px;border-inline-start:4px solid var(--bad)">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+              <div style="min-width:220px">
+                <b>⚠ مرفوضة — ${esc(loc?loc.name:'فرع غير معروف')}</b>
+                <div class="mini" style="margin-top:3px"><b>${money(total)} ${APP_CONFIG.currency}</b> — ${esc(pl.p_sale?(pl.p_sale.customer_name||''):'زبون نقدي')||'زبون نقدي'} — ${esc(String(pl.p_sale?.sale_date||r.created_at||'').slice(0,10))}</div>
+                <div class="mini ltr" style="margin-top:3px">${itemsTxt||'—'}</div>
+                <div class="mini" style="margin-top:6px;color:var(--bad)"><b>سبب الرفض:</b> ${esc(r.error||'')}</div>
+                <div class="mini" style="margin-top:4px;opacity:.75">أنشأها: ${esc(r.user_identifier||'')} — ${esc(String(r.created_at||'').replace('T',' ').slice(0,16))}${Number(r.attempts||0)?' — محاولات: '+r.attempts:''}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn" type="button" onclick="offlineQueueResolveRemote('${t}','force_retry')">إعادة إرسال (تجاوز فحص المخزون)</button>
+                <button class="btn danger" type="button" onclick="offlineQueueResolveRemote('${t}','deleted')">حذف نهائي</button>
+                <button class="btn secondary" type="button" onclick="printSale('${t}')">طباعة</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }catch(e){ console.warn('عرض المرفوضة البعيدة فشل',e); }
+  }
+  const localHtml=items.length?items.map(it=>{
     const review=it.status==='review'; const d=it.display||{};
     const itemsTxt=(it.payload.p_items||[]).map(x=>esc(x.product_code)+' ×'+money(x.qty)).join('، ');
     const k=String(it.key||'').replace(/'/g,"\\'"); const t=String(it.temp_id||'').replace(/'/g,"\\'");
@@ -894,7 +929,8 @@ async function renderOfflineQueueModal(){
         </div>
       </div>
     </div>`;
-  }).join('');
+  }).join(''):(items.length===0&&!remoteHtml?'<div class="mini" style="padding:16px;text-align:center">لا توجد فواتير محلية — كل شيء متزامن ✓</div>':'');
+  body.innerHTML=localHtml+remoteHtml;
 }
 async function offlineQueueSyncNow(key){
   const it=await offQueueGet(key); if(!it) return;
@@ -903,7 +939,7 @@ async function offlineQueueSyncNow(key){
   await renderOfflineQueueModal(); updateOfflineQueueBadge();
 }
 async function offlineQueueForceRetry(key){
-  if(currentRole?.role!=='admin'){toast('هذه الخطوة للمدير فقط','warn');return;}
+  if(!isManager()){toast('هذه الخطوة للمدير فقط','warn');return;}
   const it=await offQueueGet(key); if(!it) return;
   if(!confirm('إعادة إرسال الفاتورة مع تجاوز فحص المخزون؟\nسيُسمح للكمية بالنزول تحت الصفر إن لزم (قرار إداري يُسجَّل في سجل التدقيق).'))return;
   it.status='pending'; it.force=true; it.error=null; it.next_try_at=0;
@@ -913,16 +949,116 @@ async function offlineQueueForceRetry(key){
   await renderOfflineQueueModal(); updateOfflineQueueBadge();
 }
 async function offlineQueueDelete(key){
-  if(currentRole?.role!=='admin'){toast('الحذف للمدير فقط','warn');return;}
+  if(!isManager()){toast('الحذف للمدير فقط','warn');return;}
   const it=await offQueueGet(key); if(!it) return;
   if(it.status!=='review'){toast('لا يمكن حذف فاتورة لم يرفضها الخادم — قد تكون وصلت بالفعل','warn');return;}
   const d=it.display||{};
   if(!confirm(`حذف نهائي للفاتورة المحلية (${money(d.total)} ${APP_CONFIG.currency} — ${d.customer_name||'زبون نقدي'})؟\nالخادم رفضها ولم تُسجَّل في قاعدة البيانات. سيُعاد المخزون المخصوم محليًا.`))return;
   removeOfflineSaleLocally(it);
   await offQueueDelete(it.key);
+  queueServerMarker(it,'deleted'); /* المرآة (0106): القرار يُغلق السجل على الخادم */
   logAction('offline_sale_delete','pos_offline_queue',it.temp_id,`حذف فاتورة محلية رفضها الخادم (${it.error||''}) - ${money(d.total)} ${APP_CONFIG.currency}`);
   refreshAfterLocalUpdate(); updateOfflineQueueBadge(); await renderOfflineQueueModal();
   toast('تم حذف الفاتورة المحلية وإرجاع المخزون المحلي','success');
+}
+/* ═══ المرآة الخادم لطابور دون اتصال (0106) ═══
+   إضافي فقط: لا يُشترط على الحفظ/الطباعة/البيع أبدًا، وفشله صامت.
+   الهدف: يرى المدير الطابور من أي جهاز، ومسح بيانات جهاز البائع
+   لا يدمّر سجل بيع حقيقي (طُبِع، دُفع، وُزِّع). */
+function queueMirrorEntry(it){
+  return {
+    temp_id:it.temp_id,
+    location_id:(it.payload&&it.payload.p_sale&&it.payload.p_sale.location_id)||it.branch_id||null,
+    user_identifier:it.user_identifier||appUser?.identifier||'',
+    payload:{
+      p_sale:it.payload?.p_sale||null,
+      p_items:it.payload?.p_items||[],
+      p_payments:it.payload?.p_payments||[],
+      p_idempotency_key:it.key||null
+    },
+    status:it.status==='review'?'rejected':'pending',
+    error:it.status==='review'?String(it.error||''):null,
+    attempts:Number(it.attempts||0)
+  };
+}
+async function mirrorOfflineQueue(){
+  if(!appUser?.id||!authSession?.access_token||!navigator.onLine) return;
+  const items=(await offQueueAll().catch(()=>[])).filter(x=>x&&x.temp_id&&x.payload&&x.payload.p_sale);
+  if(!items.length) return;
+  try{
+    await rpc('pos_offline_queue_sync',{p_entries:items.map(queueMirrorEntry),p_user_identifier:appUser?.identifier||''});
+  }catch(e){ console.warn('رفع مرآة الطابور فشلت (لا يوقف البيع)',e); }
+}
+async function queueServerMarker(entry,resolution){
+  if(!appUser?.id||!authSession?.access_token||!navigator.onLine) return;
+  const e={...queueMirrorEntry(entry),status:'resolved',resolution,error:null,resolved_by:appUser?.identifier||''};
+  try{ await rpc('pos_offline_queue_sync',{p_entries:[e],p_user_identifier:appUser?.identifier||''}); }
+  catch(err){ console.warn('تحديث مرآة الطابور فشل',err); }
+}
+/* قرارات المدير المرفوعة من جهاز آخر (0106): تطبَّق على الطابور المحلي */
+async function applyRemoteQueueResolutions(){
+  if(!appUser?.id||!authSession?.access_token||!navigator.onLine) return;
+  const items=(await offQueueAll().catch(()=>[])).filter(x=>x&&x.temp_id);
+  if(!items.length) return;
+  const inList=items.map(x=>`'${x.temp_id}'`).join(',');
+  let rows=[];
+  try{ rows=await api('pos_offline_queue',{qs:`?select=temp_id,resolution&status=eq.resolved&temp_id=in.(${inList})`}); }
+  catch(e){ return; }
+  if(!Array.isArray(rows)||!rows.length) return;
+  let changed=false;
+  for(const r of rows){
+    const it=items.find(x=>x.temp_id===r.temp_id);
+    if(!it||it.status!=='review') continue;
+    const d=it.display||{};
+    if(r.resolution==='deleted'){
+      removeOfflineSaleLocally(it); /* يُرجع المخزون المخصوم محليًا ويمحو الآثار */
+      await offQueueDelete(it.key).catch(()=>{});
+      toast(`قرر المدير حذف الفاتورة المحلية${d.total?` (${money(d.total)} ${APP_CONFIG.currency})`:''}`,'warn');
+    }else if(r.resolution==='force_retry'){
+      /* المدير أعاد إرسالها من جهازه — البيع سُجِّل على الخادم */
+      dropOfflineSaleLocalRows(it); /* يُمحي الصفوف المحلية (بلا إرجاع مخزون: البيع حقيقي) */
+      await offQueueDelete(it.key).catch(()=>{});
+      toast('أعاد المدير إرسال الفاتورة المحلية وسُجِّلَت على الخادم ✓','success');
+    }
+    changed=true;
+  }
+  if(changed){
+    try{ buildProductCostIndex(); }catch(e){}
+    renderAll(); updateOfflineQueueBadge();
+    if(q('offlineQueueModal')?.classList.contains('show')) renderOfflineQueueModal().catch(()=>{});
+  }
+}
+/* يُمحي آثار فاتورة محلية من المصفوفات فقط (بلا لمس المخزون) —
+   للاستخدام عندما أصبح البيع حقيقيًا على الخادم بقرار المدير */
+function dropOfflineSaleLocalRows(entry){
+  const tempId=entry.temp_id;
+  for(let i=sales.length-1;i>=0;i--) if(sales[i].id===tempId) sales.splice(i,1);
+  for(let i=saleItems.length-1;i>=0;i--) if(saleItems[i].sale_id===tempId) saleItems.splice(i,1);
+  for(let i=salePayments.length-1;i>=0;i--) if(salePayments[i].sale_id===tempId) salePayments.splice(i,1);
+  for(let i=customerLedger.length-1;i>=0;i--) if(customerLedger[i].reference_id===tempId){
+    const e=customerLedger[i];
+    if(e.entry_type==='sale'&&Number(e.debit||0)>0){ const c=customers.find(x=>x.id===e.customer_id); if(c) c.balance=Number(c.balance||0)-Number(e.debit); }
+    customerLedger.splice(i,1);
+  }
+  for(let i=financeMovements.length-1;i>=0;i--) if(financeMovements[i].reference_id===tempId){
+    const m=financeMovements[i]; const acc=financeAccounts.find(a=>a.id===m.account_id);
+    if(acc) acc.balance=Number(acc.balance||0)+(m.direction==='in'?-Number(m.amount):Number(m.amount));
+    financeMovements.splice(i,1);
+  }
+}
+/* قرار المدير على إدخال مرفوض — من أي جهاز (0106): التنفيذ على الخادم */
+async function offlineQueueResolveRemote(tempId,resolution){
+  if(!isManager()){toast('هذه الخطوة للمدير فقط','warn');return;}
+  const msg=resolution==='force_retry'
+    ?'إعادة إرسال الفاتورة مع تجاوز فحص المخزون؟\nسيُسمح للكمية بالنزول تحت الصفر إن لزم (قرار إداري يُسجَّل في سجل التدقيق).'
+    :'حذف نهائي لهذه الفاتورة المرفوضة (لم تُسجَّل على الخادم قط)؟';
+  if(!confirm(msg))return;
+  try{
+    const r=await rpc('pos_offline_queue_resolve',{p_temp_id:tempId,p_resolution:resolution,p_user_identifier:appUser?.identifier||''});
+    if(r&&r.ok===false) toast('فشلت العملية: '+(r.error||''),'error');
+    else toast(resolution==='force_retry'?'أُعيد إرسال الفاتورة وسُجِّلَت على الخادم ✓':'حُذفت الفاتورة ✓','success');
+  }catch(e){ toast('فشلت العملية: '+friendlyError(e),'error'); }
+  await renderOfflineQueueModal().catch(()=>{});
 }
 /* ═══ شريط «صدر تحديث — أعد التحميل» ═══
    يظهر عندما تُفعِّل service worker نسخة أحدث من نسخة الصفحة العاملة.
@@ -1295,16 +1431,29 @@ function resolveSelectedLoginBranch(selectedValue, selectedText){
     locations.find(l=>String(l.name)===String(selectedText)) || null;
 }
 
-const ROLE_LABELS={admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',sales_purchase:'بيع وشراء الفرعين',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
+const ROLE_LABELS={programmer:'المبرجج',admin:'مدير',seller_11:'بائع فرع 11 يونيو',seller_sarraj:'بائع فرع السراج',sales_purchase:'بيع وشراء الفرعين',warehouse:'مخزن',accountant:'محاسب',viewer:'مشاهدة فقط'};
 const ROLE_TABS={
-  admin:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','stockCount','composites','transfers','expensesQuick','dailyCashClosing','finance','reports','auditLog','users','settings'],
+  /* (0107) قرار المالك (2026-10-03): المبرجج يرى كل شيء؛
+     users + settings + locations محصورة له — admin يُشتق من القائمة
+     الكاملة ناقص هذي الثلاثة حتى لا يُترك تبويب مستقبلي خارج التصفية */
+  programmer:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','stockCount','composites','transfers','expensesQuick','dailyCashClosing','finance','reports','auditLog','users','settings'],
   seller_11:['dashboard','products','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
   seller_sarraj:['dashboard','products','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
   sales_purchase:['dashboard','products','suppliers','sales','salesList','proformas','customers','purchases','stock','transfers','stockCount','composites','expensesQuick','dailyCashClosing'],
   warehouse:['dashboard','products','stock','stockCount','composites','transfers','purchases'],
   accountant:['dashboard','suppliers','ledger','payments','customers','expensesQuick','dailyCashClosing','finance','reports','auditLog'],
-  viewer:['dashboard','products','stock','reports']
+  viewer:['dashboard','products','stock','reports'],
+  admin:[] /* يُملأ أسفله: كل شيء ما عدا settings */
 };
+/* (0107) قرار المالك (2026-10-03): المدير يفقد users + settings + locations
+   (يبقى كل ما هو تجاري — بما فيها إرسال المصاريف إلى الجدول وعمود «في الشيت»);
+   إعداد الشيت السري (pos_sheet_sync_config) لا يقرؤه أحد عبر REST أصلًا (0095) */
+ROLE_TABS.admin=ROLE_TABS.programmer.filter(t=>!['users','settings','locations'].includes(t));
+/* (0107) الرتب + المساعَدتان — لا مقارنة متناثرة: كل فحص admin يمر منهما */
+const ROLE_RANK={viewer:0,seller_11:1,seller_sarraj:1,warehouse:1,sales_purchase:2,accountant:2,admin:8,programmer:9};
+function roleRank(r){ return ROLE_RANK[String(r||'')] ?? 0; }
+function isManager(){ return roleRank(currentRole?.role) >= ROLE_RANK.admin; }
+function isProgrammer(){ return roleRank(currentRole?.role) >= ROLE_RANK.programmer; }
 const SUPERVISOR_DISCOUNT_THRESHOLD=0.10;
 let saleSupervisorApproved=false;
 async function verifySupervisorCredentials(identifier,code){
@@ -1315,10 +1464,11 @@ async function verifySupervisorCredentials(identifier,code){
   if(!res.ok || !data.access_token) return false;
   const r=await fetch(`${SUPABASE_URL}/rest/v1/pos_user_roles?select=identifier,role,active&identifier=eq.${encodeURIComponent(identifier)}&limit=1`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${data.access_token}`}});
   const rows=await r.json().catch(()=>[]);
-  return r.ok && rows?.[0]?.role==='admin' && rows?.[0]?.active!==false;
+  /* (0107) المبرجج يوافق أيضًا — الرتبة ≥ مدير */
+  return r.ok && roleRank(rows?.[0]?.role) >= ROLE_RANK.admin && rows?.[0]?.active!==false;
 }
 async function requestSupervisorApproval(reason, details=''){
-  if(currentRole?.role==='admin') return true;
+  if(isManager()) return true;
   if(saleSupervisorApproved) return true;
   const id=prompt(`موافقة مدير مطلوبة\n${reason}\n${details?details+'\n':''}\nمعرّف المدير:`,'');
   if(id==null) return false;
@@ -1338,12 +1488,20 @@ function getUserRole(){
   return userRoles.find(r=>(r.identifier||'').toLowerCase()===appUser.identifier.toLowerCase()) || null;
 }
 async function ensureRoleAfterLogin(){
+  /* (0107) لا «أول مستخدم = مدير» بعد اليوم: من بلا دور يدخل مشاهدًا حتى
+     يسند له المبرجج صلاحية من تبويب المستخدمين */
   let role=getUserRole();
   if(!role && userRoles.length===0){
-    const created=await api('pos_user_roles',{method:'POST',body:{identifier:appUser.identifier,display_name:appUser.identifier,role:'admin',active:true,notes:'أول مستخدم - مدير تلقائي'}});
-    userRoles.push(created[0]); role=created[0];
+    try{
+      const created=await api('pos_user_roles',{method:'POST',body:{identifier:appUser.identifier,display_name:appUser.identifier,role:'viewer',active:true,notes:'أول مستخدم - بانتظار إسناد صلاحية'}});
+      if(created&&created[0]){ userRoles.push(created[0]); role=created[0]; }
+    }catch(e){ console.warn('إنشاء الدور التلقائي مرفوض من الخادم (سياسة أمان) — المستخدم يدخل مشاهدًا',e); }
   }
-  currentRole=role || {identifier:appUser.identifier,role:'viewer',active:true};
+  if(!role){
+    role={identifier:appUser.identifier,role:'viewer',active:true};
+    toast('لم يُسند لك دور بعد — تواصل مع المبرجج لإسناد الصلاحيات','warn');
+  }
+  currentRole=role;
 }
 async function loginPOS(create=false){
   if(create){toast('إنشاء المستخدمين يتم من المدير فقط','warn');return;}
@@ -1398,9 +1556,9 @@ function tidyNavGroups(){
     g.style.display=anyVisible?'':'none';
   });
 }
-function canSelectSaleBranch(){return currentRole?.role==='admin'||currentRole?.role==='sales_purchase'}
+function canSelectSaleBranch(){return isManager()||currentRole?.role==='sales_purchase'}
 function applyPermissions(){
-  const _dup=q('dupPaymentsBtn'); if(_dup)_dup.classList.toggle('hidden',currentRole?.role!=='admin');
+  const _dup=q('dupPaymentsBtn'); if(_dup)_dup.classList.toggle('hidden',!isManager());
   if(!appUser?.id){updateAuthUI();return;}
   currentRole=getUserRole()||currentRole||{role:'viewer'}; updateAuthUI();
   document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.style.display=canTab(b.dataset.tab)?'block':'none'});
@@ -1421,16 +1579,32 @@ function applyPermissions(){
     if(loc && q('saleLocation')){q('saleLocation').value=loc.id; q('saleLocation').disabled=true;}
   }
 }
+function syncRoleOptions(){
+  /* (0107) خيار المبرجج يظهر فقط للمبرمج — مصدر واحد لقائمة الأدوار */
+  const sel=q('roleName'); if(!sel) return;
+  const keep=sel.value;
+  const opts=[['programmer','المبرجج'],['admin','مدير'],['seller_11','بائع فرع 11 يونيو'],['seller_sarraj','بائع فرع السراج'],['sales_purchase','بيع وشراء الفرعين'],['warehouse','مخزن'],['accountant','محاسب'],['viewer','مشاهدة فقط']];
+  sel.innerHTML=opts.filter(([v])=>v!=='programmer'||isProgrammer()).map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  if([...sel.options].some(o=>o.value===keep)) sel.value=keep;
+}
 function renderRoles(){
   if(!q('rolesBody')) return;
-  q('rolesBody').innerHTML=userRoles.map(r=>`<tr><td class="ltr"><b>${esc(r.identifier)}</b></td><td>${esc(r.display_name||'')}</td><td>${esc(ROLE_LABELS[r.role]||r.role)}</td><td>${r.active?'<span class="badge green">نشط</span>':'<span class="badge gray">متوقف</span>'}</td><td>${esc(r.notes||'')}</td><td><button class="btn secondary" onclick="editRole('${String(r.id).replace(/'/g,"\'")}')">تعديل</button> <button class="btn secondary" onclick="changeUserCredentials('${r.identifier}')">🔑 الدخول</button></td></tr>`).join('') || '<tr><td colspan="6">لا توجد صلاحيات بعد. أول مستخدم يدخل يصبح مدير تلقائيًا.</td></tr>';
+  syncRoleOptions();
+  q('rolesBody').innerHTML=userRoles.map(r=>{
+    const isDevRow=(r.role==='programmer');
+    const actions=(isDevRow&&!isProgrammer())
+      ?'<span class="mini" style="opacity:.7">🔒 محمي — يُعدَّل بواسطة المبرجج فقط</span>'
+      :`<button class="btn secondary" onclick="editRole('${String(r.id).replace(/'/g,"\\'")}')">تعديل</button> <button class="btn secondary" onclick="changeUserCredentials('${r.identifier}')">🔑 الدخول</button>`;
+    return `<tr><td class="ltr"><b>${esc(r.identifier)}</b></td><td>${esc(r.display_name||'')}</td><td>${esc(ROLE_LABELS[r.role]||r.role)}</td><td>${r.active?'<span class="badge green">نشط</span>':'<span class="badge gray">متوقف</span>'}</td><td>${esc(r.notes||'')}</td><td>${actions}</td></tr>`;
+  }).join('') || '<tr><td colspan="6">لا توجد صلاحيات بعد — يدخل المستخدم الجديد «مشاهدة فقط» حتى يُسند له دور.</td></tr>';
 }
 function editRole(id){
   const r=userRoles.find(x=>x.id===id); if(!r)return;
+  if(r.role==='programmer'&&!isProgrammer()){toast('هذا الحساب محمي — يحرره المبرجج فقط','warn');return;}
   q('roleIdentifier').value=r.identifier||''; q('roleDisplayName').value=r.display_name||''; q('roleName').value=r.role||'viewer'; q('roleNotes').value=r.notes||'';
 }
 async function notifyAdminOfSellerEdits(){
-  if(currentRole?.role!=='admin' || !appUser?.identifier) return;
+  if(!isManager() || !appUser?.identifier) return;
   try{
     let last=null; try{last=localStorage.getItem('posAdminEditsSeenAt');}catch(e){}
     const since=last||new Date(Date.now()-7*864e5).toISOString();
@@ -1443,7 +1617,7 @@ async function notifyAdminOfSellerEdits(){
   }catch(e){console.warn('admin edit notifications failed',e)}
 }
 async function changeUserCredentials(oldId){
-  if(currentRole?.role!=='admin'){toast('هذه العملية للمدير فقط','warn');return;}
+  if(!isManager()){toast('هذه العملية للمدير فقط','warn');return;}
   const newIdRaw=prompt('تغيير بيانات دخول المستخدم: '+oldId+'\n\nالمعرّف الجديد (اتركه كما هو أو فارغاً للإبقاء على الحالي):',oldId||'');
   if(newIdRaw===null) return;
   const newId=String(newIdRaw).trim().toLowerCase();
@@ -1518,7 +1692,7 @@ function lcrRule(locId,cat){ /* Map مبنية مسبقاً — لا find داخ
 function renderLocationCategoryRules(){
   const head=q('lcrHead'), body=q('lcrBody'); if(!head||!body) return;
   if(!locations.length){ body.innerHTML='<tr><td>لا توجد مواقع.</td></tr>'; head.innerHTML=''; return; }
-  const isAdmin=currentRole?.role==='admin';
+  const isAdmin=isManager();
   const term=(q('lcrSearch')?.value||'').trim();
   /* Map واحدة للقواعد الحالية + مجموعة التصنيفات (من القواعد ثم من المنتجات للجديدة) */
   lcrRule._m=new Map(locationCategoryRules.map(r=>[r.location_id+'|'+r.category,r]));
@@ -1549,14 +1723,14 @@ function renderLocationCategoryRules(){
   }
 }
 function lcrToggleColumn(locId,val){
-  if(currentRole?.role!=='admin') return;
+  if(!isManager()) return;
   document.querySelectorAll('input[data-lcr]').forEach(cb=>{
     const [loc,cat]=String(cb.dataset.lcr).split('|');
     if(loc===locId) cb.checked=val;
   });
 }
 async function saveLocationCategoryRules(){
-  if(currentRole?.role!=='admin'){toast('حفظ أقسام المواقع للمدير فقط','warn');return;}
+  if(!isManager()){toast('حفظ أقسام المواقع للمدير فقط','warn');return;}
   const rows=[];
   document.querySelectorAll('input[data-lcr]').forEach(cb=>{
     const [loc,cat]=String(cb.dataset.lcr).split('|');
@@ -2791,7 +2965,7 @@ function toggleCustomerBalanceFilter(kind){ customerBalanceFilter=(customerBalan
 function renderCustomers(){
   const term=(q('customerSearch')?.value||'').trim();
   const showInactive=q('customerShowInactive')?.checked;
-  const isAdmin=currentRole?.role==='admin';
+  const isAdmin=isManager();
   const rows=customers.filter(c=>(!term || (c.name||'').includes(term) || (c.phone||'').includes(term)) && (showInactive || c.active!==false) && (customerBalanceFilter==='' || customerBalanceKind(c.balance)===customerBalanceFilter));
   const more=rows.length-customersListLimit;
   q('customersBody').innerHTML = rows.slice(0,customersListLimit).map(c=>{
@@ -2819,7 +2993,7 @@ function renderCustomerLedger(){
   const cid=q('customerLedgerCustomer')?.value||'';
   const rows=customerLedger.filter(l=>l.customer_id===cid).sort((a,b)=> new Date(a.entry_date+'T00:00:00')-new Date(b.entry_date+'T00:00:00') || new Date(a.created_at)-new Date(b.created_at));
   let running=0;
-  const isAdminL=currentRole?.role==='admin';
+  const isAdminL=isManager();
   const rendered=rows.map(l=>{running += Number(l.debit||0)-Number(l.credit||0);
     /* زر تعديل الرصيد الافتتاحي — جاء من المنظومة القديمة أو من نموذج الإضافة، طلب المالك إمكانية تعديله */
     const openBtn=(l.entry_type==='opening'&&isAdminL)
@@ -2852,7 +3026,7 @@ function ensureOpeningEditModal(){
   document.body.appendChild(d);
 }
 async function openOpeningEditModal(customerId){
-  if(currentRole?.role!=='admin'){toast('تعديل الرصيد الافتتاحي للمدير فقط','warn');return;}
+  if(!isManager()){toast('تعديل الرصيد الافتتاحي للمدير فقط','warn');return;}
   const c=customers.find(x=>x.id===customerId)||(await api('pos_customers',{qs:`?select=id,name,customer_no&limit=1&id=eq.${customerId}`}))?.[0];
   if(!c){toast('الزبون غير موجود','warn');return;}
   if(String(c.customer_no||'')==='9999'||c.name==='الزبون'){toast('رصيد زبون الكاش العام لا يعدّل من هنا','warn');return;}
@@ -2906,7 +3080,7 @@ function lpeFillAccounts(){
   if(q('lpeAccount')) q('lpeAccount').innerHTML=financeAccountOptionsFor(q('lpeMethod')?.value||'cash','اختر الحساب');
 }
 function openCustomerLedgerPaymentEdit(entryId){
-  if(currentRole?.role!=='admin'){toast('تعديل الدفعات للمدير فقط','warn');return;}
+  if(!isManager()){toast('تعديل الدفعات للمدير فقط','warn');return;}
   const l=(customerLedger||[]).find(x=>x.id===entryId); if(!l){toast('القيد غير موجود','warn');return;}
   if(l.entry_type!=='payment'){toast('يُعدَّل هنا قيد دفعة فقط','warn');return;}
   const mv=findLedgerPaymentMove(entryId);
@@ -2996,7 +3170,7 @@ function renderDupPaymentsList(){
   }).join('')||'<tr><td colspan="5">لا توجد دفعات مشتبه بتكرارها مبدئياً — هذا كشف اقتراحي فقط، لا يحذف شيئاً إلا بضغطك على زر.</td></tr>';
 }
 function openDupPaymentsModal(){
-  if(currentRole?.role!=='admin'){toast('هذه الأداة للمدير فقط','warn');return;}
+  if(!isManager()){toast('هذه الأداة للمدير فقط','warn');return;}
   ensureDupPaymentsModal();
   try{ dupPaymentsCache=detectDuplicatePayments(); }catch(e){ console.warn(e); dupPaymentsCache=[]; }
   renderDupPaymentsList();
@@ -3085,7 +3259,7 @@ function paymentSale(p){return sales.find(x=>x.id===p.sale_id);}
 function renderCustomerPaymentsList(){
   const body=q('customerPaymentsBody'); if(!body)return;
   const term=(q('custPaymentsSearch')?.value||'').trim().toLowerCase();
-  const isAdmin=currentRole?.role==='admin';
+  const isAdmin=isManager();
   let rows=(salePayments||[]).slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||new Date(b.created_at||0)-new Date(a.created_at||0));
   if(term) rows=rows.filter(p=>{
     const sl=paymentSale(p), c=customers.find(x=>x.id===sl?.customer_id);
@@ -3132,7 +3306,7 @@ function cpeFillAccounts(){
   if(q('cpeAccount')) q('cpeAccount').innerHTML=financeAccountOptionsFor(q('cpeMethod')?.value||'cash','اختر الحساب');
 }
 function openCustomerPaymentEdit(paymentId){
-  if(currentRole?.role!=='admin'){toast('تعديل الدفعات للمدير فقط','warn');return;}
+  if(!isManager()){toast('تعديل الدفعات للمدير فقط','warn');return;}
   const p=(salePayments||[]).find(x=>x.id===paymentId); if(!p){toast('الدفعة غير موجودة','warn');return;}
   ensureCustomerPaymentEditModal();
   customerPaymentEditId=paymentId;
@@ -3156,7 +3330,7 @@ async function saveCustomerPaymentEdit(){
   finally{showLoading(false);}
 }
 async function deleteCustomerPaymentAdmin(paymentId){
-  if(currentRole?.role!=='admin'){toast('حذف الدفعات للمدير فقط','warn');return;}
+  if(!isManager()){toast('حذف الدفعات للمدير فقط','warn');return;}
   const p=(salePayments||[]).find(x=>x.id===paymentId); if(!p)return;
   const sl=paymentSale(p), c=customers.find(x=>x.id===sl?.customer_id);
   if(!confirm(`حذف نهائي للدفعة: ${money(p.amount)} ${APP_CONFIG.currency} — ${c?.name||''} (فاتورة ${sl?.invoice_no||''} — ${p.payment_date||''})؟\nيُعاد المبلغ إلى رصيد الفاتورة وكشف الزبون وتُعكس الحركة من الخزينة — لا رجوع.`))return;
@@ -3582,7 +3756,7 @@ function returnListRowHtml(r){
   const cust=(ctx.custIdx?.get(r.customer_id))||customers.find(c=>c.id===r.customer_id), l=(ctx.locIdx?.get(r.location_id))||locations.find(x=>x.id===r.location_id);
   const orig=(ctx.saleIdx?.get(r.sale_id))||sales.find(x=>x.id===r.sale_id);
   const safe=String(r.id).replace(/'/g,"\\'");
-  const isAdm=currentRole?.role==='admin';
+  const isAdm=isManager();
   const rec=ctx.recMap?.get(r.id) ?? returnRecorder(r.id);
   const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
   let act='';
@@ -4062,7 +4236,7 @@ function renderSales(){
   /* شريط الإجماليات تحت القائمة — للمدير فقط ويتغير تبعاً للفلاتر */
   const bar=q('salesTotalsBar');
   if(bar){
-    if(currentRole?.role!=='admin'){bar.style.display='none';bar.innerHTML='';}
+    if(!isManager()){bar.style.display='none';bar.innerHTML='';}
     else{
       bar.style.display='';
       const cur=esc(APP_CONFIG.currency);
@@ -4240,7 +4414,7 @@ function renderReturns(){
 
 /* ═══ تعديل/حذف المرتجع: المدير كل شيء، الموظف مرتجعه فقط (بلا بطاقة مسجّل = مدير فقط) ═══ */
 function retActionCell(r,negativeDoc,rec,safe){
-  const isAdm=currentRole?.role==='admin';
+  const isAdm=isManager();
   if(negativeDoc){
     /* مرتجع بفاتورة سالبة تاريخية — لا مستند له: مشاهدة الفاتورة + حذفها (المدير فقط)، وتعديل الأسطر غير متاح بنفس آلية المستندات */
     if(!isAdm) return '—';
@@ -4300,7 +4474,7 @@ function reRecalc(){
 function openEditReturnModal(id, viewOnly=false){
   const r=saleReturns.find(x=>x.id===id); if(!r){toast('مرتجع بفاتورة سالبة تاريخية — لا مستند له ولا يُعرض من هنا','info');return;}
   const rec=returnRecorder(id);
-  const isAdm=currentRole?.role==='admin';
+  const isAdm=isManager();
   const mine=rec && appUser?.identifier && String(rec).trim().toLowerCase()===String(appUser.identifier).trim().toLowerCase();
   /* (1976) viewOnly: مشاهدة مفتوحة للجميع (👁 من صف الإرجاع) — التعديل يبقى للمخوّل */
   if(!viewOnly && !isAdm && !mine){toast('التعديل للمدير أو للموظف الذي سجّل هذا المرتجع فقط','warn');return;}
@@ -4379,7 +4553,7 @@ async function submitReturnEdit(){
   }finally{showLoading(false);window.__busy=false;}
 }
 async function deleteReturnAdmin(id){
-  if(currentRole?.role!=='admin'){toast('حذف المرتجع للمدير فقط','warn');return;}
+  if(!isManager()){toast('حذف المرتجع للمدير فقط','warn');return;}
   const r=saleReturns.find(x=>x.id===id); if(!r){toast('لم يوجد مستند المرتجع','warn');return;}
   const orig=sales.find(x=>x.id===r.sale_id);
   const short=String(id).slice(0,8);
@@ -5435,9 +5609,24 @@ async function showSaleInvoiceDoc(id,mode){
   try{
     const localSl=sales.find(x=>x.id===id);
     const offlinePrint=!navigator.onLine || localSl?.offline_pending; /* الطباعة تعمل دون إنترنت من البيانات المحلية */
-    const sl=localSl || (await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
-    const items=offlinePrint? saleItems.filter(x=>x.sale_id===id) : await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`});
-    const payRows=salePayments.filter(p=>p.sale_id===id);
+    let sl=localSl || (await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
+    let qe=null;
+    if(!sl){
+      /* الفاتورة غير موجودة على الخادم (مرفوضة/محذوفة) — الطباعة من بيانات الطابور:
+         المحلي أولًا، ثم المرآة الخادم (0106) — وتظهر نسخة «بانتظار المزامنة» */
+      const localQ=(await offQueueAll()).find(x=>x&&x.temp_id===id&&x.payload&&x.payload.p_sale);
+      if(localQ) qe=localQ.payload;
+      else{
+        try{
+          const mir=(await api('pos_offline_queue',{qs:`?select=*&temp_id=eq.${id}&limit=1`}))[0];
+          if(mir&&mir.payload&&mir.payload.p_sale) qe=mir.payload;
+        }catch(e){}
+      }
+      if(qe) sl={...qe.p_sale, offline_pending:true, id:id};
+      else{ toast('الفاتورة غير موجودة على الخادم — مرفوضة أو محذوفة','warn'); return; }
+    }
+    const items=qe ? (qe.p_items||[]) : (offlinePrint? saleItems.filter(x=>x.sale_id===id) : await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`}));
+    const payRows=qe ? (qe.p_payments||[]) : salePayments.filter(p=>p.sale_id===id);
     const loc=locations.find(x=>x.id===sl.location_id); const cust=customers.find(x=>x.id===sl.customer_id);
     const itemCount=items.reduce((a,it)=>a+Number(it.qty||0),0);
     const subtotal=items.reduce((a,it)=>a+Number(it.line_total||0),0);
@@ -5806,7 +5995,7 @@ table.items{width:100%;border-collapse:collapse;margin:0 0 18px}
 }
 
 async function deleteSale(id){
-  if(currentRole?.role!=='admin'){toast('حذف الفواتير للمدير فقط','warn');return;}
+  if(!isManager()){toast('حذف الفواتير للمدير فقط','warn');return;}
   const sl=sales.find(x=>x.id===id); if(!sl){toast('لم يتم العثور على الفاتورة','warn');return;}
   if(sl.offline_pending){toast('فاتورة محلية بانتظار المزامنة — أدِرها من مؤشر الطابور أعلى الشاشة','warn');return;}
   const inv=sl.invoice_no||String(id).slice(0,8);
@@ -6755,11 +6944,11 @@ let expensesListCache=[], expensesListLimit=500, expensesListInit=false, expense
 let expensesSheetSentMap=new Map(), expensesSheetPending=new Set(), expenseSheetSel=new Set();
 function expenseTodayUTC(){ return new Date().toISOString().slice(0,10); } /* مطابق لـ current_date بتوقيت الخادم */
 function canEditExpenseRow(x){
-  if(currentRole?.role==='admin') return true;
+  if(isManager()) return true;
   if(!x.created_by || String(x.created_by)!==String(appUser?.identifier||'')) return false;
   return String(x.created_at||'').slice(0,10)===expenseTodayUTC();
 }
-function canDeleteExpenseRow(){ return currentRole?.role==='admin'; }
+function canDeleteExpenseRow(){ return isManager(); }
 function debouncedExpenseSearch(){ clearTimeout(expensesSearchTimer); expensesSearchTimer=setTimeout(fetchExpensesList,250); }
 /* (1973) خيارات الفرع تُبقي متزامنة مع البيانات عند كل جلب: إن وصلت الفروع بعد فتح
    التبويب كان الفلتر سابقاً عالقاً على «كل الفروع» فقط ⇒ «فلتر الفرع لا يعمل».
@@ -6777,7 +6966,7 @@ function syncExpenseFilterOptions(){
 }
 function expenseDefaultBranchValue(){
   /* المدير يرى كل الفروع افتراضياً. الباقي يبدأ على فرعه (فلتر راحة — لا قيد صلاحية). */
-  if(currentRole?.role==='admin') return '';
+  if(isManager()) return '';
   return (appUser?.branch_id && locations.some(l=>l.id===appUser.branch_id)) ? appUser.branch_id : '';
 }
 function expenseRangeDates(kind){
@@ -6868,7 +7057,7 @@ function expenseSheetToggle(cb){
   if(cb.checked) expenseSheetSel.add(id); else expenseSheetSel.delete(id);
 }
 async function sendExpensesToSheet(){
-  if(currentRole?.role!=='admin'){toast('هذه العملية للمدير وحده','warn');return;}
+  if(!isManager()){toast('هذه العملية للمدير وحده','warn');return;}
   const ids=[...expenseSheetSel];
   if(!ids.length){toast('أوّلاً اوّشّر المصاريف المراد إرسالها (المربّعات في عمود «في الشيت»)','warn');return;}
   const btn=q('expensesSendSheetBtn'); if(btn) btn.disabled=true;
@@ -6977,7 +7166,7 @@ function renderExpensesList(){
   const bv=q('expenseListBranch')?.value||'';
   const brLabel= bv==='__no_branch__' ? 'بدون فرع' : (bv ? (locMap.get(bv)||'؟') : '');
   /* (0103) زر «إرسال للجدول» يراه المدير وحده — والخادم يتحقق مرة أخرى */
-  const isAdmin=currentRole?.role==='admin';
+  const isAdmin=isManager();
   q('expensesSendSheetBtn')?.classList.toggle('hidden',!isAdmin);
   if(!expensesListCache.length){
     body.innerHTML='<tr><td colspan="8">لا توجد مصاريف مطابقة للفلاتر.</td></tr>';
@@ -7042,7 +7231,7 @@ q('expenseEditForm')?.addEventListener('submit',async e=>{
   finally{ showLoading(false); window.__busy=false; }
 });
 async function deleteExpense(id){
-  if(currentRole?.role!=='admin'){toast('الحذف للمدير فقط','warn');return;}
+  if(!isManager()){toast('الحذف للمدير فقط','warn');return;}
   const x=expensesListCache.find(e=>e.id===id)||expenses.find(e=>e.id===id); if(!x){toast('لم يتم العثور على المصروف','warn');return;}
   if(!confirm(`حذف المصروف "${x.title}" بمبلغ ${money(x.amount)} ${APP_CONFIG.currency}؟\nسيُحذف مع حركته المالية في نفس المعاملة فيعود المبلغ لرصيد الخزينة.`))return;
   if(window.__busy) return; window.__busy=true;
@@ -7106,9 +7295,11 @@ q('expenseCategoryForm')?.addEventListener('submit',async e=>{
 });
 
 q('roleForm').addEventListener('submit', async e=>{
+  /* (0107) المبرجج لا يُمنح إلا من حساب مبرجج (الخادم يرفض أيضًا) */
+  if(q('roleName')?.value==='programmer'&&!isProgrammer()){ toast('دور المبرجج يُسند من حساب المبرجج فقط','warn'); e.preventDefault(); return; }
   e.preventDefault();
   if(window.__busy) return; window.__busy=true;
-  if(currentRole?.role!=='admin'){toast('هذه الصفحة للمدير فقط','warn'); window.__busy=false; return;}
+  if(!isManager()){toast('هذه الصفحة للمدير فقط','warn'); window.__busy=false; return;}
   try{
     showLoading(true);
     const identifier=q('roleIdentifier').value.trim().toLowerCase();
@@ -7174,7 +7365,7 @@ async function toggleCustomerActive(id, makeActive){
   finally{showLoading(false);window.__busy=false}
 }
 async function deleteCustomer(id){
-  if(currentRole?.role!=='admin'){toast('الحذف متاح للمدير فقط','warn');return;}
+  if(!isManager()){toast('الحذف متاح للمدير فقط','warn');return;}
   const c=customers.find(x=>x.id===id); if(!c){toast('لم يتم العثور على الزبون','warn');return;}
   if(!confirm(`هل تريد حذف الزبون "${c.name||''}"؟`)) return;
   if(window.__busy) return; window.__busy=true;
@@ -8994,7 +9185,7 @@ const CTX_BUILDERS={
       {label:'مرتجع',icon:'ti-arrow-back-up',action:()=>openSaleReturn(id)},
       {sep:true},
       {label:'تحويل إلى مبدئية',icon:'ti-file-description',action:()=>convertSaleToProforma(id)}];
-    if(currentRole?.role==='admin') items.push({sep:true},{label:'حذف الفاتورة (مدير)',icon:'ti-trash',action:()=>deleteSale(id)});
+    if(isManager()) items.push({sep:true},{label:'حذف الفاتورة (مدير)',icon:'ti-trash',action:()=>deleteSale(id)});
     return items;
   },
   suppliersBody(tr){const id=ctxArg(tr.querySelector('button[onclick^="openLedger"]'),'openLedger'); if(!id) return [];
@@ -9010,7 +9201,7 @@ const CTX_BUILDERS={
       {label:'تسجيل دفعة من الزبون',icon:'ti-cash',action:()=>{openTab('customers'); if(q('customerPaymentCustomer'))q('customerPaymentCustomer').value=id;}}];
     if(c){
       if(c.active===false) items.push({label:'تفعيل الزبون',icon:'ti-check',action:()=>toggleCustomerActive(id,true)});
-      else if(currentRole?.role==='admin') items.push({label:'حذف (مدير)',icon:'ti-trash',action:()=>deleteCustomer(id)});
+      else if(isManager()) items.push({label:'حذف (مدير)',icon:'ti-trash',action:()=>deleteCustomer(id)});
     }
     return items;
   },
