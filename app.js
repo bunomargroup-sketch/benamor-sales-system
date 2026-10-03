@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261002-0006';
+const APP_BUILD='b20261003-1316';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7140,7 +7140,7 @@ q('roleForm').addEventListener('submit', async e=>{
 
 let editingCustomerId=null;
 function resetCustomerForm(){
-  editingCustomerId=null;
+  editingCustomerId=null; __pendingCustomerSelect=null; /* (20261003) إلغاء النموذج يلغي وعد الاختيار التلقائي */
   const f=q('customerForm'); if(f) f.reset(); if(q('customerPhone2')) q('customerPhone2').value='';
   if(q('customerOpening')) q('customerOpening').value=0;
   const btn=q('customerSubmitBtn'); if(btn) btn.textContent='حفظ الزبون';
@@ -7221,6 +7221,7 @@ q('customerForm').addEventListener('submit', async e=>{
       const opening=Math.abs(moneyVal(q('customerOpening').value));
       const created=await api('pos_customers',{method:'POST',body:{...body,active:true}});
       const c=created[0];
+      __lastSavedCustomer=c?.id||null;
       customers.unshift(c);
       if(opening>0){
         const isDebit=q('customerOpeningType').value==='debit';
@@ -7231,6 +7232,12 @@ q('customerForm').addEventListener('submit', async e=>{
       toast('تم حفظ الزبون','success');
     }
     rebuildCustomerSelects(); /* الزبون الجديد (أو اسمُه المعدّل) متاح فوراً في نوافذ الدفع/الكشف */
+    if(__pendingCustomerSelect){ /* (20261003) المنتقي الذي طُلب منه «إضافة زبون» — يختار الزبون الجديد تلقائياً */
+      const nid=editingCustomerId||__lastSavedCustomer, sel=q(__pendingCustomerSelect);
+      if(sel&&nid){ sel.value=String(nid); sel.dispatchEvent(new Event('change',{bubbles:true})); }
+      __pendingCustomerSelect=null;
+    }
+    __lastSavedCustomer=null;
     resetCustomerForm(); refreshAfterLocalUpdate();
   }catch(err){console.error(err);toast('خطأ في حفظ الزبون: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false}
@@ -9095,15 +9102,20 @@ function initNavGroups(){
 
 /* ===== Long list picker: replaces native huge dropdowns ===== */
 let longPickerState={target:null,type:'select',items:[],filtered:[],index:0,title:''};
+/* (20261003) «إضافة زبون» من منتقي الزبائن (القائمة التي تفتح داخل نوافذ
+   الدفع/الكشف): صف خاص أعلى القائمة ينقل إلى نموذج الإضافة، والزبون
+   الجديد يُختار تلقائياً في المنتقي الذي فُتح منه عند حفظه. */
+const CUSTOMER_PICKER_IDS=new Set(['saleCustomer','proformaCustomer','customerPaymentCustomer','customerLedgerCustomer']);
+let __pendingCustomerSelect=null;
+let __lastSavedCustomer=null;
 const LONG_PICKER_IDS=new Set(['saleCustomer','purchaseSupplier','paymentSupplier','ledgerSupplier','productSupplier','proformaCustomer','customerPaymentCustomer','customerLedgerCustomer']);
 const LONG_INPUT_IDS=new Set(['productBrand','productModel','productColor']);
 function optionText(o){return (o?.textContent||'').trim()}
 function longPickerItemsFor(el){
   if(!el) return [];
   const id=el.id;
-  const customerIds=new Set(['saleCustomer','proformaCustomer','customerPaymentCustomer','customerLedgerCustomer']);
   const supplierIds=new Set(['purchaseSupplier','paymentSupplier','ledgerSupplier','productSupplier']);
-  if(customerIds.has(id)){
+  if(CUSTOMER_PICKER_IDS.has(id)){
     return (customers||[]).map(c=>({
       value:c.id,
       text:[c.customer_no,c.name].filter(Boolean).join(' - ') || c.id,
@@ -9146,8 +9158,18 @@ function renderLongPicker(){
   const rows=longPickerState.items.filter(it=>!term||normText(it.search||it.text).includes(term)||normText(it.value).includes(term));
   longPickerState.filtered=rows.slice(0,300);
   if(longPickerState.index>=longPickerState.filtered.length) longPickerState.index=Math.max(0,longPickerState.filtered.length-1);
-  q('longPickerBody').innerHTML=longPickerState.filtered.map((it,i)=>`<tr class="${i===longPickerState.index?'active-row':''}" ondblclick="chooseLongPicker(${i})" onclick="longPickerState.index=${i};renderLongPicker()"><td><b>${esc(it.text)}</b>${it.sub?`<div class="mini">${esc(it.sub)}</div>`:''}</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();chooseLongPicker(${i})">اختيار</button></td></tr>`).join('')||'<tr><td colspan="2">لا توجد نتائج</td></tr>';
+  /* (20261003) منتقيات الزبائن فقط: صف «إضافة زبون جديد» أعلى القائمة */
+  const addRow=CUSTOMER_PICKER_IDS.has(longPickerState.target?.id)?`<tr class="lp-add" onclick="longPickerAddCustomer()"><td colspan="2">➕ إضافة زبون جديد — سيُختار تلقائياً هنا بعد حفظه</td></tr>`:'';
+  q('longPickerBody').innerHTML=addRow+longPickerState.filtered.map((it,i)=>`<tr class="${i===longPickerState.index?'active-row':''}" ondblclick="chooseLongPicker(${i})" onclick="longPickerState.index=${i};renderLongPicker()"><td><b>${esc(it.text)}</b>${it.sub?`<div class="mini">${esc(it.sub)}</div>`:''}</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();chooseLongPicker(${i})">اختيار</button></td></tr>`).join('')||'<tr><td colspan="2">لا توجد نتائج</td></tr>';
   q('longPickerInfo').textContent=`عرض ${longPickerState.filtered.length} من ${longPickerState.items.length}`;
+}
+/* (20261003) من المنتقي إلى نموذج الإضافة — ثم عودة الاختيار تلقائياً عند الحفظ */
+function longPickerAddCustomer(){
+  const t=longPickerState?.target;
+  __pendingCustomerSelect=(t&&CUSTOMER_PICKER_IDS.has(t.id))?t.id:null;
+  closeLongPicker();
+  openTab('customers');
+  setTimeout(()=>{ q('customerForm')?.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>q('customerName')?.focus(),120); },60);
 }
 function chooseLongPicker(i){
   const it=longPickerState.filtered[i]; const el=longPickerState.target; if(!it||!el)return;

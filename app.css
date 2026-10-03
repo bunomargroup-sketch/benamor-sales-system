@@ -216,6 +216,9 @@
     #longPickerSearch{min-height:48px;font-size:17px}
     #longPickerBody tr{cursor:pointer}
     #longPickerBody tr.active-row{background:var(--accent-soft);outline:2px solid color-mix(in srgb,var(--blue) 45%,transparent);outline-offset:-2px}
+    /* (20261003) صف «إضافة زبون جديد» أعلى منتقي الزبائن */
+    #longPickerBody tr.lp-add td{background:var(--accent-soft);color:var(--blue2);font-weight:600;border-bottom:1px solid var(--border)}
+    #longPickerBody tr.lp-add:hover td{background:color-mix(in srgb,var(--blue) 22%,var(--accent-soft))}
 
 
     /* Weak internet / offline status */
