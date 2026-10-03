@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261003-1316';
+const APP_BUILD='b20261003-1349';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3952,6 +3952,7 @@ async function refreshSalesDomain(o={}){
   sales=r[0]; saleItems=r[1]||saleItems; salePayments=r[2]||salePayments; stock=r[3];
   saleReturns=r[4]||saleReturns; saleReturnItems=r[5]||saleReturnItems; stockMovements=r[6]||stockMovements;
   customerLedger=r[7]||customerLedger; financeMovements=r[8]||financeMovements; customers=r[9]||customers; stockCounts=r[10]||stockCounts;
+  try{rebuildSaleCustomerOptions(); rebuildCustomerSelects();}catch(_e){} /* (20261003) منتقيات الدفع/الكشف تُملأ بالزبائن الحيّة — كانت تبقى فارغة إن رُسمت قبل وصول الزبائن */
 
   __lastFullSync=Date.now();
   if(!__salesHorizon) __salesHorizon=hz;
@@ -9173,7 +9174,13 @@ function longPickerAddCustomer(){
 }
 function chooseLongPicker(i){
   const it=longPickerState.filtered[i]; const el=longPickerState.target; if(!it||!el)return;
-  el.value=it.value;
+  if(el.tagName==='SELECT' && ![...el.options].some(o=>o.value===String(it.value))){
+    /* (20261003) خيارات الـselect قد تكون أقدم من القائمة (رُسمت قبل وصول الزبائن)
+       — نضيف الخيار الناقص وإلا اختفى الاسم وبقي المربع فارغاً (المتصفح يمسح
+       القيمة التي لا يوجد لها خيار). */
+    const o=document.createElement('option'); o.value=String(it.value); o.textContent=it.text; el.appendChild(o);
+  }
+  el.value=String(it.value);
   el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}));
   if(el.tagName!=='SELECT') el.dispatchEvent(new Event('change',{bubbles:true}));
   closeLongPicker();
