@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261003-1959';
+const APP_BUILD='b20261004-1511';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7444,12 +7444,28 @@ q('customerPaymentForm').addEventListener('submit', async e=>{
     validateAccountingPayment('customer',amount);
     const method=typeLabel(q('customerPaymentMethod').value);
     const notes=q('customerPaymentNotes').value.trim();
-    const cp=await api('pos_customer_ledger',{method:'POST',body:{customer_id:q('customerPaymentCustomer').value,entry_date:q('customerPaymentDate').value,entry_type:'payment',description:notes||`دفعة زبون - ${method}`,debit:0,credit:amount}});
-    await addFinanceMovement(q('customerPaymentFinanceAccount')?.value||defaultFinanceAccountFor(q('customerPaymentMethod').value),'in','customer_payment',amount,q('customerPaymentDate').value,'pos_customer_ledger',cp?.[0]?.id||null,notes||'دفعة من الزبون');
-    customerLedger.unshift(cp[0]);
-    localMovement(q('customerPaymentFinanceAccount')?.value||defaultFinanceAccountFor(q('customerPaymentMethod').value),'in','customer_payment',amount,q('customerPaymentDate').value,'pos_customer_ledger',cp?.[0]?.id||null,notes||'دفعة من الزبون');
-    const cpc=customers.find(x=>x.id===cp[0].customer_id); if(cpc) cpc.balance=Number(cpc.balance||0)-Number(amount);
-    e.target.reset(); setToday(); toast('تم تسجيل دفعة الزبون'); refreshAfterLocalUpdate();
+    /* (0109) RPC واحد في الخادم: قيد الدفتر + حركة الخزينة + توزيع FIFO على
+       الفواتير (يحل محل ثلاثة REST منفصلة كانت تترك التوزيع بلا أثر) */
+    const accountId=q('customerPaymentFinanceAccount')?.value||defaultFinanceAccountFor(q('customerPaymentMethod').value);
+    const cid=q('customerPaymentCustomer').value;
+    const res=await rpc('post_customer_payment',{
+      p_customer_id:cid,
+      p_entry_date:q('customerPaymentDate').value,
+      p_amount:amount,
+      p_account_id:accountId,
+      p_payment_method:q('customerPaymentMethod').value,
+      p_description:notes||null,
+      p_user_identifier:appUser?.identifier||null
+    });
+    customerLedger.unshift({id:res.ledger_id,customer_id:cid,entry_date:q('customerPaymentDate').value,entry_type:'payment',description:notes||`دفعة زبون - ${method}`,debit:0,credit:amount,created_at:new Date().toISOString()});
+    localMovement(accountId,'in','customer_payment',amount,q('customerPaymentDate').value,'pos_customer_ledger',res.ledger_id,notes||'دفعة من الزبون');
+    const cpc=customers.find(x=>x.id===cid); if(cpc) cpc.balance=Number(res.balance_after);
+    e.target.reset(); setToday();
+    const unalloc=Number(res.unallocated_credit||0);
+    toast(unalloc>0
+      ?`تم تسجيل الدفعة: ${money(Number(res.allocated)||0)} على الفواتير و${money(unalloc)} رصيد`
+      :'تم تسجيل دفعة الزبون');
+    refreshAfterLocalUpdate();
   }catch(err){console.error(err);toast('خطأ في تسجيل الدفعة: '+err.message)}
   finally{showLoading(false);window.__busy=false}
 });
