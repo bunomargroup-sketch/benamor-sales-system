@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261005-1609">
+<link rel="stylesheet" href="app.css?v=20261005-1716">
 </head>
 <body class="auth-locked">
   <header>
@@ -42,6 +42,8 @@
 
       <div class="nav-group" data-sec="stock">المشتريات والمخزون</div>
       <button data-tab="products"><i class="ti ti-box"></i><span>قاعدة المنتجات</span></button>
+      <button data-tab="priceReview" title="منتجات تغيّرت تكلفتها بفاتورة شراء — راجع سعر البيع"><i class="ti ti-tag"></i><span>مراجعة أسعار البيع</span><span class="nav-badge" id="priceReviewBadge" hidden></span></button>
+      <button data-tab="bulkPrice" title="رفع جماعي لأسعار الماركات/الموردين/التصنيفات (للمدير والمبرمج فقط)"><i class="ti ti-trending-up"></i><span>رفع جماعي للأسعار</span></button>
       <button data-tab="suppliers"><i class="ti ti-truck"></i><span>الموردون</span></button>
       <button data-tab="purchases"><i class="ti ti-receipt"></i><span>فواتير الشراء</span></button>
       <button data-tab="stock"><i class="ti ti-stack-2"></i><span>المخزون الحالي</span></button>
@@ -211,6 +213,82 @@
         </div>
       </section>
 
+      <!-- (0116) SPEC §2 — قائمة مراجعة أسعار البيع: قائمة دائمة من المنتجات
+           التي تغيّرت تكلفتها بفاتورة شراء. البائع يفتحها قراءةً فقط. -->
+      <section id="priceReview" class="section">
+        <div class="panel">
+          <div class="tools">
+            <h2>مراجعة أسعار البيع</h2>
+            <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+              <select id="prBrandFilter" onchange="priceReviewFilterChanged()"><option value="">كل الماركات</option></select>
+              <select id="prSupplierFilter" onchange="priceReviewFilterChanged()"><option value="">كل الموردين</option></select>
+              <select id="prCategoryFilter" onchange="priceReviewFilterChanged()"><option value="">كل التصنيفات</option></select>
+              <select id="prDirectionFilter" onchange="priceReviewFilterChanged()">
+                <option value="up">تصاعد التكلفة (الأول)</option>
+                <option value="down">تناقص التكلفة</option>
+                <option value="">الكل</option>
+              </select>
+              <button class="btn" id="prAcceptAllBtn" type="button" onclick="priceReviewAcceptAll()">قبول كل المقترح</button>
+            </div>
+          </div>
+          <p class="mini" style="margin:4px 0 10px">تُملأ تلقائياً عند تغيّر تكلفة منتج بفاتورة شراء (من أي جهاز). <b>السعر المقترح</b> يعيد الهامش القديم على التكلفة الجديدة، وتقريبه لأعلى إلى 0.5. التناقص فرصة لتخفيض السعر — معروض في فلترة خاصة حتى لا يختلط بالطارئ.</p>
+          <div class="table-scroll" style="max-height:70vh">
+            <table>
+              <thead><tr>
+                <th>الكود</th><th>الاسم</th><th>الماركة</th>
+                <th>التكلفة القديمة</th><th>التكلفة الجديدة</th><th>نسبة التغيّر</th>
+                <th>سعر البيع الحالي</th><th>الهامش القديم</th><th>الهامش الحالي</th>
+                <th>السعر المقترح</th><th>سعر البيع الجديد</th><th>الهامش بعد التعديل</th>
+                <th>إجراء</th>
+              </tr></thead>
+              <tbody id="priceReviewBody"></tbody>
+            </table>
+          </div>
+          <div id="priceReviewEmpty" class="mini" style="display:none;text-align:center;padding:22px">لا توجد ملاحظات قائمة — كل الأسعار مطابقة لتكاليفها الحالية.</div>
+        </div>
+      </section>
+
+      <!-- (0117) SPEC §4 — الرفع الجماعي: معاينة إلزامية قبل كتابة، تدقيق
+           (دفعات + سطور) وتراجع بأمر واحد. المدير والمبرمج فقط. -->
+      <section id="bulkPrice" class="section">
+        <div class="panel">
+          <h2>رفع جماعي للأسعار</h2>
+          <div class="row" style="gap:8px;flex-wrap:wrap;align-items:end;margin:10px 0">
+            <div><label>الماركة</label><select id="bpBrandFilter"></select></div>
+            <div><label>المورّد</label><select id="bpSupplierFilter"></select></div>
+            <div><label>التصنيف</label><select id="bpCategoryFilter"></select></div>
+            <div><label>النسبة ٪</label><input id="bpPct" type="text" inputmode="decimal" placeholder="مثال: 15" style="width:110px"></div>
+            <div style="display:flex;align-items:center;gap:6px;padding-bottom:8px"><label style="margin:0">شمل المعطّل</label><input id="bpIncludeInactive" type="checkbox"></div>
+            <button class="btn secondary" type="button" onclick="bulkPricePreview()">معاينة الأثر</button>
+            <button class="btn" id="bpApplyBtn" type="button" onclick="bulkPriceApply()" disabled>تطبيق الرفع</button>
+          </div>
+          <p class="mini" style="margin:0 0 10px">النطاق اختياري وقابل للدمج (AND). التقريب <b>لأعلى إلى 0.5 دائماً</b>. تُتجاوز المنتجات بلا سعر (0) والمعطّل ما لم يُشمل صراحة. <b>الكتابة تتم فقط بعد المعاينة وبضغط «تطبيق الرفع».</b></p>
+          <div id="bpPreviewWrap" style="display:none">
+            <div class="row" style="gap:10px;margin:8px 0;align-items:center">
+              <span class="badge yellow" id="bpCountBadge">0 منتج</span>
+              <span class="mini" id="bpTotalDelta"></span>
+            </div>
+            <div class="table-scroll" style="max-height:52vh">
+              <table>
+                <thead><tr><th>الكود</th><th>الاسم</th><th>الماركة</th><th>السعر الحالي</th><th>السعر الجديد</th><th>الهامش الجديد ٪</th></tr></thead>
+                <tbody id="bpPreviewBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="bpIdle" class="mini" style="padding:14px;text-align:center">اختر النطاق والنسبة ثم اضغط «معاينة الأثر».</div>
+        </div>
+        <div class="panel">
+          <h2>الدفعات الأخيرة والتراجع</h2>
+          <p class="mini" style="margin:4px 0 8px">تراجع دفعة يعيد كل أسعارها إلى قيمتها السابقة بالضبط.</p>
+          <div class="table-scroll" style="max-height:34vh">
+            <table>
+              <thead><tr><th>التاريخ</th><th>بواسطة</th><th>النطاق</th><th>النسبة</th><th>المنتجات</th><th></th></tr></thead>
+              <tbody id="bpBatchesBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- نافذة إضافة/تعديل منتج — كل الحقول والمعرفات كما هي -->
       <div class="modal" id="productModal">
         <div class="modal-card" style="max-width:min(1320px,98vw)">
@@ -237,9 +315,10 @@
             </div>
             <div><label>الباركود</label><input id="productBarcode" class="ltr" placeholder="اختياري"></div>
             <div><label>حد الطلب</label><input id="productReorderPoint" type="number" step="1" value="0"></div>
-            <div><label>سعر الشراء</label><input id="productPurchasePrice" type="text" inputmode="decimal" value="0"></div>
-            <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="text" inputmode="decimal" value="0"></div>
+            <div><label>سعر الشراء</label><input id="productPurchasePrice" type="text" inputmode="decimal" value="0" oninput="updateProductFormMargin()"></div>
+            <div><label>سعر البيع القطاعي</label><input id="productRetailPrice" type="text" inputmode="decimal" value="0" oninput="updateProductFormMargin()"></div>
             <div><label>سعر الجملة</label><input id="productWholesalePrice" type="text" inputmode="decimal" value="0"></div>
+            <div id="productMarginLine" style="grid-column:1/-1;display:none;font-size:12.5px;font-weight:700;padding:2px 1px"></div>
             <div style="grid-column:1/-1"><label>📝 ملاحظة على المنتج</label><input id="productNotes" placeholder="اختياري — تظهر في قائمة المنتجات ونافذة F3 وعند فتح المنتج: مثلاً موقع الرفّ، بدائل، بلد المنشأ…"></div>
             <div class="row" style="grid-column:1/-1"><button class="btn" id="productSubmitBtn" type="submit">حفظ المنتج</button><button class="btn secondary" type="button" onclick="resetProductForm()">تفريغ</button></div>
           </form>
@@ -1407,6 +1486,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261005-1609"></script>
+<script src="app.js?v=20261005-1716"></script>
 </body>
 </html>

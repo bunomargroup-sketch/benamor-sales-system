@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1609';
+const APP_BUILD='b20261005-1716';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1271,6 +1271,8 @@ const TAB_RENDERERS={
   proformas:()=>renderProformas(),
   customers:()=>{renderCustomers(); renderCustomerLedger();},
   products:()=>renderProducts(),
+  priceReview:()=>renderPriceReview(),
+  bulkPrice:()=>renderBulkPrice(),
   suppliers:()=>renderSuppliers(),
   purchases:()=>{fillSupplierSelects(); renderPurchases();},
   stock:()=>{renderStock(); renderStockWaste();},
@@ -1314,7 +1316,9 @@ function renderAll(){
    التصفيح أعلى الملف. وأي فشل شبكة يترك المصفوفة الحالية كما هي ولا يُفرغها. */
 const REFRESH_SOURCES={
   locations:        {tabs:['locations','stock','transfers','dailyCashClosing'], run:async()=>{ const r=await apiAll('pos_locations','?select=*&order=name.asc,id.asc'); if(r) locations=r; }},
-  products:         {tabs:['products','stock','composites','sales'],            run:async()=>{ const r=await apiAll('pos_product_stock_summary','?select=*&order=code.asc'); if(r){ products=r; buildProductSearchIndex(); renderProductDatalist(); } }},
+  products:         {tabs:['products','stock','composites','sales','priceReview'],run:async()=>{ const r=await apiAll('pos_product_stock_summary','?select=*&order=code.asc'); if(r){ products=r; buildProductSearchIndex(); renderProductDatalist(); } }},
+  /* (0116) طابور مراجعة الأسعار — يُجلب مع أي تغيير منتجات/شراء ويُحدَّث عدّاد القائمة */
+  priceReviewQueue: {tabs:['priceReview'],                                      run:async()=>{ await loadPriceReviewQueue(); }},
   stock:            {tabs:['stock','products','stockCount','transfers'],        run:async()=>{ const r=await apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc'); if(r) stock=r; }},
   composites:       {tabs:['composites','products'],                            run:async()=>{ const r=await apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc'); if(r) compositeItems=r; }},
   cost:             {tabs:['reports','products'],                               run:async()=>{ const r=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}); if(r){ costViewRows=r; applyCostReference(); } }},
@@ -1436,11 +1440,13 @@ const ROLE_TABS={
   /* (0107) قرار المالك (2026-10-03): المبرجج يرى كل شيء؛
      users + settings + locations محصورة له — admin يُشتق من القائمة
      الكاملة ناقص هذي الثلاثة حتى لا يُترك تبويب مستقبلي خارج التصفية */
-  programmer:['dashboard','locations','products','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','stockCount','composites','transfers','expensesQuick','dailyCashClosing','finance','reports','auditLog','users','settings'],
-  seller_11:['dashboard','products','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
-  seller_sarraj:['dashboard','products','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
-  sales_purchase:['dashboard','products','suppliers','sales','salesList','proformas','customers','purchases','stock','transfers','stockCount','composites','expensesQuick','dailyCashClosing'],
-  warehouse:['dashboard','products','stock','stockCount','composites','transfers','purchases'],
+  /* (0116) priceReview = قائمة دائمة يفتحها الجميع (البائع قراءة فقط —
+     الكتابة مرفوضة على مستوى القاعدة)؛ bulkPrice للمدير/المبرمج فقط */
+  programmer:['dashboard','locations','products','priceReview','bulkPrice','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','stockCount','composites','transfers','expensesQuick','dailyCashClosing','finance','reports','auditLog','users','settings'],
+  seller_11:['dashboard','products','priceReview','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
+  seller_sarraj:['dashboard','products','priceReview','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
+  sales_purchase:['dashboard','products','priceReview','suppliers','sales','salesList','proformas','customers','purchases','stock','transfers','stockCount','composites','expensesQuick','dailyCashClosing'],
+  warehouse:['dashboard','products','priceReview','stock','stockCount','composites','transfers','purchases'],
   accountant:['dashboard','suppliers','ledger','payments','customers','expensesQuick','dailyCashClosing','finance','reports','auditLog'],
   viewer:['dashboard','products','stock','reports'],
   admin:[] /* يُملأ أسفله: كل شيء ما عدا settings */
@@ -1578,6 +1584,9 @@ function applyPermissions(){
     const wanted=currentRole.role==='seller_11'?'فرع 11 يونيو':'فرع السراج'; const loc=locations.find(l=>l.name===wanted);
     if(loc && q('saleLocation')){q('saleLocation').value=loc.id; q('saleLocation').disabled=true;}
   }
+  /* (0116) عدّاد المراجعات المعلقة يظهر فور الدخول (لا ينتظر أول نبضة) —
+     طلب واحد صغير، لا يرسم أي شاشة */
+  try{ if(navigator.onLine) loadPriceReviewQueue().catch(()=>{}); }catch(_e){}
 }
 function syncRoleOptions(){
   /* (0107) خيار المبرجج يظهر فقط للمبرمج — مصدر واحد لقائمة الأدوار */
@@ -2375,7 +2384,39 @@ function smartFilterProducts(parsed){
 }
 
 
-function buildProductSearchIndex(){ for(const p of products){ if(!p) continue; if(p._hay===undefined) p._hay=normText(productSearchFields(p).join(' ')); if(p._cost===undefined){ const c=productCost(p.code); p._cost=c; p._mv=Number(p.retail_price||0)-c; p._mp=(c>0)?(p._mv/c*100):0; } } }
+/* (0115/0116) ── صيغتا السعر والهامش — تعريف واحد تشترك فيه كل الشاشات ──
+   SPEC §0/§1: الهامش = markup on cost = (retail − cost)/cost × 100، والتكلفة
+   من محرك التكلفة productCost() (وليس purchase_price). والتقدير دائماً
+   لأعلى إلى 0.5: twin المتصفح لـ pos_round_price_up() على الخادم —
+   إن اختلفا اختلف العرض عن ما يُكتب. */
+function roundPriceUp(v){ return Math.ceil(Number(v||0)*2)/2; }
+function marginOf(retail,cost){ const r=Number(retail||0), c=Number(cost||0); return c>0?(r-c)/c*100:0; }
+/* السعر المقترح (SPEC §2): يعيد الهامش القديم — التقدير لأعلى ⇒ لا ينزل أبداً */
+function suggestedRetailPrice(oldCost,newCost,retail){ return roundPriceUp(newCost*(1+marginOf(retail,oldCost)/100)); }
+
+/* (0116) SPEC §3 — الهامش حيّاً تحت سعر البيع في نموذج المنتج:
+   «الهامش: 45.00 د.ل · 30.0% (التكلفة: 150.00)»
+   • منتج قائم: التكلفة من محرك التكلفة productCost(code) (نفس صيغة القائمة)
+   • منتج جديد بلا تاريخ تكلفة: يُقدَّر من سعر الشراء المدخل ويُعلَّم «تقديري»
+   • بيع تحت التكلفة ⇒ سالب ملوَّن — يُكتشف عند الإدخال لا في تقرير لاحق */
+function updateProductFormMargin(){
+  const el=q('productMarginLine'); if(!el) return;
+  const retail=moneyVal(q('productRetailPrice')?.value||0);
+  const enteredCost=moneyVal(q('productPurchasePrice')?.value||0);
+  const code=String(q('productCode')?.value||'').trim();
+  let cost=0, est=false;
+  if(productFormMode==='edit' && code){
+    cost=productCost(code);
+    if(!(cost>0)){ cost=enteredCost; est=cost>0; } /* لا تاريخ تكلفة: تقدير من سعر الشراء */
+  } else { cost=enteredCost; est=cost>0; }
+  if(!(retail>0) && !(cost>0)){ el.style.display='none'; return; }
+  const mv=retail-cost, mp=marginOf(retail,cost);
+  el.style.display='';
+  el.innerHTML=`الهامش: <b>${money(mv)} ${APP_CONFIG.currency}</b> · <b>${mp.toFixed(1)}٪</b> <span style="font-weight:400;opacity:.75">(التكلفة: ${money(cost)}${est?' — تقديري':''})</span>`;
+  el.style.color=mp<0?'var(--bad,#c0392b)':''; /* تحت التكلفة: أحمر */
+}
+
+function buildProductSearchIndex(){ for(const p of products){ if(!p) continue; if(p._hay===undefined) p._hay=normText(productSearchFields(p).join(' ')); if(p._cost===undefined){ const c=productCost(p.code); p._cost=c; p._mv=Number(p.retail_price||0)-c; p._mp=marginOf(p.retail_price,c); } } }
 let _renderProductsTimer=null;
 function debounceRenderProducts(){ clearTimeout(_renderProductsTimer); _renderProductsTimer=setTimeout(renderProducts,180); }
 function renderProducts(){
@@ -2431,7 +2472,7 @@ function renderProducts(){
 
 function selectProductRow(code){selectedProductCode=code; renderProducts()}
 /* ═══ (المهمة ٢) نافذة المنتج + شريط الإجراءات + فلاتر ═══ */
-function openProductModal(){q("productModal").classList.add("show"); ['newBrand','newModel','newColor'].forEach(id=>{const e=q(id); if(e) e.value='';}); setTimeout(()=>q("productCode")?.focus(),60)}
+function openProductModal(){q("productModal").classList.add("show"); ['newBrand','newModel','newColor'].forEach(id=>{const e=q(id); if(e) e.value='';}); setTimeout(()=>{q("productCode")?.focus(); updateProductFormMargin();},60)}
 function closeProductModal(){q("productModal").classList.remove("show")}
 function clearProductFilters(){["productCategoryFilter","productBrandFilter","productColorFilter","productSupplierFilter"].forEach(id=>{const el=q(id); if(el){el.value=""; delete el.dataset.ready;}}); if(q("productSearch"))q("productSearch").value=""; const pe=q("productExtraSearch"); if(pe)pe.innerHTML=""; renderProducts()}
 function clearStockFilters(){["stockLocationFilter","stockCategoryFilter","stockBrandFilter","stockSupplierFilter","stockStatusFilter"].forEach(id=>{const el=q(id); if(el)el.value="";}); if(q("stockSearch"))q("stockSearch").value=""; renderStock()}
@@ -2690,6 +2731,7 @@ function resetProductForm(){
   productFormMode='create'; editingProductCode=null;
   q('productForm').reset(); q('productPurchasePrice').value=0; q('productRetailPrice').value=0; q('productReorderPoint').value=0;
   q('productSubmitBtn').textContent='حفظ المنتج'; q('productCode').readOnly=false;
+  updateProductFormMargin();
 }
 function editProduct(code){
   if(hasCompositeComponents(code)){openCompositeEditModal(code);return;} /* المنتج المركّب يُعدَّل من نافذته الخاصة دائماً */
@@ -2708,6 +2750,7 @@ function editProduct(code){
   (async()=>{try{const r=await api('pos_products',{qs:`?select=description&code=eq.${encodeURIComponent(p.code)}&limit=1`}); if(r&&r[0]&&q('productNotes')) q('productNotes').value=r[0].description||'';}catch(e){console.warn('product note fetch failed',e)}})();
   q('productSubmitBtn').textContent='حفظ تعديل المنتج';
   q('productCode').readOnly=true;
+  updateProductFormMargin();
   q('productName').focus();
 }
 
@@ -2742,6 +2785,7 @@ function duplicateProduct(code){
   const sup=suppliers.find(s=>s.name===p.supplier_name); q('productSupplier').value=sup?.id||'';
   q('productSubmitBtn').textContent='حفظ المنتج المنسوخ';
   q('productCode').focus(); q('productCode').select();
+  updateProductFormMargin();
   toast('تم نسخ بيانات المنتج. راجع الكود والباركود ثم احفظ.','success');
 }
 function duplicateSelectedProduct(){const p=getSelectedProduct(); if(p) duplicateProduct(p.code); else toast('اختر منتجًا من الجدول أولاً','warn')}
@@ -8023,6 +8067,8 @@ q('purchaseForm').addEventListener('submit', async e=>{
       logAction('purchase','pos_purchases',saved.id,`${saved.purchase_no||saved.id?.slice(0,8)||''} - ${money(total)} ${APP_CONFIG.currency}`);
       purchaseId=saved.id; if(q('purchaseAutoNo')) q('purchaseAutoNo').value=saved.purchase_no||saved.id?.slice(0,8)||'';
       resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون رقم '+(saved.purchase_no||''),'success'); applyPurchaseLocally(saved, body, items, payment); refreshAfterLocalUpdate();
+      /* (0116) فاتورة شراء قد تغيّرت تكاليف ⇒ طابور المراجعة والعداد يُحدَّثان */
+      refreshParts(['priceReviewQueue'],{silent:true}).catch(()=>{});
       return;
     }
     /* 🔒 متابعة 1b: تعديل فاتورة الشراء الآن نداء RPC ذرّي واحد (0063).
@@ -10379,6 +10425,8 @@ async function retryConnection(){
 
 /* الوقت النسبي يشيخ: تحديث خفيف كل نصف دقيقة (نصّ فقط، بلا أي طلب شبكة) */
 setInterval(()=>{ try{ if(!navigator.onLine) renderOfflineBanner(); renderStatusBar(); }catch(_e){} }, 30000);
+/* (0116) عداد المراجعات المعلقة — نبضة خفيفة مع شريط الحالة (لا يرسم أي شاشة) */
+setInterval(()=>{ try{ refreshPriceReviewBadge(); }catch(_e){} }, 30000);
 
 
 /* (0090) زرّ صغير داخل كل عنصر في الشريط الجانبي يفتح الشاشة نافذةً عائمة،
@@ -10400,3 +10448,236 @@ document.addEventListener('keydown',ev=>{
   }
 });
 try{ initWindowButtons(); }catch(_e){}
+
+/* ═══════════════════════════════════════════════════════════════════
+   (0116/0117) SPEC — مراجعة أسعار البيع + الرفع الجماعي
+   ─ قائمة دائمة (خادم) من المنتجات التي تغيّرت تكلفتها بفاتورة شراء
+   ─ السعر المقترح يعيد الهامش القديم — نفس الصيغة على الخادم (لا يكذب العرض)
+   ─ الكتابة فعل مدير (isManager)؛ البائع قراءة فقط والقاعدة ترفض الباقي
+   ─ الرفع الجماعي: معاينة إلزامية ثم تطبيق، تدقيق بدفعات + تراجع بأمر واحد
+   ═══════════════════════════════════════════════════════════════════ */
+let priceReviewQueue=[]; /* الصفوف المعلقة: {product_code,old_cost,new_cost,direction,detected_at} */
+const __prInputs={}; /* (0116) حقل «سعر البيع الجديد» لكل سطر، مفتاحه الكود */
+
+async function loadPriceReviewQueue(){
+  const rows=await apiAll('pos_price_review_queue','?select=*&status=eq.pending&order=detected_at.desc');
+  if(rows) priceReviewQueue=rows;
+  updatePriceReviewBadge(priceReviewQueue.length);
+  return rows;
+}
+function updatePriceReviewBadge(n){
+  const b=q('priceReviewBadge'); if(!b) return;
+  const c=Number(n||0);
+  b.hidden=c<=0; b.textContent=c>99?'99+':String(c);
+}
+/* نبضة خفيفة كل 30 ثانية (مع شريط الحالة) — عداد القائمة الجانبية */
+function refreshPriceReviewBadge(){
+  if(!appUser?.id||!navigator.onLine) return;
+  api('pos_price_review_queue',{qs:'?select=product_code&status=eq.pending'})
+    .then(rows=>{ if(Array.isArray(rows)&&rows.length) priceReviewQueue=rows; updatePriceReviewBadge(rows?rows.length:0); })
+    .catch(()=>{});
+}
+
+function priceReviewFilters(){
+  return {
+    brand:String(q('prBrandFilter')?.value||''),
+    supplier:String(q('prSupplierFilter')?.value||''),
+    category:String(q('prCategoryFilter')?.value||''),
+    direction:String(q('prDirectionFilter')?.value||'up') /* الافتراضي: الزيادات فقط */
+  };
+}
+function priceReviewFilteredRows(){
+  const f=priceReviewFilters();
+  return priceReviewQueue.filter(r=>{
+    const p=products.find(x=>String(x.code)===String(r.product_code));
+    if(!p) return false;
+    if(f.brand && String(p.brand||'')!==f.brand) return false;
+    if(f.supplier && String(p.supplier_name||'')!==f.supplier) return false;
+    if(f.category && String(p.category||'')!==f.category) return false;
+    if(f.direction && r.direction!==f.direction) return false;
+    return true;
+  });
+}
+function renderPriceReview(){
+  const body=q('priceReviewBody'); if(!body) return;
+  /* فلاتر قابلة للدمج (AND) — القيم من قائمة المنتجات الحالية */
+  const fill=(id,key,label)=>{ const el=q(id); if(!el) return; const keep=el.value;
+    const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort();
+    el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if(vals.includes(keep)) el.value=keep; };
+  fill('prBrandFilter','brand','كل الماركات');
+  fill('prSupplierFilter','supplier_name','كل الموردين');
+  fill('prCategoryFilter','category','كل التصنيفات');
+  q('prDirectionFilter') && (q('prDirectionFilter').value = q('prDirectionFilter').value || 'up');
+
+  const rows=priceReviewFilteredRows();
+  const mgr=isManager();
+  q('prAcceptAllBtn').style.display=mgr?'':'none';
+  body.innerHTML=rows.map(r=>{
+    const p=products.find(x=>String(x.code)===String(r.product_code))||{};
+    const oldC=Number(r.old_cost||0), newC=Number(r.new_cost||0), retail=Number(p.retail_price||0);
+    const chg=oldC>0?(newC-oldC)/oldC*100:null;
+    const chgCls=newC>oldC?'var(--bad)':'var(--good)'; /* أحمر صعوداً، أخضر نزولاً */
+    const mOld=marginOf(retail,oldC), mNew=marginOf(retail,newC);
+    const suggested=suggestedRetailPrice(oldC,newC,retail);
+    const newInput=mgr
+      ? `<input type="text" inputmode="decimal" value="${suggested}" oninput="priceReviewMarginAfterEdit(this,&quot;${esc(r.product_code)}&quot;)" style="width:90px">`
+      : `<b>${money(suggested)}</b>`;
+    const actions=mgr
+      ? `<button class="btn mini" type="button" onclick="priceReviewSaveRow(&quot;${esc(r.product_code)}&quot;)">حفظ</button>
+         <button class="btn secondary mini" type="button" onclick="priceReviewDismissRow(&quot;${esc(r.product_code)}&quot;)">تجاهل</button>`
+      : '';
+    return `<tr data-code="${esc(r.product_code)}">
+      <td class="ltr">${esc(r.product_code)}</td><td>${esc(p.name||'')}</td><td>${esc(p.brand||'—')}</td>
+      <td>${money(oldC)}</td><td><b>${money(newC)}</b></td>
+      <td style="color:${chgCls};font-weight:700">${chg===null?'—':(chg>=0?'+':'')+chg.toFixed(1)+'%'}</td>
+      <td>${money(retail)}</td>
+      <td>${oldC>0?mOld.toFixed(1)+'%':'—'}</td>
+      <td style="color:${mNew<mOld?'var(--bad)':''};font-weight:${mNew<mOld?'700':''}">${newC>0?mNew.toFixed(1)+'%':'—'}</td>
+      <td><b>${money(suggested)}</b></td>
+      <td>${newInput}</td>
+      <td><span data-pr-margin="${esc(r.product_code)}">${mgr?'':'—'}</span></td>
+      <td style="white-space:nowrap">${actions}</td>
+    </tr>`;
+  }).join('');
+  q('priceReviewEmpty').style.display=rows.length?'none':'';
+  /* سجّل حقل السعر لكل سطر وابدأ «الهامش بعد التعديل» من القيم المعروضة */
+  for(const k of Object.keys(__prInputs)) delete __prInputs[k];
+  if(mgr){
+    body.querySelectorAll('tr[data-code] input[inputmode="decimal"]').forEach(inp=>{
+      const code=inp.closest('tr')?.dataset?.code;
+      if(code){ __prInputs[code]=inp; priceReviewMarginAfterEdit(inp,code); }
+    });
+  }
+}
+function priceReviewMarginAfterEdit(input,code){
+  const r=priceReviewQueue.find(x=>String(x.product_code)===String(code)); if(!r) return;
+  const span=input?.closest?.('tr')?.querySelector?.('[data-pr-margin]');
+  if(!span) return;
+  const price=moneyVal(input.value);
+  span.textContent=money(price-Number(r.new_cost||0))+' · '+marginOf(price,r.new_cost).toFixed(1)+'%';
+  span.style.color=marginOf(price,r.new_cost)<0?'var(--bad)':'';
+}
+async function priceReviewSaveRow(code){
+  const input=__prInputs[code];
+  const price=moneyVal(input?.value||0);
+  if(!(price>0)){ toast('اكتب سعر البيع الجديد أولاً','warn'); return; }
+  if(!confirm(`حفظ سعر ${code} = ${money(price)} ${APP_CONFIG.currency}؟`)) return;
+  try{
+    const res=await rpc('pos_price_review_resolve',{p_product_code:code,p_new_price:price,p_status:'done'});
+    const oldP=Number(res?.old_price||0);
+    await logAction('price_review_save','pos_products',code,`سعر ${code}: ${money(oldP)} → ${money(price)}`);
+    toast('تم حفظ السعر وحل الملاحظة');
+    await refreshParts(['priceReviewQueue','products'],{silent:true});
+  }catch(e){ console.error(e); toast('تعذّر الحفظ: '+e.message,'error'); }
+}
+async function priceReviewDismissRow(code){
+  if(!confirm(`تجاهل ${code} دون تغيير السعر؟`)) return;
+  try{
+    await rpc('pos_price_review_resolve',{p_product_code:code,p_new_price:null,p_status:'dismissed'});
+    await logAction('price_review_dismiss','pos_products',code,`تجاهل ${code} دون تغيير السعر`);
+    await refreshParts(['priceReviewQueue'],{silent:true});
+  }catch(e){ console.error(e); toast('تعذّر التجاهل: '+e.message,'error'); }
+}
+async function priceReviewAcceptAll(){
+  const rows=priceReviewFilteredRows();
+  if(!rows.length){ toast('لا توجد أسطر ضمن الفلتر الحالي','warn'); return; }
+  const dirs={up:rows.filter(r=>r.direction==='up').length,down:rows.filter(r=>r.direction==='down').length};
+  const msg=`قبول السعر المقترح لـ ${rows.length} منتج ضمن الفلتر الحالي (صعود ${dirs.up} / نزول ${dirs.down})؟`+
+    (dirs.down>0?'\n⚠ الفلتر الحالي يشمل منتجات انخفضت تكلفتها — سيُنزل سعرها المقترح.':''  );
+  if(!confirm(msg)) return;
+  try{
+    const res=await rpc('pos_price_review_accept_suggested',{p_codes:rows.map(r=>r.product_code)});
+    await logAction('price_review_accept_all','pos_products','',`قبول كل المقترح: ${res?.applied??0} منتج (فلتر: ${JSON.stringify(priceReviewFilters())})`);
+    toast(`تم تطبيق السعر المقترح على ${res?.applied??0} منتج`);
+    await refreshParts(['priceReviewQueue','products'],{silent:true});
+  }catch(e){ console.error(e); toast('تعذّر القبول الجماعي: '+e.message,'error'); }
+}
+
+/* ───────────── SPEC §4 — الرفع الجماعي: معاينة ثم تطبيق ───────────── */
+let __bpPreview=null; /* آخر معاينة: {rows:[{product_code,product_name,brand,old_price,new_price,new_margin_pct}],n,delta} */
+function bpScope(){
+  const pct=moneyVal(q('bpPct')?.value||0);
+  return {
+    brand:q('bpBrandFilter')?.value||null,
+    supplier_id:q('bpSupplierFilter')?.value||null,
+    category:q('bpCategoryFilter')?.value||null,
+    pct,
+    include_inactive:!!q('bpIncludeInactive')?.checked
+  };
+}
+function renderBulkPrice(){
+  if(!isManager()){ q('bulkPrice')?.classList.remove('active'); return; }
+  const fill=(id,key,label)=>{ const el=q(id); if(!el) return;
+    const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort();
+    el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''); };
+  fill('bpBrandFilter','brand','كل الماركات');
+  fill('bpSupplierFilter','supplier_name','كل الموردين');
+  fill('bpCategoryFilter','category','كل التصنيفات');
+  renderBulkPriceBatches();
+}
+async function renderBulkPriceBatches(){
+  const body=q('bpBatchesBody'); if(!body) return;
+  let rows=[];
+  try{ rows=await apiAll('pos_price_change_batches','?select=*&order=created_at.desc,id.desc&limit=10')||[]; }catch(_e){}
+  body.innerHTML=rows.map(b=>{
+    const s=b.scope||{};
+    const scope=[s.brand&&`الماركة: ${s.brand}`,s.supplier_id&&`مورّد`,s.category&&`التصنيف: ${s.category}`].filter(Boolean).join(' · ')||'الكل';
+    const date=new Date(b.created_at).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<tr><td>${date}</td><td>${esc(b.created_by||'—')}</td><td>${esc(scope)}</td>
+      <td>${Number(b.pct).toFixed(1)}٪</td><td>${b.n_products}</td>
+      <td><button class="btn secondary mini" type="button" onclick="rollbackPriceBatch(&quot;${esc(b.id)}&quot;)">تراجع</button></td></tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا دفعات بعد</td></tr>';
+}
+async function bulkPricePreview(){
+  const s=bpScope();
+  if(!(s.pct>0)){ toast('اكتب نسبة أكبر من صفر','warn'); return; }
+  try{
+    showLoading(true);
+    const rows=await rpc('pos_bulk_price_preview',{p_brand:s.brand,p_supplier_id:s.supplier_id,p_category:s.category,p_pct:s.pct,p_include_inactive:s.include_inactive});
+    const list=Array.isArray(rows)?rows:[];
+    const delta=list.reduce((a,r)=>a+(Number(r.new_price||0)-Number(r.old_price||0)),0);
+    __bpPreview={rows:list,n:list.length,delta};
+    q('bpIdle').style.display='none';
+    q('bpPreviewWrap').style.display='';
+    q('bpCountBadge').textContent=list.length+' منتج';
+    q('bpTotalDelta').textContent='إجمالي تغيّر قيمة الكتالوج: '+(delta>=0?'+':'−')+money(Math.abs(delta))+' '+APP_CONFIG.currency;
+    q('bpPreviewBody').innerHTML=list.map(r=>`<tr>
+      <td class="ltr">${esc(r.product_code)}</td><td>${esc(r.product_name||'')}</td><td>${esc(r.brand||'—')}</td>
+      <td>${money(r.old_price)}</td><td><b>${money(r.new_price)}</b></td>
+      <td>${Number(r.new_margin_pct||0).toFixed(1)}%</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا منتجات ضمن النطاق</td></tr>';
+    q('bpApplyBtn').disabled=!list.length;
+  }catch(e){ console.error(e); toast('تعذّرت المعاينة: '+e.message,'error'); }
+  finally{ showLoading(false); }
+}
+async function bulkPriceApply(){
+  if(!__bpPreview||!__bpPreview.n){ toast('شغّل المعاينة أولاً','warn'); return; }
+  const s=bpScope();
+  const scopeTxt=[s.brand&&`الماركة «${s.brand}»`,s.supplier_id&&'مورّد محدد',s.category&&`التصنيف «${s.category}»`].filter(Boolean).join(' + ')||'كل المنتجات';
+  const confirmMsg='تطبيق رفع '+Number(s.pct).toFixed(1)+'٪ على '+__bpPreview.n+' منتج ('+scopeTxt+')؟\nتقريب لأعلى إلى 0.5 — يمكن التراجع من «الدفعات الأخيرة».';
+  if(!confirm(confirmMsg)) return;
+  try{
+    showLoading(true);
+    const res=await rpc('pos_bulk_price_update',{p_brand:s.brand,p_supplier_id:s.supplier_id,p_category:s.category,p_pct:s.pct,p_include_inactive:s.include_inactive,p_note:'رفع جماعي من الواجهة'});
+    await logAction('bulk_price_update','pos_products','',`رفع ${s.pct}٪ على ${res?.n_products??0} منتج — دفعة ${String(res?.batch_id||'').slice(0,8)}`);
+    toast(`تم الرفع على ${res?.n_products??0} منتج — الدفعات الأخيرة تتيح التراجع`);
+    __bpPreview=null;
+    q('bpApplyBtn').disabled=true;
+    q('bpPct')&&(q('bpPct').value='');
+    await refreshParts(['products'],{silent:true});
+    renderBulkPriceBatches();
+  }catch(e){ console.error(e); toast('تعذّر التطبيق: '+e.message,'error'); }
+  finally{ showLoading(false); }
+}
+async function rollbackPriceBatch(batchId){
+  if(!confirm('تراجع عن هذه الدفعة؟ ستعود كل أسعارها إلى قيمتها السابقة بالضبط.')) return;
+  try{
+    showLoading(true);
+    const res=await rpc('pos_rollback_price_batch',{p_batch_id:batchId});
+    await logAction('bulk_price_rollback','pos_products','',`تراجع دفعة ${String(batchId).slice(0,8)} — ${res?.restored??0} منتج`);
+    toast(`عادت ${res?.restored??0} منتج إلى سعرها السابق`);
+    await refreshParts(['products'],{silent:true});
+    renderBulkPriceBatches();
+  }catch(e){ console.error(e); toast('تعذّر التراجع: '+e.message,'error'); }
+  finally{ showLoading(false); }
+}
