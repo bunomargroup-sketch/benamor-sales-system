@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1750';
+const APP_BUILD='b20261005-1801';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10599,7 +10599,7 @@ async function priceReviewAcceptAll(){
 }
 
 /* ───────────── SPEC §4 — الرفع الجماعي: معاينة ثم تطبيق ───────────── */
-let __bpPreview=null; /* آخر معاينة: {rows:[{product_code,product_name,brand,old_price,new_price,new_margin_pct}],n,delta} */
+let __bpPreview=null; /* آخر معاينة: {rows:[{product_code,product_name,brand,old_price,new_price,new_margin_pct}]} — البحث يضيّقها محلياً */
 function bpScope(){
   const pct=moneyVal(q('bpPct')?.value||0);
   return {
@@ -10629,12 +10629,42 @@ async function renderBulkPriceBatches(){
   try{ rows=await apiAll('pos_price_change_batches','?select=*&order=created_at.desc,id.desc&limit=10')||[]; }catch(_e){}
   body.innerHTML=rows.map(b=>{
     const s=b.scope||{};
-    const scope=[s.brand&&`الماركة: ${s.brand}`,s.supplier_id&&`مورّد`,s.category&&`التصنيف: ${s.category}`].filter(Boolean).join(' · ')||'الكل';
+    const scope=[s.brand&&`الماركة: ${s.brand}`,s.supplier_id&&`مورّد`,s.category&&`التصنيف: ${s.category}`,s.search&&`بحث: ${s.search}`].filter(Boolean).join(' · ')||'الكل';
     const date=new Date(b.created_at).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     return `<tr><td>${date}</td><td>${esc(b.created_by||'—')}</td><td>${esc(scope)}</td>
       <td>${Number(b.pct).toFixed(1)}٪</td><td>${b.n_products}</td>
       <td><button class="btn secondary mini" type="button" onclick="rollbackPriceBatch(&quot;${esc(b.id)}&quot;)">تراجع</button></td></tr>`;
   }).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا دفعات بعد</td></tr>';
+}
+/* (0119) مربع البحث: يضيّق المعروض من المعاينة المخزَّنة (بلا طلب شبكة)،
+   والتطبيق يشمل المنتجات المعروضة أمام المستخدم فقط — ما يُرى هو ما يتغيّر */
+function bpSearchTerm(){ return String(q('bpSearch')?.value||'').trim().toLowerCase(); }
+function bpVisibleRows(){
+  if(!__bpPreview) return [];
+  const t=bpSearchTerm();
+  if(!t) return __bpPreview.rows;
+  return __bpPreview.rows.filter(r=>String(r.product_code||'').toLowerCase().includes(t)||String(r.product_name||'').toLowerCase().includes(t));
+}
+function renderBulkPricePreviewTable(){
+  if(!__bpPreview) return;
+  const list=bpVisibleRows();
+  const total=__bpPreview.rows.length;
+  const delta=list.reduce((a,r)=>a+(Number(r.new_price||0)-Number(r.old_price||0)),0);
+  q('bpCountBadge').textContent=list.length+' منتج'+(list.length!==total?` (من ${total})`:'');
+  q('bpTotalDelta').textContent='إجمالي تغيّر قيمة المعروض: '+(delta>=0?'+':'−')+money(Math.abs(delta))+' '+APP_CONFIG.currency;
+  q('bpPreviewBody').innerHTML=list.map(r=>`<tr>
+    <td class="ltr">${esc(r.product_code)}</td><td>${esc(r.product_name||'')}</td><td>${esc(r.brand||'—')}</td>
+    <td>${money(r.old_price)}</td><td><b>${money(r.new_price)}</b></td>
+    <td>${Number(r.new_margin_pct||0).toFixed(1)}%</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا نتائج لهذا البحث ضمن المعاينة</td></tr>';
+  q('bpApplyBtn').disabled=!list.length;
+}
+function bulkPriceSearchChanged(){ if(__bpPreview) renderBulkPricePreviewTable(); }
+/* تغيير فلتر يُبطل المعاينة — لا يصحّ التطبيق على نطاق لم يُعاين */
+function bulkPriceInvalidatePreview(){
+  __bpPreview=null;
+  q('bpApplyBtn')&&(q('bpApplyBtn').disabled=true);
+  q('bpPreviewWrap')&&(q('bpPreviewWrap').style.display='none');
+  q('bpIdle')&&(q('bpIdle').style.display='');
 }
 async function bulkPricePreview(){
   const s=bpScope();
@@ -10643,34 +10673,36 @@ async function bulkPricePreview(){
     showLoading(true);
     const rows=await rpc('pos_bulk_price_preview',{p_brand:s.brand,p_supplier_id:s.supplier_id,p_category:s.category,p_pct:s.pct,p_include_inactive:s.include_inactive});
     const list=Array.isArray(rows)?rows:[];
-    const delta=list.reduce((a,r)=>a+(Number(r.new_price||0)-Number(r.old_price||0)),0);
-    __bpPreview={rows:list,n:list.length,delta};
+    __bpPreview={rows:list};
     q('bpIdle').style.display='none';
     q('bpPreviewWrap').style.display='';
-    q('bpCountBadge').textContent=list.length+' منتج';
-    q('bpTotalDelta').textContent='إجمالي تغيّر قيمة الكتالوج: '+(delta>=0?'+':'−')+money(Math.abs(delta))+' '+APP_CONFIG.currency;
-    q('bpPreviewBody').innerHTML=list.map(r=>`<tr>
-      <td class="ltr">${esc(r.product_code)}</td><td>${esc(r.product_name||'')}</td><td>${esc(r.brand||'—')}</td>
-      <td>${money(r.old_price)}</td><td><b>${money(r.new_price)}</b></td>
-      <td>${Number(r.new_margin_pct||0).toFixed(1)}%</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا منتجات ضمن النطاق</td></tr>';
-    q('bpApplyBtn').disabled=!list.length;
+    renderBulkPricePreviewTable();
   }catch(e){ console.error(e); toast('تعذّرت المعاينة: '+e.message,'error'); }
   finally{ showLoading(false); }
 }
 async function bulkPriceApply(){
-  if(!__bpPreview||!__bpPreview.n){ toast('شغّل المعاينة أولاً','warn'); return; }
+  if(!__bpPreview){ toast('شغّل المعاينة أولاً','warn'); return; }
+  const list=bpVisibleRows();
+  if(!list.length){ toast('لا منتجات معروضة ضمن البحث الحالي','warn'); return; }
   const s=bpScope();
-  const scopeTxt=[s.brand&&`الماركة «${s.brand}»`,s.supplier_id&&'مورّد محدد',s.category&&`التصنيف «${s.category}»`].filter(Boolean).join(' + ')||'كل المنتجات';
-  const confirmMsg='تطبيق رفع '+Number(s.pct).toFixed(1)+'٪ على '+__bpPreview.n+' منتج ('+scopeTxt+')؟\nتقريب لأعلى إلى 0.5 — يمكن التراجع من «الدفعات الأخيرة».';
+  const t=bpSearchTerm();
+  const scopeTxt=[s.brand&&`الماركة «${s.brand}»`,s.supplier_id&&'مورّد محدد',s.category&&`التصنيف «${s.category}»`,t&&`بحث: «${t}»`].filter(Boolean).join(' + ')||'كل المنتجات';
+  const confirmMsg='تطبيق تعديل '+Number(s.pct).toFixed(1)+'٪ على '+list.length+' منتج ('+scopeTxt+')؟\nتقريب لأعلى إلى 0.5 — يمكن التراجع من «الدفعات الأخيرة».';
   if(!confirm(confirmMsg)) return;
   try{
     showLoading(true);
-    const res=await rpc('pos_bulk_price_update',{p_brand:s.brand,p_supplier_id:s.supplier_id,p_category:s.category,p_pct:s.pct,p_include_inactive:s.include_inactive,p_note:'رفع جماعي من الواجهة'});
-    await logAction('bulk_price_update','pos_products','',`رفع ${s.pct}٪ على ${res?.n_products??0} منتج — دفعة ${String(res?.batch_id||'').slice(0,8)}`);
-    toast(`تم الرفع على ${res?.n_products??0} منتج — الدفعات الأخيرة تتيح التراجع`);
-    __bpPreview=null;
-    q('bpApplyBtn').disabled=true;
+    /* (0119) القائمة الصريحة المعروضة — لا النطاق: ما يُرى هو ما يتغيّر */
+    const res=await rpc('pos_bulk_price_update_codes',{
+      p_codes:list.map(r=>r.product_code),
+      p_pct:s.pct,
+      p_scope:{brand:s.brand,supplier_id:s.supplier_id,category:s.category,search:t||null},
+      p_note:'تعديل أسعار من الواجهة'
+    });
+    await logAction('bulk_price_update','pos_products','',`تعديل ${s.pct}٪ على ${res?.n_products??0} منتج${t?` (بحث: ${t})`:''} — دفعة ${String(res?.batch_id||'').slice(0,8)}`);
+    toast(`تم تعديل أسعار ${res?.n_products??0} منتج — الدفعات الأخيرة تتيح التراجع`);
+    bulkPriceInvalidatePreview();
     q('bpPct')&&(q('bpPct').value='');
+    q('bpSearch')&&(q('bpSearch').value='');
     await refreshParts(['products'],{silent:true});
     renderBulkPriceBatches();
   }catch(e){ console.error(e); toast('تعذّر التطبيق: '+e.message,'error'); }
