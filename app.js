@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1426';
+const APP_BUILD='b20261005-1534';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3909,22 +3909,30 @@ async function ensureSalesHistory(fromDate){
     const older = await apiAll('pos_sales',
       `?select=*&sale_date=gte.${from}&sale_date=lt.${until}&order=sale_date.desc,created_at.desc,id.asc`);
     if(older && older.length){
+      /* (20261005b) الفواتير تُدمج أولاً، والتفاصيل تُجلب بشكل أفضل جهد —
+         فشل واحد في دفعات السطور/الدفعات (عشرات الطلبات على شبكة ضعيفة)
+         لم يعد يبتلع التنزيل كله («لا يحمل شيء»). زر «تحديث» يرمم
+         التفاصيل عند التحديث الكامل التالي. */
+      sales = mergeRows(sales, older, cmpSale);
       const ids=older.map(x=>x.id);
-      const [items,pays] = await Promise.all([
-        fetchByKeys('pos_sale_items','sale_id',ids,SEL_SALE_ITEMS,'created_at.asc,id.asc'),
-        fetchByKeys('pos_sale_payments','sale_id',ids,'*','created_at.asc,id.asc')
-      ]);
-      sales        = mergeRows(sales, older, cmpSale);
-      saleItems    = replaceGroups(saleItems, items, 'sale_id', ids);
-      salePayments = replaceGroups(salePayments, pays, 'sale_id', ids);
-      const rets = await apiAll('pos_sale_returns',
-        `?select=*&return_date=gte.${from}&return_date=lt.${until}&order=return_date.desc,id.asc`).catch(()=>[]);
-      if(rets && rets.length){
-        const rids=rets.map(x=>x.id);
-        const ritems=await fetchByKeys('pos_sale_return_items','return_id',rids,'*','created_at.asc,id.asc');
-        saleReturns     = mergeRows(saleReturns, rets, cmpDesc('return_date'));
-        saleReturnItems = replaceGroups(saleReturnItems, ritems, 'return_id', rids);
-      }
+      try{
+        const [items,pays] = await Promise.all([
+          fetchByKeys('pos_sale_items','sale_id',ids,SEL_SALE_ITEMS,'created_at.asc,id.asc'),
+          fetchByKeys('pos_sale_payments','sale_id',ids,'*','created_at.asc,id.asc')
+        ]);
+        saleItems    = replaceGroups(saleItems, items, 'sale_id', ids);
+        salePayments = replaceGroups(salePayments, pays, 'sale_id', ids);
+      }catch(e){ console.warn('تعذّر تنزيل تفاصيل الفواتير الأقدم (الفواتير نفسها محفوظة)', e); }
+      try{
+        const rets = await apiAll('pos_sale_returns',
+          `?select=*&return_date=gte.${from}&return_date=lt.${until}&order=return_date.desc,id.asc`).catch(()=>[]);
+        if(rets && rets.length){
+          const rids=rets.map(x=>x.id);
+          const ritems=await fetchByKeys('pos_sale_return_items','return_id',rids,'*','created_at.asc,id.asc');
+          saleReturns     = mergeRows(saleReturns, rets, cmpDesc('return_date'));
+          saleReturnItems = replaceGroups(saleReturnItems, ritems, 'return_id', rids);
+        }
+      }catch(e){ console.warn('تعذّر تنزيل مرتجعات الأقدم', e); }
     }
     __salesHorizon = from;
     if(older && older.length) __oldestSaleDate=String(older[older.length-1].sale_date||'').slice(0,10)||__oldestSaleDate; /* (20261005) الدفعة مرتبة desc ⇒ الأخير هو الأقدم */
@@ -8795,12 +8803,25 @@ function renderSellerSales(){
 }
 
 /* (0080) الفترة المطلوبة قد تسبق ما حُمِّل (نافذة 90 يوماً) — ننزّل الناقص
-   عند الطلب لا دائماً. */
+   عند الطلب لا دائماً.
+   (20261005b) إصلاح «لا يحمل شيء»:
+   1) عند معرفة أقدم فاتورة في القاعدة، نزّل الفجوة كلها دفعة واحدة بدل
+      دفعات 180 يوماً — ضغطة واحدة تعطي كامل التاريخ، والزر يختفي عند
+      بلوغ الأقدم. (بلا معرفة الأقدم: دفعة 180 يوماً كما كانت.)
+   2) بعد نجاح التنزيل يُرفع حدّ العرض إلى عدد الصفوف المحمَّلة — القائمة
+      مرتبة من الأحدث للأقدم، فالفواتير القديمة تقع في ذيلها، وكان
+      (+300) يبقي المستخدم ينظر إلى نفس التواريخ: البيانات تُنزَّل وتبقى
+      مخفية تحت الحدّ. */
 function loadOlderSales(){
-  salesListLimit+=300;
-  const oldest=__salesHorizon||new Date().toISOString().slice(0,10);
-  const back=new Date(new Date(oldest).getTime()-180*864e5).toISOString().slice(0,10);
-  ensureSalesHistory(back).then(got=>{ renderSales(); }).catch(()=>renderSales());
+  if(!navigator.onLine){ toast('غير متصل بالإنترنت — لا يمكن تنزيل الأقدم، حاول مجدداً','warn'); return; }
+  const oldestH=__salesHorizon||new Date().toISOString().slice(0,10);
+  const back=(__oldestSaleDate && __oldestSaleDate<oldestH)
+    ? __oldestSaleDate
+    : new Date(new Date(oldestH).getTime()-180*864e5).toISOString().slice(0,10);
+  ensureSalesHistory(back).then(got=>{
+    renderSales();
+    if(got && window.__salesListCount>salesListLimit){ salesListLimit=window.__salesListCount; renderSales(); }
+  }).catch(()=>renderSales());
   renderSales();
 }
 
