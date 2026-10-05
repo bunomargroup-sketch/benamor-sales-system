@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261004-1511';
+const APP_BUILD='b20261005-1323';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3887,6 +3887,7 @@ async function fetchByKeys(table, keyField, keys, select, order){
 
 const SALES_WINDOW_DAYS = 90;
 var __salesHorizon = null;      /* أقدم تاريخ بيع مُحمَّل فعلاً (YYYY-MM-DD) */
+var __oldestSaleDate = null;    /* أقدم فاتورة في القاعدة كلها (YYYY-MM-DD) — null: مجهول، '': لا مبيعات، تاريخ: يوجد أقدم من الأفق؟ */
 var __historyBusy = false;
 
 function salesHorizonDate(){
@@ -3926,6 +3927,7 @@ async function ensureSalesHistory(fromDate){
       }
     }
     __salesHorizon = from;
+    if(older && older.length) __oldestSaleDate=String(older[older.length-1].sale_date||'').slice(0,10)||__oldestSaleDate; /* (20261005) الدفعة مرتبة desc ⇒ الأخير هو الأقدم */
     if(legacyCostMap||!costViewMap){ try{buildProductCostIndex();}catch(_e){} }
     saveEssentialCache?.();
     setSyncState?.('online','متصل - تم تنزيل المبيعات الأقدم');
@@ -4120,7 +4122,8 @@ async function refreshSalesDomain(o={}){
     apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+cutoff90+'&order=entry_date.desc,created_at.desc,id.asc').catch(()=>null),
     api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc&limit=200'}).catch(()=>null),
     apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc').catch(()=>null),
-    api('pos_stock_counts',{qs:'?select=*&order=count_date.desc,created_at.desc&limit=100'}).catch(()=>null)
+    api('pos_stock_counts',{qs:'?select=*&order=count_date.desc,created_at.desc&limit=100'}).catch(()=>null),
+    api('pos_sales',{qs:'?select=sale_date&order=sale_date.asc&limit=1'}).catch(()=>null) /* (20261005) صف واحد: هل توجد فواتير أقدم من الأفق المحمَّل؟ */
   ]);
   if(!r[0]||!r[3]) return false; /* الاتصال ساقط — لا نلمس البيانات الحالية */
   sales=r[0]; saleItems=r[1]||saleItems; salePayments=r[2]||salePayments; stock=r[3];
@@ -4130,6 +4133,9 @@ async function refreshSalesDomain(o={}){
 
   __lastFullSync=Date.now();
   if(!__salesHorizon) __salesHorizon=hz;
+  /* (20261005) صف الأقدم: null (فشل الاستعلام) = يبقى مجهولاً، [] = لا مبيعات،
+     صف = التاريخ — يُستخدم في زر «تحميل الأقدم» عند بحث بلا نتائج. */
+  if(Array.isArray(r[11])) __oldestSaleDate=(r[11][0]&&String(r[11][0].sale_date||'').slice(0,10))||'';
   const st=[maxStamp(sales,'updated_at'), maxStamp(stock,'updated_at')].filter(Boolean).sort().slice(-1)[0];
   __deltaSince = st || new Date().toISOString();
 
@@ -4203,7 +4209,14 @@ async function autoRefreshTick(){
   finally{ __autoRefreshRunning=false; }
 }
 
-let salesListLimit=150; /* (0076) عرض أول 150 فاتورة ثم «تحميل الأقدم» — كان يُرسم ~10,000 صف دفعة واحدة */
+const SALES_LIST_LIMIT_INITIAL=150;
+let salesListLimit=SALES_LIST_LIMIT_INITIAL; /* (0076) عرض أول 150 فاتورة ثم «تحميل الأقدم» — كان يُرسم ~10,000 صف دفعة واحدة */
+/* (20261005) كل تغيير فلتر يعيد الحدّ إلى قيمته الأولى — وإلا نمت القيمة مع
+   نقرات «تحميل الأقدم» (150+300×n) حتى تجاوزت عدد نتائج الفلتر فبقي الزر
+   مختفياً نهائياً على ذلك الفلتر، وفيه أكثر ما يحتاجه المستخدم.
+   ملاحظة: renderSales وحده (تحديث دوري/بعد معاملة) لا يُعيد ضبط الحدّ —
+   الضبط هنا فقط، حيث يتغيّر الفلتر فعلاً. */
+function salesFilterChanged(){ salesListLimit=SALES_LIST_LIMIT_INITIAL; renderSales(); }
 function renderSales(){
   fillSaleListFilterOptions();
   const typ=q('saleFilterType')?.value||'';
@@ -4225,9 +4238,19 @@ function renderSales(){
                  ...rets.map(r=>({kind:'ret',date:String(r.return_date||''),key:String(saleIdx.get(r.sale_id)?.invoice_no||String(r.id).slice(0,8)),r}))];
   entries.sort((a,b)=>{const d=b.date.localeCompare(a.date);return d||b.key.localeCompare(a.key,'ar',{numeric:true});});
   const more=entries.length-salesListLimit;
-  q('salesBody').innerHTML=(entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('')
-    +(more>0?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'')
-  ) || '<tr><td colspan="10">لا توجد فواتير مطابقة. غيّر البحث أو الفلاتر.</td></tr>';
+  /* (20261005) الزر يظهر أيضاً حين:
+     • «من تاريخ» يسبق الأفق المحمَّل — الفلتر يطلب فترة لم تُحمَّل بعد، أو
+     • الناتج صفراً وتوجد فواتير أقدم — كان يختفي تماماً في لحظة
+       «بحث بلا نتائج»، وهي اللحظة التي يحتاجها فيها المستخدم. */
+  const hz=__salesHorizon;
+  const olderMayExist=hz && __oldestSaleDate!=='' && (__oldestSaleDate===null || __oldestSaleDate<hz);
+  const fromF=(q('saleFilterFrom')?.value||'').slice(0,10);
+  const needOlder=olderMayExist && ((fromF && fromF<hz) || entries.length===0);
+  const olderRow=more>0
+    ?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`
+    :(needOlder?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم</button></td></tr>`:'');
+  const bodyHtml=entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('');
+  q('salesBody').innerHTML=(bodyHtml||'<tr><td colspan="10">لا نتائج ضمن آخر 90 يوماً — حمّل الأقدم</td></tr>')+olderRow;
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
@@ -4252,8 +4275,8 @@ function renderSales(){
   }
 }
 
-function clearSaleFilters(){['saleListSearch','saleFilterFrom','saleFilterTo','saleFilterMonth','saleFilterYear','saleFilterUser'].forEach(id=>{if(q(id))q(id).value=''}); ['saleFilterType','saleFilterCustomer','saleFilterBranch','saleFilterWarehouse','saleFilterPayment'].forEach(id=>{if(q(id))q(id).value=''}); renderSales();}
-function showDueSalesOnly(){if(q('saleFilterPayment'))q('saleFilterPayment').value='due'; renderSales();}
+function clearSaleFilters(){['saleListSearch','saleFilterFrom','saleFilterTo','saleFilterMonth','saleFilterYear','saleFilterUser'].forEach(id=>{if(q(id))q(id).value=''}); ['saleFilterType','saleFilterCustomer','saleFilterBranch','saleFilterWarehouse','saleFilterPayment'].forEach(id=>{if(q(id))q(id).value=''}); salesFilterChanged();}
+function showDueSalesOnly(){if(q('saleFilterPayment'))q('saleFilterPayment').value='due'; salesFilterChanged();}
 
 /* ═══ تصدير/طباعة قائمة الفواتير — تحترم كل فلاتر الشاشة (بحث، فترة، شهر، سنة، نوع، مستخدم، زبون، فرع، حالة دفع) ═══ */
 function saleStatusText(st){return st==='paid'?'مدفوعة':st==='partial'?'مدفوعة جزئيًا':'غير مدفوعة'}
@@ -6542,6 +6565,8 @@ async function restoreSaleDraft(d){
 }
 function saveActiveSaleDraft(){
   if(suppressSaleDraftSave) return;
+  if(editingSaleId) return; /* (20261004) فاتورة قائمة تحت التعديل ليست «فاتورة جديدة غير محفوظة» —
+     مسودة التعديل كانت تعود بعد الحفظ/التحديث وتبقى في نافذة فاتورة جديدة حتى إنشاء فاتورة */
   clearTimeout(saleDraftTimer);
   saleDraftTimer=setTimeout(()=>{
     try{const d=collectSaleDraft(); if(d.items.length) localStorage.setItem(saleDraftStorageKey(),JSON.stringify(d)); else localStorage.removeItem(saleDraftStorageKey());}catch(e){console.warn('draft save failed',e)}
@@ -7566,7 +7591,7 @@ q('saleForm').addEventListener('submit', async e=>{
     saleId=updated.id; body.invoice_no=updated.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||''; syncSaleInvoiceNoText();
     /* ⚙️ أُزيلت logAction('sale_edit') من العميل: 0065 يسطر التدقيق من الخادم بتفاصيل أغنى (سجل التعديلات داخل الفاتورة) */
     const msg='تم تعديل فاتورة البيع وتحديث المخزون';
-    const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); resetSaleForm(); await refreshSalesDomain(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
+    const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); clearActiveSaleDraft(); resetSaleForm(); await refreshSalesDomain(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
   }catch(err){console.error(err);toast('خطأ في حفظ البيع: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false;document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false)}
 });

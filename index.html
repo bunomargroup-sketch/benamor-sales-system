@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261004-1511">
+<link rel="stylesheet" href="app.css?v=20261005-1323">
 </head>
 <body class="auth-locked">
   <header>
@@ -437,17 +437,17 @@
           <div class="tools"><h2>فواتير البيع</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
           <div id="salesInvoicesPanel">
           <div class="grid sales-filter-grid" style="margin:10px 0">
-            <div><label>بحث الفواتير</label><input id="saleListSearch" placeholder="رقم، زبون، هاتف، صنف، باركود..." oninput="renderSales()"></div>
-            <div><label>من تاريخ</label><input id="saleFilterFrom" type="date" onchange="renderSales()"></div>
-            <div><label>إلى تاريخ</label><input id="saleFilterTo" type="date" onchange="renderSales()"></div>
-            <div><label>الشهر</label><input id="saleFilterMonth" type="month" onchange="renderSales()"></div>
-            <div><label>السنة</label><input id="saleFilterYear" type="number" min="2020" max="2100" placeholder="مثال 2026" oninput="renderSales()"></div>
-            <div><label>نوع الفاتورة</label><select id="saleFilterType" onchange="renderSales()"><option value="">كل الفواتير</option><option value="sale">بيع فقط</option><option value="mixed_return">بيع مع مرتجع</option><option value="return">فواتير إرجاع فقط</option></select></div>
-            <div><label>البائع</label><input id="saleFilterUser" placeholder="بحث في البائع / الملاحظات" oninput="renderSales()"></div>
-            <div><label>الزبون</label><select id="saleFilterCustomer" onchange="renderSales()"><option value="">كل الزبائن</option></select></div>
-            <div><label>الفرع</label><select id="saleFilterBranch" onchange="renderSales()"><option value="">كل الفروع</option></select></div>
-            <div><label>المخزن</label><select id="saleFilterWarehouse" onchange="renderSales()"><option value="">غير مطبق للبيع</option></select></div>
-            <div><label>حالة الدفع</label><select id="saleFilterPayment" onchange="renderSales()"><option value="">كل الحالات</option><option value="paid">مدفوعة بالكامل</option><option value="partial">مدفوعة جزئيًا / عليها باقي</option><option value="unpaid">غير مدفوعة</option><option value="due">كل الفواتير التي عليها دين</option></select></div>
+            <div><label>بحث الفواتير</label><input id="saleListSearch" placeholder="رقم، زبون، هاتف، صنف، باركود..." oninput="salesFilterChanged()"></div>
+            <div><label>من تاريخ</label><input id="saleFilterFrom" type="date" onchange="salesFilterChanged()"></div>
+            <div><label>إلى تاريخ</label><input id="saleFilterTo" type="date" onchange="salesFilterChanged()"></div>
+            <div><label>الشهر</label><input id="saleFilterMonth" type="month" onchange="salesFilterChanged()"></div>
+            <div><label>السنة</label><input id="saleFilterYear" type="number" min="2020" max="2100" placeholder="مثال 2026" oninput="salesFilterChanged()"></div>
+            <div><label>نوع الفاتورة</label><select id="saleFilterType" onchange="salesFilterChanged()"><option value="">كل الفواتير</option><option value="sale">بيع فقط</option><option value="mixed_return">بيع مع مرتجع</option><option value="return">فواتير إرجاع فقط</option></select></div>
+            <div><label>البائع</label><input id="saleFilterUser" placeholder="بحث في البائع / الملاحظات" oninput="salesFilterChanged()"></div>
+            <div><label>الزبون</label><select id="saleFilterCustomer" onchange="salesFilterChanged()"><option value="">كل الزبائن</option></select></div>
+            <div><label>الفرع</label><select id="saleFilterBranch" onchange="salesFilterChanged()"><option value="">كل الفروع</option></select></div>
+            <div><label>المخزن</label><select id="saleFilterWarehouse" onchange="salesFilterChanged()"><option value="">غير مطبق للبيع</option></select></div>
+            <div><label>حالة الدفع</label><select id="saleFilterPayment" onchange="salesFilterChanged()"><option value="">كل الحالات</option><option value="paid">مدفوعة بالكامل</option><option value="partial">مدفوعة جزئيًا / عليها باقي</option><option value="unpaid">غير مدفوعة</option><option value="due">كل الفواتير التي عليها دين</option></select></div>
             <div class="row sales-filter-actions"><button class="btn secondary" type="button" onclick="clearSaleFilters()">مسح الفلاتر</button><button class="btn secondary" type="button" onclick="showDueSalesOnly()">فواتير عليها دين</button><button class="btn secondary" type="button" onclick="exportSalesListCsv()">📊 تصدير Excel</button><button class="btn secondary" type="button" onclick="printSalesList()">🖨 طباعة القائمة / PDF</button></div>
           </div>
           <div class="row sticky-actions" style="margin:10px 0">
@@ -1407,6 +1407,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261004-1511"></script>
+<script src="app.js?v=20261005-1323"></script>
 </body>
 </html>
