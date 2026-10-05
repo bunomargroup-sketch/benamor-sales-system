@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1801';
+const APP_BUILD='b20261005-1923';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10629,10 +10629,13 @@ async function renderBulkPriceBatches(){
   try{ rows=await apiAll('pos_price_change_batches','?select=*&order=created_at.desc,id.desc&limit=10')||[]; }catch(_e){}
   body.innerHTML=rows.map(b=>{
     const s=b.scope||{};
-    const scope=[s.brand&&`الماركة: ${s.brand}`,s.supplier_id&&`مورّد`,s.category&&`التصنيف: ${s.category}`,s.search&&`بحث: ${s.search}`].filter(Boolean).join(' · ')||'الكل';
+    const isAccept=s.mode==='price_review_accept';
+    /* (0121) دفعات قبول المقترح تظهر بلوحها لا بنطاق الفلاتر */
+    const scope=isAccept?'قبول المقترح — قائمة مراجعة الأسعار'
+      :[s.brand&&`الماركة: ${s.brand}`,s.supplier_id&&`مورّد`,s.category&&`التصنيف: ${s.category}`,s.search&&`بحث: ${s.search}`].filter(Boolean).join(' · ')||'الكل';
     const date=new Date(b.created_at).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     return `<tr><td>${date}</td><td>${esc(b.created_by||'—')}</td><td>${esc(scope)}</td>
-      <td>${Number(b.pct).toFixed(1)}٪</td><td>${b.n_products}</td>
+      <td>${isAccept?'—':Number(b.pct).toFixed(1)+'٪'}</td><td>${b.n_products}</td>
       <td><button class="btn secondary mini" type="button" onclick="rollbackPriceBatch(&quot;${esc(b.id)}&quot;)">تراجع</button></td></tr>`;
   }).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا دفعات بعد</td></tr>';
 }
