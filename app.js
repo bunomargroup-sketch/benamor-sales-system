@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1323';
+const APP_BUILD='b20261005-1426';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4238,17 +4238,17 @@ function renderSales(){
                  ...rets.map(r=>({kind:'ret',date:String(r.return_date||''),key:String(saleIdx.get(r.sale_id)?.invoice_no||String(r.id).slice(0,8)),r}))];
   entries.sort((a,b)=>{const d=b.date.localeCompare(a.date);return d||b.key.localeCompare(a.key,'ar',{numeric:true});});
   const more=entries.length-salesListLimit;
-  /* (20261005) الزر يظهر أيضاً حين:
-     • «من تاريخ» يسبق الأفق المحمَّل — الفلتر يطلب فترة لم تُحمَّل بعد، أو
-     • الناتج صفراً وتوجد فواتير أقدم — كان يختفي تماماً في لحظة
-       «بحث بلا نتائج»، وهي اللحظة التي يحتاجها فيها المستخدم. */
+  /* (20261005) الزر يظهر حين تتجاوز الصفوف الحدّ (كما كان)، أو ما دام توجد
+     فواتير أقدم من الأفق المحمَّل — بعداد حين تتجاوز الصفوف الحدّ، وبدونه
+     حين النتائج قليلة أو صفرية (حالة «الفواتير تتوقف حتى 06-07» بلا زر).
+     يختفي عند بلوغ أقدم فاتورة في القاعدة. */
   const hz=__salesHorizon;
   const olderMayExist=hz && __oldestSaleDate!=='' && (__oldestSaleDate===null || __oldestSaleDate<hz);
-  const fromF=(q('saleFilterFrom')?.value||'').slice(0,10);
-  const needOlder=olderMayExist && ((fromF && fromF<hz) || entries.length===0);
-  const olderRow=more>0
-    ?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`
-    :(needOlder?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم</button></td></tr>`:'');
+  const olderRow=(more>0||olderMayExist)
+    ?(more>0
+      ?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`
+      :`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم</button></td></tr>`)
+    :'';
   const bodyHtml=entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('');
   q('salesBody').innerHTML=(bodyHtml||'<tr><td colspan="10">لا نتائج ضمن آخر 90 يوماً — حمّل الأقدم</td></tr>')+olderRow;
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
