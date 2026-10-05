@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1716';
+const APP_BUILD='b20261005-1750';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2391,8 +2391,12 @@ function smartFilterProducts(parsed){
    إن اختلفا اختلف العرض عن ما يُكتب. */
 function roundPriceUp(v){ return Math.ceil(Number(v||0)*2)/2; }
 function marginOf(retail,cost){ const r=Number(retail||0), c=Number(cost||0); return c>0?(r-c)/c*100:0; }
-/* السعر المقترح (SPEC §2): يعيد الهامش القديم — التقدير لأعلى ⇒ لا ينزل أبداً */
-function suggestedRetailPrice(oldCost,newCost,retail){ return roundPriceUp(newCost*(1+marginOf(retail,oldCost)/100)); }
+/* السعر المقترح (SPEC §2): يعيد الهامش القديم — التقدير لأعلى ⇒ لا ينزل أبداً.
+   (0118) منتج بلا سعر بيع موجب: المقترح = التكلفة الجديدة مقرَّبة لأعلى (لا صفراً) */
+function suggestedRetailPrice(oldCost,newCost,retail){
+  if(!(Number(retail)>0)) return roundPriceUp(newCost);
+  return roundPriceUp(newCost*(1+marginOf(retail,oldCost)/100));
+}
 
 /* (0116) SPEC §3 — الهامش حيّاً تحت سعر البيع في نموذج المنتج:
    «الهامش: 45.00 د.ل · 30.0% (التكلفة: 150.00)»
@@ -10612,8 +10616,11 @@ function renderBulkPrice(){
     const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort();
     el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''); };
   fill('bpBrandFilter','brand','كل الماركات');
-  fill('bpSupplierFilter','supplier_name','كل الموردين');
   fill('bpCategoryFilter','category','كل التصنيفات');
+  /* (0118) المورّد بالمعرّف (uuid) لا بالاسم — الخادم يرشّح بـ supplier_id */
+  { const el=q('bpSupplierFilter'); if(el){ const keep=el.value;
+    el.innerHTML=`<option value="">كل الموردين</option>`+(suppliers||[]).map(s=>`<option value="${esc(s.id)}">${esc(s.name||'')}</option>`).join('');
+    if(keep && [...(el.options||[])].some(o=>o.value===keep)) el.value=keep; } }
   renderBulkPriceBatches();
 }
 async function renderBulkPriceBatches(){
