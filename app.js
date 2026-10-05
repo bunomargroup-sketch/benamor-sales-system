@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1534';
+const APP_BUILD='b20261005-1609';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4156,7 +4156,12 @@ async function refreshSalesDomain(o={}){
 
 /* الرسم مشترك بين المسارين */
 function refreshSalesDomainRender(){
-  try{renderSales();}catch(_e){}
+  /* (20261005b) قائمة الفواتير تُرسم أثناء فتحها فقط — بعد «تحميل الأقدم»
+     تحمل القائمة التاريخ كله (آلاف الصفوف)، وإعادة رسمها وهي مخفية بعد كل
+     تحديث كانت عبثاً يُبطئ بقية الشاشات. وهي مغلقة: تُعلَّم متّسخة فيُرسم
+     عند الفتح (renderTab) — نفس نظام الرسم الكسول 0076. */
+  if(q('salesList')?.classList.contains('active')){ try{renderSales();}catch(_e){} }
+  else { if(TAB_RENDERERS.salesList) tabDirty['salesList']=true; }
   try{renderStatusBar();}catch(_e){}
   if(q('stock')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{renderStock();}catch(_e){} }
   if(q('stockCount')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{ if(q('stockCountLists')?.style.display!=='none') renderStockCountLists(); else renderStockCount(); }catch(_e){} }
