@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261005-1923';
+const APP_BUILD='b20261006-1134';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10477,8 +10477,10 @@ function updatePriceReviewBadge(n){
 /* نبضة خفيفة كل 30 ثانية (مع شريط الحالة) — عداد القائمة الجانبية */
 function refreshPriceReviewBadge(){
   if(!appUser?.id||!navigator.onLine) return;
+  /* (20261006) العدّ فقط — كانت تستبدل مصفوفة الصفوف بصفوف بلا
+     تكاليف/اتجاه (select=product_code) فتفسد القائمة كل 30 ثانية */
   api('pos_price_review_queue',{qs:'?select=product_code&status=eq.pending'})
-    .then(rows=>{ if(Array.isArray(rows)&&rows.length) priceReviewQueue=rows; updatePriceReviewBadge(rows?rows.length:0); })
+    .then(rows=>{ if(Array.isArray(rows)) updatePriceReviewBadge(rows.length); })
     .catch(()=>{});
 }
 
@@ -10562,6 +10564,12 @@ function priceReviewMarginAfterEdit(input,code){
   span.textContent=money(price-Number(r.new_cost||0))+' · '+marginOf(price,r.new_cost).toFixed(1)+'%';
   span.style.color=marginOf(price,r.new_cost)<0?'var(--bad)':'';
 }
+/* (20261006) إعادة رسم القائمة بعد أي حلّ/تجاهل/قبول: القسم مفتوح في نافذة
+   عائمة لا يغطّيه renderTab(activeTabId()) — زرّه ليس النشط — فكان
+   «تجاهل» يعمل على الخادم والسطر يبقى ظاهراً في النافذة. نرسمه مباشرة. */
+function priceReviewRefreshUI(){
+  if(!q('priceReview')?.classList.contains('active')){ try{ renderPriceReview(); }catch(_e){} }
+}
 async function priceReviewSaveRow(code){
   const input=__prInputs[code];
   const price=moneyVal(input?.value||0);
@@ -10573,15 +10581,28 @@ async function priceReviewSaveRow(code){
     await logAction('price_review_save','pos_products',code,`سعر ${code}: ${money(oldP)} → ${money(price)}`);
     toast('تم حفظ السعر وحل الملاحظة');
     await refreshParts(['priceReviewQueue','products'],{silent:true});
-  }catch(e){ console.error(e); toast('تعذّر الحفظ: '+e.message,'error'); }
+    priceReviewRefreshUI();
+  }catch(e){
+    console.error(e); toast('تعذّر الحفظ: '+e.message,'error');
+    /* حدّث القائمة رغم الفشل — سطر تالٍ (حُلّ من جهاز آخر) يجب أن يختفي */
+    await refreshParts(['priceReviewQueue'],{silent:true}).catch(()=>{});
+    priceReviewRefreshUI();
+  }
 }
 async function priceReviewDismissRow(code){
   if(!confirm(`تجاهل ${code} دون تغيير السعر؟`)) return;
   try{
     await rpc('pos_price_review_resolve',{p_product_code:code,p_new_price:null,p_status:'dismissed'});
     await logAction('price_review_dismiss','pos_products',code,`تجاهل ${code} دون تغيير السعر`);
+    toast('تم تجاهل الملاحظة');
     await refreshParts(['priceReviewQueue'],{silent:true});
-  }catch(e){ console.error(e); toast('تعذّر التجاهل: '+e.message,'error'); }
+    priceReviewRefreshUI();
+  }catch(e){
+    console.error(e); toast('تعذّر التجاهل: '+e.message,'error');
+    /* فشل «غير موجود» = حُلّ السطر من جهاز آخر — التحديث يُخفيه بدل بقائه */
+    await refreshParts(['priceReviewQueue'],{silent:true}).catch(()=>{});
+    priceReviewRefreshUI();
+  }
 }
 async function priceReviewAcceptAll(){
   const rows=priceReviewFilteredRows();
@@ -10595,7 +10616,11 @@ async function priceReviewAcceptAll(){
     await logAction('price_review_accept_all','pos_products','',`قبول كل المقترح: ${res?.applied??0} منتج (فلتر: ${JSON.stringify(priceReviewFilters())})`);
     toast(`تم تطبيق السعر المقترح على ${res?.applied??0} منتج`);
     await refreshParts(['priceReviewQueue','products'],{silent:true});
-  }catch(e){ console.error(e); toast('تعذّر القبول الجماعي: '+e.message,'error'); }
+    priceReviewRefreshUI();
+  }catch(e){ console.error(e); toast('تعذّر القبول الجماعي: '+e.message,'error');
+    await refreshParts(['priceReviewQueue'],{silent:true}).catch(()=>{});
+    priceReviewRefreshUI();
+  }
 }
 
 /* ───────────── SPEC §4 — الرفع الجماعي: معاينة ثم تطبيق ───────────── */
