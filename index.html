@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261006-1920">
+<link rel="stylesheet" href="app.css?v=20261006-2022">
 </head>
 <body class="auth-locked">
   <header>
@@ -186,6 +186,7 @@
             <select id="productSupplierFilter" onchange="renderProducts()"></select>
             <button class="btn secondary" type="button" onclick="clearProductFilters()">مسح الفلاتر</button>
             <button class="btn secondary" onclick="loadAll()">تحديث</button>
+            <button class="btn secondary" type="button" onclick="resetTableColumns('products')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
           </div>
           <!-- [3] شريط الإجراءات — يظهر عند تحديد صف -->
           <div class="row sticky-actions hidden" id="productActionBar" style="margin-bottom:6px;gap:6px;padding:6px 10px;border-radius:10px;background:color-mix(in srgb,var(--blue) 10%,transparent)">
@@ -229,6 +230,7 @@
                 <option value="">الكل</option>
               </select>
               <button class="btn" id="prAcceptAllBtn" type="button" onclick="priceReviewAcceptAll()">قبول كل المقترح</button>
+              <button class="btn secondary" type="button" onclick="resetTableColumns('priceReview')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
             </div>
           </div>
           <p class="mini" style="margin:4px 0 10px">تُملأ تلقائياً عند تغيّر تكلفة منتج بفاتورة شراء (من أي جهاز). «التكلفة الجديدة» = تكلفة <b>آخر فاتورة شراء</b> للمنتج في المنظومة الجديدة. <b>السعر المقترح</b> يعيد الهامش القديم على التكلفة الجديدة، وتقريبه لأعلى إلى 0.5. التناقص فرصة لتخفيض السعر — معروض في فلترة خاصة حتى لا يختلط بالطارئ.</p>
@@ -268,6 +270,7 @@
           <div id="bpIdle" class="mini" style="padding:14px;text-align:center">اختر ماركة أو مورّداً أو اكتب في البحث لعرض المنتجات</div>
           <div id="bpListWrap" style="display:none">
             <div class="row" style="gap:10px;margin:8px 0;align-items:center;flex-wrap:wrap">
+              <button class="btn secondary" type="button" onclick="resetTableColumns('bulkPrice')" title="إعادة أعمدة الجدول إلى العرض الافتراضي" style="padding:4px 10px">↔ الأعمدة</button>
               <span class="badge yellow" id="bpCountBadge">0 منتج</span>
               <span class="mini" id="bpTotalDelta"></span>
               <span class="badge green" id="bpServerBadge" style="display:none"></span>
@@ -454,7 +457,11 @@
               <div class="pos-items-card">
                 <div class="pos-items-head">
                   <h2>الأصناف (<span id="saleItemsCount">0</span>)</h2>
-                  <div class="row"><button class="btn secondary" type="button" onclick="addSaleRowAndFocus()">+ صنف يدوي</button></div>
+                  <div class="row">
+                    <button class="btn secondary" type="button" onclick="addSaleRowAndFocus()">+ صنف يدوي</button>
+                    <button class="btn secondary" type="button" id="saleDensityBtn" onclick="toggleSaleDensity()" title="تبديل كثافة الصفوف: مضغوط = سطر واحد لكل صنف">مضغوط</button>
+                    <button class="btn secondary" type="button" onclick="resetTableColumns('saleItems')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
+                  </div>
                 </div>
                 <div class="table-scroll sale-lines-scroll">
                   <table>
@@ -541,6 +548,7 @@
             <button class="btn secondary" type="button" onclick="convertSelectedSaleToProforma()">تحويل لمبدئية</button>
             <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
+            <button class="btn secondary" type="button" onclick="resetTableColumns('salesList')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
           </div>
           <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>هامش</th><th>البائع</th></tr></thead><tbody id="salesBody"></tbody></table></div>
           <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
@@ -643,7 +651,7 @@
 
             <div class="tools" style="margin-top:16px">
               <h2 style="font-size:18px;margin:0">الأصناف</h2>
-              <button class="btn secondary" type="button" onclick="addPurchaseRow()">+ إضافة صنف يدوي</button><button class="btn secondary" type="button" onclick="openPurchaseProductPicker()">قائمة المنتجات F3</button>
+              <button class="btn secondary" type="button" onclick="addPurchaseRow()">+ إضافة صنف يدوي</button><button class="btn secondary" type="button" onclick="openPurchaseProductPicker()">قائمة المنتجات F3</button><button class="btn secondary" type="button" onclick="resetTableColumns('purchaseItems')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
             </div>
             <div class="table-scroll">
               <table>
@@ -724,7 +732,7 @@
             </div>
             <div class="tools" style="margin-top:16px">
               <h2 style="font-size:18px;margin:0">الأصناف المحولة</h2>
-              <button class="btn secondary" type="button" onclick="addTransferRow()">+ إضافة صنف</button><button class="btn secondary" type="button" onclick="openTransferProductPicker()">قائمة المنتجات F3</button>
+              <button class="btn secondary" type="button" onclick="addTransferRow()">+ إضافة صنف</button><button class="btn secondary" type="button" onclick="openTransferProductPicker()">قائمة المنتجات F3</button><button class="btn secondary" type="button" onclick="resetTableColumns('transferItems')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
             </div>
             <div class="table-scroll">
               <table>
@@ -1489,6 +1497,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261006-1920"></script>
+<script src="app.js?v=20261006-2022"></script>
 </body>
 </html>

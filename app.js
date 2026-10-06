@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261006-1920';
+const APP_BUILD='b20261006-2022';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -112,7 +112,7 @@ function fillProductNote(tr,sel,code){
   const note=tr.querySelector(sel);
   /* (0082) الماركة والموديل صارا عمودين مستقلّين بعد الاسم، فالسطر الصغير
      تحت الكود يكتفي بالمورد — كان يكرّرهما. */
-  if(note) note.textContent=p.supplier_name||'';
+  if(note){ note.textContent=p.supplier_name||''; note.title=note.textContent; } /* (20261006h) سطر واحد بعنوان كامل عند التحويم */
   fillLineAttrs(tr,p);
 }
 /* (0082) عمودا الماركة والموديل في سطر فاتورة البيع والشراء */
@@ -1319,6 +1319,181 @@ const TAB_RENDERERS={
 const tabDirty={};
 function activeTabId(){const a=document.querySelector('nav button.active'); return a?.dataset.tab||'dashboard';}
 function markAllTabsDirty(){Object.keys(TAB_RENDERERS).forEach(t=>{tabDirty[t]=true;});}
+/* ════ (20261006h) TABLE-LAYOUT-AND-COLUMN-RESIZE-SPEC — أعمدة قابلة للسحب ════
+   بناء واحد عامّ لكل الجداول (سحب المقبض، نقرة مزدوجة = ملاءمة، حفظ لكل
+   جدول) — الجداول تدخل واحداً واحداً من RESIZABLE_TABLES أدناه.
+   التخزين: مفتاح مستقلّ صغير posColWidths (بضع مئات بايت) بمعزل عن
+   الكاش المتخم — وكل قراءة/كتابة داخل try/catch: فشل الحصة = افتراضيات،
+   لا جدول مكسور (المواصفة 🔴). */
+const POS_COL_WIDTHS_KEY='posColWidths';
+const POS_COL_MIN=48;                       /* أرضية عمود — لا يُسحب إلى صفر */
+const __colTables={};                       /* storageKey -> table */
+
+function posColStore(){
+  try{ const m=JSON.parse(localStorage.getItem(POS_COL_WIDTHS_KEY)||'{}');
+       return (m&&typeof m==='object'&&!Array.isArray(m))?m:{}; }
+  catch(e){ return {}; }                    /* تخزين فاسد/محجوب = افتراضيات */
+}
+function posColStoreSave(map){
+  try{ localStorage.setItem(POS_COL_WIDTHS_KEY,JSON.stringify(map)); }
+  catch(e){ /* الحصة ممتلئة: بلا حفظ — الجلسة الحالية تعمل كالمعتاد */ }
+}
+function __colEnsureColgroup(table,nCols){
+  /* الجداول التي يُعاد بناء داخلها بالكامل (innerHTML) تترك colgroup
+     قديماً منفصلاً — الإلحاق شرط الصلاحية */
+  let cg=table.__colgroup;
+  if(!cg||cg.parentNode!==table){
+    cg=document.createElement('colgroup'); table.insertBefore(cg,table.firstChild); table.__colgroup=cg;
+  }
+  while(cg.children.length<nCols){ cg.appendChild(document.createElement('col')); }
+  while(cg.children.length>nCols){ cg.lastElementChild.remove(); }
+  return cg;
+}
+/* النظام كله عربي (rtl) — getComputedStyle متاح في المتصفح، وعند غيابه
+   (بيئات الاختبار) الافتراضي rtl كما يشغَّل هذا التطبيق */
+function __colRtl(table){
+  try{
+    if(typeof getComputedStyle==='function'){
+      const d=getComputedStyle(table).direction; if(d) return d==='rtl';
+    }
+  }catch(e){}
+  const de=table.ownerDocument&&table.ownerDocument.documentElement;
+  return !(de&&de.dir==='ltr');
+}
+/* تثبيت العروض الحالية بالبكسل ثم التخطيط الثابت — قبل أول سحب/ملاءمة
+   (العروض لا تُطبَّق بموثوقية تحت table-layout:auto) */
+function __colFreezeWidths(table,cg){
+  [...table.querySelectorAll('thead th')].forEach((th,i)=>{
+    if(cg.children[i]) cg.children[i].style.width=Math.round(Number(th.offsetWidth)||0)+'px';
+  });
+  table.style.tableLayout='fixed'; table.__colFixed=true;
+}
+function posColPersist(table,cg,storageKey){
+  if(!table.__colFixed) return;
+  const m=posColStore();
+  m[storageKey]=[...cg.children].map(c=>Math.round(parseFloat(c.style.width)||0));
+  posColStoreSave(m);
+}
+function colResizeStart(ev,table,cg,idx,th,storageKey){
+  if(ev.button!==undefined&&ev.button!==0) return;
+  ev.preventDefault(); ev.stopPropagation();
+  const h=ev.currentTarget;
+  try{ h.setPointerCapture(ev.pointerId); }catch(e){}
+  if(!table.__colFixed) __colFreezeWidths(table,cg);
+  const rtl=__colRtl(table);
+  const col=cg.children[idx];
+  const w0=parseFloat(col.style.width)||Math.round(Number(th.offsetWidth)||0);
+  const x0=ev.clientX;
+  /* RTL: المقبض على الحافة الطرفية (inline-end = يسار)؛ جرّه يساراً (dx سالب)
+     يوسّع العمود — الحساب معكوس الاتجاه كما في المواصفة (ب-٢). */
+  const move=e2=>{
+    const dx=e2.clientX-x0;
+    const w=Math.max(POS_COL_MIN,Math.round(w0+(rtl?-dx:dx)));
+    col.style.width=w+'px';                  /* حيّ — الحيّز المجاور يتكيّف */
+  };
+  const finish=()=>{
+    h.removeEventListener('pointermove',move);
+    h.removeEventListener('pointerup',finish);
+    h.removeEventListener('pointercancel',finish);
+    try{ h.releasePointerCapture(ev.pointerId); }catch(e){}
+    posColPersist(table,cg,storageKey);      /* الحفظ عند الإفلات فقط */
+  };
+  h.addEventListener('pointermove',move);
+  h.addEventListener('pointerup',finish);
+  h.addEventListener('pointercancel',finish);
+}
+function colAutoFit(table,cg,idx,storageKey){
+  /* ملاءمة أوسع خلية ظاهرة: قياس طبيعي لحظي (تغييرات متزامنة بلا رسم
+     بينهما فلا وميض)، ثم إعادة التثبيت */
+  const ths=[...table.querySelectorAll('thead th')];
+  if(!ths[idx]) return;
+  if(!table.__colFixed) __colFreezeWidths(table,cg);
+  const prev=cg.children.map(c=>c.style.width);
+  cg.children.forEach(c=>c.style.width='');
+  const prevLayout=table.style.tableLayout;
+  table.style.tableLayout='auto';
+  const natural=Math.round(Number(ths[idx].offsetWidth)||0);
+  cg.children.forEach((c,i)=>c.style.width=prev[i]);
+  table.style.tableLayout=prevLayout;
+  cg.children[idx].style.width=Math.max(POS_COL_MIN,natural)+'px';
+  posColPersist(table,cg,storageKey);
+}
+function makeTableResizable(table,storageKey){
+  if(!table) return;
+  const ths=[...table.querySelectorAll('thead th')];
+  if(!ths.length) return;
+  __colTables[storageKey]=table;
+  /* إعادة تهيئة عند تغيّر عدد الأعمدة أو إعادة بناء الرأس (قائمة أعمدة
+     المنتجات، أعمدة النسبة في تعديل الأسعار) — وإلا فلا عمل مكرر */
+  if(table.__colKey===storageKey && table.__colCount===ths.length
+     && ths[0].__colHandle) return;
+  table.__colKey=storageKey; table.__colCount=ths.length;
+  const cg=__colEnsureColgroup(table,ths.length);
+  /* عروض محفوظة ⇒ طبّقها وفعّل التخطيط الثابت (بلا قياس — يعمل والقسم مخفي) */
+  const saved=posColStore()[storageKey];
+  if(Array.isArray(saved)&&saved.some(w=>w>=POS_COL_MIN)){
+    saved.slice(0,ths.length).forEach((w,i)=>{
+      if(w>=POS_COL_MIN) cg.children[i].style.width=w+'px';
+    });
+    table.style.tableLayout='fixed'; table.__colFixed=true;
+  }
+  ths.forEach((th,idx)=>{
+    th.classList.add('col-th');
+    if(th.__colHandle) return;               /* الرأس أعيد بناؤه جزئياً */
+    const h=document.createElement('div');
+    h.className='col-resizer';
+    h.title='اسحب لتغيير عرض العمود — نقرة مزدوجة = ملاءمة أوسع خلية';
+    h.addEventListener('pointerdown',ev=>colResizeStart(ev,table,cg,idx,th,storageKey));
+    h.addEventListener('dblclick',ev=>{ ev.preventDefault(); ev.stopPropagation(); colAutoFit(table,cg,idx,storageKey); });
+    /* السحب/الملاءمة لا تُفتّش العمود — أوقف النقل قبل مستمعي الترتيب */
+    h.addEventListener('click',ev=>ev.stopPropagation());
+    th.appendChild(h); th.__colHandle=h;    /* تتبّع المقبض — إعادة التهيئة الآمنة */
+  });
+}
+function resetTableColumns(storageKey){
+  const table=__colTables[storageKey]; if(!table) return;
+  const m=posColStore(); delete m[storageKey]; posColStoreSave(m);
+  const cg=__colEnsureColgroup(table,table.querySelectorAll('thead th').length);
+  [...cg.children].forEach(c=>c.style.width='');
+  table.style.tableLayout=''; table.__colFixed=false;
+  toast('أعيدت أعمدة الجدول إلى العرض الافتراضي');
+}
+/* كثافة صفوف فاتورة البيع: مضغوط/مريح — محفوظة مع عروض الأعمدة */
+function posDensityGet(){
+  const d=posColStore()._density;
+  return (d&&d.saleItems==='compact')?'compact':'comfort';
+}
+function applySaleDensity(){
+  const compact=posDensityGet()==='compact';
+  const sec=q('sales'); if(sec) sec.classList.toggle('sale-compact',compact);
+  const b=q('saleDensityBtn');
+  if(b){ b.textContent=compact?'مريح':'مضغوط';
+         b.title=compact?'الوضع المريح: يُظهر السطر الفرعي تحت الكود':'الوضع المضغوط: سطر واحد لكل صنف — يخفي السطر الفرعي'; }
+}
+function toggleSaleDensity(){
+  const m=posColStore(); m._density=m._density||{};
+  m._density.saleItems=posDensityGet()==='compact'?'comfort':'compact';
+  posColStoreSave(m); applySaleDensity();
+}
+/* الجداول المشمولة (المواصفة ب-٥): فواتير البيع/الشراء، التحويل، المنتجات،
+   قائمة البيع، مراجعة الأسعار، تعديل الأسعار — نداء واحد لكل جدول */
+const RESIZABLE_TABLES=[
+  ['saleItemsBody','saleItems'],
+  ['purchaseItemsBody','purchaseItems'],
+  ['transferItemsBody','transferItems'],
+  ['productsBody','products'],
+  ['salesBody','salesList'],
+  ['priceReviewBody','priceReview'],
+  ['bpListBody','bulkPrice'],
+];
+function initResizableTables(){
+  RESIZABLE_TABLES.forEach(([tbodyId,key])=>{
+    const tb=q(tbodyId); if(tb) makeTableResizable(tb.closest('table'),key);
+  });
+  applySaleDensity();
+}
+document.addEventListener('DOMContentLoaded',applySaleDensity);
+
 function renderTab(tab, force=false){
   const fn=TAB_RENDERERS[tab]; if(!fn) return;
   if(!force && tabDirty[tab]===false) return; /* رُسِم من بعد آخر تغيير — لا عمل مكرر */
@@ -1326,6 +1501,7 @@ function renderTab(tab, force=false){
   try{ fn(); }catch(e){ console.error('render tab '+tab, e); }
   tabDirty[tab]=false;
   setTimeout(setupTableSorting,0); /* مرتبّ — آمن عند التكرار (dataset.sortReady) */
+  try{ initResizableTables(); }catch(e){ console.warn('col-resize init',e); } /* (20261006h) آمن التكرار — الرؤوس تُعاد */
 }
 function renderAll(){
   renderProductDatalist(); fillSupplierSelects(); renderStatusBar(); applyPermissions();
@@ -2503,6 +2679,7 @@ function renderProducts(){
   rows.sort((a,b)=>{const va=key==='margin_value'?a._mv:(key==='margin_pct'?a._mp:(a[key]??'')), vb=key==='margin_value'?b._mv:(key==='margin_pct'?b._mp:(b[key]??'')); const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va).localeCompare(String(vb),'ar'); return productSortDir==='asc'?c:-c;});
   const shown=rows.slice(0,100);
   applyProductColVisibility(shown, smartParsed);
+  try{ initResizableTables(); }catch(e){ console.warn('col-resize init',e); } /* (20261006h) الجدول أُعيد بناؤه بالكامل */
 
   const sp=selectedProductCode?products.find(p=>p.code===selectedProductCode):null;
   if(q('selectedProductInfo')) q('selectedProductInfo').textContent=sp?`المحدد: ${sp.code} - ${sp.name}`:'';
@@ -3622,7 +3799,7 @@ function addOrIncrementTransferProduct(p, qty=1){
   const existing=rows.find(tr=>String(tr.querySelector('.ti-code')?.value||'').trim().toLowerCase()===String(p.code||'').toLowerCase());
   if(existing){const inp=existing.querySelector('.ti-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updateTransferAvailable(inp); return;}
   addTransferRow({product_code:p.code,product_name:p.name,qty});
-  const last=q('transferItemsBody').lastElementChild; if(last){const note=last.querySelector('.ti-product-note'); if(note) note.textContent=[p.brand,p.model,p.color,p.category].filter(Boolean).join(' - '); updateTransferAvailable(last.querySelector('.ti-qty'));}
+  const last=q('transferItemsBody').lastElementChild; if(last){const note=last.querySelector('.ti-product-note'); if(note){ note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - '); note.title=note.textContent; } updateTransferAvailable(last.querySelector('.ti-qty'));} /* (20261006h) موحّد مع 0082 — سطر واحد بالنقاط */
 }
 function addTransferRow(item={}){
   const tr=document.createElement('tr');
@@ -5246,7 +5423,7 @@ function fillSaleRow(input){
   if(mergeSaleDuplicateRows(tr,p.code)) return;
   fillLineAttrs(tr,p);   /* (0082) الماركة والموديل عمودان مستقلّان */
   const note=tr.querySelector('.si-product-note');
-  if(note) note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - ');
+  if(note){ note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - '); note.title=note.textContent; }
   updateSaleTotal(); updateSaleAvailable(input); renderSaleStockInfo(p.code);
 }
 function updateSaleAvailable(el){
@@ -5283,7 +5460,7 @@ function addOrIncrementSaleProduct(p, qty=1){
     if(last){
       last.style.boxShadow='inset 3px 0 0 #7c3aed';
       const note=last.querySelector('.si-product-note');
-      if(note) note.innerHTML='<span style="color:#7c3aed;font-weight:800">مركّب:</span> '+comps.map(ci=>`<span class="ltr" style="color:#7c3aed;font-weight:700">${esc(ci.component_code)}×${Number(ci.qty||1)}</span>`).join('<span style="color:#7c3aed">، </span>');
+      if(note){ note.innerHTML='<span style="color:#7c3aed;font-weight:800">مركّب:</span> '+comps.map(ci=>`<span class="ltr" style="color:#7c3aed;font-weight:700">${esc(ci.component_code)}×${Number(ci.qty||1)}</span>`).join('<span style="color:#7c3aed">، </span>'); note.title=note.textContent; }
       updateSaleAvailable(last.querySelector('.si-qty'));
     }
     updateSaleTotal(); renderSaleStockInfo(p.code);
@@ -5294,7 +5471,7 @@ function addOrIncrementSaleProduct(p, qty=1){
   const existing=rows.find(tr=>String(tr.querySelector('.si-code')?.value||'').trim().toLowerCase()===String(p.code||'').toLowerCase());
   if(existing){const inp=existing.querySelector('.si-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updateSaleTotal(); updateSaleAvailable(inp); return;}
   addSaleRow({product_code:p.code,product_name:p.name,qty,unit_price:(getSaleWholesale()&&Number(p.wholesale_price)>0)?Number(p.wholesale_price):Number(p.retail_price||0)});
-  const last=q('saleItemsBody').lastElementChild; if(last){const note=last.querySelector('.si-product-note'); if(note) note.textContent=[p.brand,p.model,p.color,p.category].filter(Boolean).join(' - '); updateSaleAvailable(last.querySelector('.si-qty'));} renderSaleStockInfo(p.code);
+  const last=q('saleItemsBody').lastElementChild; if(last){const note=last.querySelector('.si-product-note'); if(note){ note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - '); note.title=note.textContent; } updateSaleAvailable(last.querySelector('.si-qty'));} renderSaleStockInfo(p.code); /* (20261006h) نفس محتوى 0082 — الماركة والموديل عمودان مستقلّان، والسطر سطر واحد */
 }
 
 function mergeSaleDuplicateRows(currentTr, productCode){
@@ -10812,6 +10989,7 @@ function bpMarginCell(price,cost){
 function renderBulkPriceList(){
   const body=q('bpListBody'); if(!body) return;
   const head=q('bpListHead'), wrap=q('bpListWrap'), idle=q('bpIdle');
+  /* (20261006h) الرأس يُعاد بناؤه (أعمدة «بعد» تظهر/تختفي) — المقابض تُعاد */
   if(!head||!wrap||!idle) return;
   const s=bpScope(); const t=bpSearchTerm();
   if(!(t||s.brand||s.supplier_id||s.category)){
@@ -10826,6 +11004,7 @@ function renderBulkPriceList(){
   const pct=s.pct, showAfter=pct>0;
   head.innerHTML='<tr><th>الكود</th><th>الاسم</th><th>الماركة</th><th>المورّد</th><th>التكلفة</th><th>سعر البيع</th><th>هامش البيع %</th><th>سعر الجملة</th><th>هامش الجملة %</th>'
     +(showAfter?'<th>سعر البيع الجديد</th><th>الهامش الجديد %</th><th>الفرق</th>':'')+'</tr>';
+  try{ makeTableResizable(head.closest('table'),'bulkPrice'); }catch(e){} /* (20261006h) الرأس أُعيد بناؤه — المقابض تُعاد */
   const badge=q('bpCountBadge'), deltaEl=q('bpTotalDelta');
   if(!rows.length){
     body.innerHTML='<tr><td colspan="12" style="text-align:center;opacity:.6">لا منتجات مطابقة</td></tr>';

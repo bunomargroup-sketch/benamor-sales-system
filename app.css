@@ -1159,3 +1159,38 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
 
 /* (0116) شارة عدّاد على أزرار القائمة الجانبية — عدّ المراجعات المعلقة */
 .nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;margin-inline-start:8px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;font-weight:800;line-height:1}
+
+    /* ════ (20261006h) TABLE-LAYOUT-AND-COLUMN-RESIZE-SPEC ════ */
+
+    /* (أ) الأرقام لا تُقصّ أبداً — أرضيات عرض + أرقام جدولية متوسّطة.
+       اختُبرت على 1366×768 (شاشات الفروع): الكمية والسعر والإجمالي
+       كاملة الظهور في كل صف. */
+    #saleItemsBody input.si-code{min-width:150px}               /* الكود كاملاً — AASB30003 لا يُقتطع */
+    #saleItemsBody input.si-qty{min-width:64px;text-align:center;font-variant-numeric:tabular-nums}
+    #saleItemsBody input.si-price{min-width:88px;text-align:center;font-variant-numeric:tabular-nums}
+    #saleItemsBody input.si-discount{min-width:72px;text-align:center;font-variant-numeric:tabular-nums}
+    #saleItemsBody td.si-margin,#saleItemsBody td.si-margin-pct,#saleItemsBody td.si-available,#saleItemsBody td.si-line{white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
+    #saleItemsBody td.si-available,#saleItemsBody td.si-line{min-width:96px}
+    #purchaseItemsBody input.pi-code{min-width:150px}
+    #purchaseItemsBody input.pi-qty{min-width:64px;text-align:center;font-variant-numeric:tabular-nums}
+    #purchaseItemsBody input.pi-cost{min-width:88px;text-align:center;font-variant-numeric:tabular-nums}
+    #purchaseItemsBody td.pi-line{min-width:96px;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
+    #transferItemsBody input.ti-code{min-width:150px}
+    #transferItemsBody input.ti-qty{min-width:64px;text-align:center;font-variant-numeric:tabular-nums}
+    #transferItemsBody .ti-available{white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
+
+    /* (ج) السطر الفرعي تحت الكود: سطر واحد بنقاط نهاية والعنوان الكامل
+       عند التحويم — لا التفاف إلى سطرين/ثلاثة فيرفع ارتفاع الصف */
+    #saleItemsBody .si-product-note,#purchaseItemsBody .pi-product-note,#transferItemsBody .ti-product-note{
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+    }
+    /* الوضع المضغوط: يخفي السطر الفرعي كلياً ويشدّ الحشو — صف نصّ واحد */
+    #sales.sale-compact #saleItemsBody .si-product-note{display:none}
+    #sales.sale-compact #saleItemsBody td{padding-top:1px;padding-bottom:1px}
+    #sales.sale-compact #saleItemsBody input{min-height:26px}
+
+    /* (ب) مقابض سحب الأعمدة — على الحافة الطرفية (inline-end: اليسار في
+       العربية)؛ العرض الحدّي الأدنى يفرضه POS_COL_MIN في المحرّك */
+    th.col-th{position:relative;padding-inline-end:14px}
+    .col-resizer{position:absolute;top:0;bottom:0;inset-inline-end:-3px;width:7px;cursor:col-resize;touch-action:none;z-index:3}
+    .col-resizer:hover,.col-resizer:active{background:color-mix(in srgb,var(--blue) 45%,transparent);border-radius:3px}
