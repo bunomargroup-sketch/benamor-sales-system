@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261006-1134';
+const APP_BUILD='b20261006-1157';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2414,6 +2414,13 @@ function updateProductFormMargin(){
     if(!(cost>0)){ cost=enteredCost; est=cost>0; } /* لا تاريخ تكلفة: تقدير من سعر الشراء */
   } else { cost=enteredCost; est=cost>0; }
   if(!(retail>0) && !(cost>0)){ el.style.display='none'; return; }
+  if(!(cost>0)){
+    /* (20261006b) لا تكلفة معروفة: لا نعرض 0.0٪ مضلِّلة */
+    el.style.display='';
+    el.innerHTML='الهامش: <b>—</b> <span style="font-weight:400;opacity:.75">(لا تكلفة معروفة — أدخل سعر الشراء ليُحسب الهامش)</span>';
+    el.style.color='';
+    return;
+  }
   const mv=retail-cost, mp=marginOf(retail,cost);
   el.style.display='';
   el.innerHTML=`الهامش: <b>${money(mv)} ${APP_CONFIG.currency}</b> · <b>${mp.toFixed(1)}٪</b> <span style="font-weight:400;opacity:.75">(التكلفة: ${money(cost)}${est?' — تقديري':''})</span>`;
@@ -10489,7 +10496,9 @@ function priceReviewFilters(){
     brand:String(q('prBrandFilter')?.value||''),
     supplier:String(q('prSupplierFilter')?.value||''),
     category:String(q('prCategoryFilter')?.value||''),
-    direction:String(q('prDirectionFilter')?.value||'up') /* الافتراضي: الزيادات فقط */
+    /* (20261006b) «الكل» قيمة صريحة صالحة: لا ن强迫ها إلى up.
+       الافتراضي يبقى الزيادات لأن أول خيار في القائمة هو up عند الفتح. */
+    direction:(q('prDirectionFilter') ? String(q('prDirectionFilter').value||'') : 'up')
   };
 }
 function priceReviewFilteredRows(){
@@ -10504,6 +10513,9 @@ function priceReviewFilteredRows(){
     return true;
   });
 }
+/* (20261006b) كانت هذه الدالة مفقودة من index.html (كل قوائم الفلترة
+   تستدعيها في onchange) — الفلاتر كانت لا تعمل إطلاقاً في المتصفح */
+function priceReviewFilterChanged(){ renderPriceReview(); }
 function renderPriceReview(){
   const body=q('priceReviewBody'); if(!body) return;
   /* فلاتر قابلة للدمج (AND) — القيم من قائمة المنتجات الحالية */
@@ -10514,7 +10526,8 @@ function renderPriceReview(){
   fill('prBrandFilter','brand','كل الماركات');
   fill('prSupplierFilter','supplier_name','كل الموردين');
   fill('prCategoryFilter','category','كل التصنيفات');
-  q('prDirectionFilter') && (q('prDirectionFilter').value = q('prDirectionFilter').value || 'up');
+  /* (20261006b) نطبّع القيم غير الصالحة فقط — '' (=الكل) قيمة مقصودة */
+  q('prDirectionFilter') && !['','up','down'].includes(q('prDirectionFilter').value) && (q('prDirectionFilter').value='up');
 
   const rows=priceReviewFilteredRows();
   const mgr=isManager();
@@ -10533,7 +10546,7 @@ function renderPriceReview(){
       ? `<button class="btn mini" type="button" onclick="priceReviewSaveRow(&quot;${esc(r.product_code)}&quot;)">حفظ</button>
          <button class="btn secondary mini" type="button" onclick="priceReviewDismissRow(&quot;${esc(r.product_code)}&quot;)">تجاهل</button>`
       : '';
-    return `<tr data-code="${esc(r.product_code)}">
+    return `<tr data-code="${esc(r.product_code)}" data-old-cost="${oldC}" data-new-cost="${newC}">
       <td class="ltr">${esc(r.product_code)}</td><td>${esc(p.name||'')}</td><td>${esc(p.brand||'—')}</td>
       <td>${money(oldC)}</td><td><b>${money(newC)}</b></td>
       <td style="color:${chgCls};font-weight:700">${chg===null?'—':(chg>=0?'+':'')+chg.toFixed(1)+'%'}</td>
@@ -10557,12 +10570,21 @@ function renderPriceReview(){
   }
 }
 function priceReviewMarginAfterEdit(input,code){
-  const r=priceReviewQueue.find(x=>String(x.product_code)===String(code)); if(!r) return;
-  const span=input?.closest?.('tr')?.querySelector?.('[data-pr-margin]');
+  const tr=input?.closest?.('tr');
+  const span=tr?.querySelector?.('[data-pr-margin]');
   if(!span) return;
+  /* (20261006b) التكلفة من بيانات السطر المرسوم نفسه (data-new-cost) لا
+     من المصفوفة العالمية — كانت النبضة/أي تحديث يستبدلانها بصفوف ناقصة
+     فيصير الهامش 0 عند الكتابة. السطر المرسوم هو مصدر الحقيقة هنا. */
+  let newCost=Number(tr?.getAttribute?.('data-new-cost'));
+  if(!(newCost>0)){
+    const r=priceReviewQueue.find(x=>String(x.product_code)===String(code));
+    newCost=Number(r?.new_cost||0);
+  }
   const price=moneyVal(input.value);
-  span.textContent=money(price-Number(r.new_cost||0))+' · '+marginOf(price,r.new_cost).toFixed(1)+'%';
-  span.style.color=marginOf(price,r.new_cost)<0?'var(--bad)':'';
+  if(!(newCost>0)){ span.textContent='—'; span.style.color=''; return; } /* لا تكلفة معروفة — لا هامش مزيف */
+  span.textContent=money(price-newCost)+' · '+marginOf(price,newCost).toFixed(1)+'%';
+  span.style.color=marginOf(price,newCost)<0?'var(--bad)':'';
 }
 /* (20261006) إعادة رسم القائمة بعد أي حلّ/تجاهل/قبول: القسم مفتوح في نافذة
    عائمة لا يغطّيه renderTab(activeTabId()) — زرّه ليس النشط — فكان
