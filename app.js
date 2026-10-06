@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261006-1332';
+const APP_BUILD='b20261006-1829';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1486,6 +1486,11 @@ const ROLE_RANK={viewer:0,seller_11:1,seller_sarraj:1,warehouse:1,sales_purchase
 function roleRank(r){ return ROLE_RANK[String(r||'')] ?? 0; }
 function isManager(){ return roleRank(currentRole?.role) >= ROLE_RANK.admin; }
 function isProgrammer(){ return roleRank(currentRole?.role) >= ROLE_RANK.programmer; }
+/* (20261006e) 1993 (المبرجج) يجب أن يستطيع فعل كل شيء: قوائم الأدوار
+   الصلبة في مواضع تعديل الفاتورة كانت تستثني المبرمج — لا يظهر له زر
+   «تعديل» أصلاً ويُرفض داخل openSaleForEdit. isManager() تشمله
+   (رتبته فوق admin) فتصبح القائمة: مدير/مبرمج/بيع وشراء/بائعا الفرعين. */
+function canEditSales(){ return isManager() || ['sales_purchase','seller_11','seller_sarraj'].includes(String(currentRole?.role||'')); }
 const SUPERVISOR_DISCOUNT_THRESHOLD=0.10;
 let saleSupervisorApproved=false;
 async function verifySupervisorCredentials(identifier,code){
@@ -5175,7 +5180,7 @@ q('salesBody')?.addEventListener('contextmenu',e=>{
   items.push({label:'🖨️ طباعة',icon:'ti-printer',action:()=>printSale(id)});
   items.push({label:'👁️ مشاهدة الفاتورة (بشكل نموذج الإدخال)',icon:'ti-eye',action:()=>viewSaleDetails(id)});
   items.push({label:'🧾 معاينة بشكل الطباعة',icon:'ti-file-description',action:()=>viewSaleInvoice(id)});
-  if(['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role)) items.push({sep:true},{label:'✏️ تعديل',icon:'ti-edit',action:()=>openSaleForEdit(id)});
+  if(canEditSales()) items.push({sep:true},{label:'✏️ تعديل',icon:'ti-edit',action:()=>openSaleForEdit(id)});
   showCtxMenu(e.clientX,e.clientY,items);
 });
 function getSelectedSaleId(){if(!selectedSaleId){toast('اختر فاتورة من الجدول أولاً');return null;} return selectedSaleId}
@@ -5672,7 +5677,7 @@ function resetSaleForm(){
 async function openSaleForEdit(id){
   const role=currentRole?.role;
   if(sales.find(x=>x.id===id)?.offline_pending){toast('فاتورة محلية بانتظار المزامنة — تصبح قابلة للتعديل بعد وصولها للخادم','warn');return;}
-  if(!['admin','sales_purchase','seller_11','seller_sarraj'].includes(role)){toast('تعديل الفواتير للمدير وموظف البيع والشراء — للتصحيح استعمل المرتجع','warn');return;}
+  if(!canEditSales()){toast('تعديل الفواتير للمدير وموظف البيع والشراء — للتصحيح استعمل المرتجع','warn');return;}
   if(role==='seller_11'||role==='seller_sarraj'){
     const sl=sales.find(x=>x.id===id);
     if(!sl){toast('لم يتم العثور على الفاتورة','warn');return;}
@@ -5904,7 +5909,7 @@ function openSaleViewModal(sl,html){
   ensureSaleViewModal();
   viewSaleCtxId=sl.id;
   q('svTitle').textContent=String(sl.invoice_no||String(sl.id).slice(0,8))+' · '+String(sl.sale_date||'');
-  const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role) && !sl.offline_pending;
+  const canEdit=canEditSales() && !sl.offline_pending;
   q('svEditBtn').style.display=canEdit?'':'none';
   q('saleViewFrame').srcdoc=html;
   q('saleViewModal').classList.add('show'); modalToTop(q('saleViewModal'));
@@ -6021,7 +6026,7 @@ function renderSaleViewDetailsData(sl,items,linkedReturns){
       ${svdLine('مرتجعات على هذه الفاتورة',linkedReturns.length?(linkedReturns.length+' — '+money(retT)+' '+cur):'لا يوجد')}
       <div class="mini" style="margin-top:6px">البائع: ${esc(sl.seller||'—')} · سجّلت بواسطة: ${esc(sl.created_by||sl.cashier||'—')} · الحالة: ${esc(typeLabel(sl.status||'posted'))}${sl.notes?` · ملاحظات: ${esc(sl.notes)}`:''}</div>
     </div>`;
-  const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role) && !sl.offline_pending;
+  const canEdit=canEditSales() && !sl.offline_pending;
   q('svdEditBtn').style.display=canEdit?'':'none';
   if(q('svdTitle')) q('svdTitle').textContent=String(sl.invoice_no||String(sl.id).slice(0,8))+' · '+String(sl.sale_date||'');
 }
@@ -9343,7 +9348,7 @@ const CTX_BUILDERS={
       {label:'سعر البيع: '+money(p?.retail_price||0)+' '+APP_CONFIG.currency,icon:'ti-tag',action:()=>showProductStockSummary(code,'all')}];
   },
   salesBody(tr){const id=ctxArg(tr,'selectSaleRow'); if(!id) return []; selectSaleRow(id);
-    const canEdit=['admin','sales_purchase','seller_11','seller_sarraj'].includes(currentRole?.role);
+    const canEdit=canEditSales();
     const items=[{head:'فاتورة بيع'},
       {label:'مشاهدة الفاتورة (بشكل نموذج الإدخال)',icon:'ti-eye',action:()=>viewSaleDetails(id)},
       {label:'معاينة بشكل الطباعة',icon:'ti-file-description',action:()=>viewSaleInvoice(id)},
