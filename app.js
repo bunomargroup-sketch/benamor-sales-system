@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261006-1231';
+const APP_BUILD='b20261006-1332';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -411,10 +411,34 @@ const ESSENTIAL_CACHE_KEY='posEssentialCacheV1';
    تحديث دوري (كل 60 ثانية) — أي تجمّد ملموس بين الفاتورة والتالية.
    الآن: الاستدعاءات المتلاحقة تُدمج في كتابة واحدة عند خمول المتصفح، بمهلة قصوى
    4 ثوانٍ حتى لا تتأخر أبداً. وتُفرَغ فوراً عند إغلاق الصفحة أو إخفائها. */
+/* (20261006d) سُلّم الحصص: الذخيرة الكاملة على بيانات الإنتاج ~10.6MB أضعاف
+   سقف localStorage (~5MB) فكانت الكتابة تفشل دائماً بـ QuotaExceededError —
+   لا ذخيرة إطلاقاً وتكرار الأخطاء في الطابور. ننزل درجات: نُسقط أولاً أثقل
+   ما لا يلزم للبيع دون اتصال، فتُحفظ ذخيرة صالحة (وإن ناقصة) بدل لا شيء.
+   المستوى ١: بلا تاريخ المشتريات/المصاريف/القيود (يبقى تاريخ البيع للمرتجعات).
+   المستوى ٢: بلا تاريخ البيع إطلاقاً — البيع دون اتصال يعمل (منتجات/مخزون/
+   زبائن/موردين/مواقع/أدوار/حسابات مالية/تصنيفات مصاريف). */
+function persistEssentialCache(data){
+  const pick=(keys)=>{ const o={saved_at:data.saved_at}; keys.forEach(k=>{ if(data[k]!==undefined) o[k]=data[k]; }); return o; };
+  const lv=[
+    data,
+    pick(['locations','suppliers','stock','products','sales','saleItems','customers','userRoles','financeAccounts','expenseCategories']),
+    pick(['locations','suppliers','stock','products','customers','userRoles','financeAccounts','expenseCategories'])
+  ];
+  for(let i=0;i<lv.length;i++){
+    try{ localStorage.setItem(ESSENTIAL_CACHE_KEY,JSON.stringify(lv[i])); return i; }
+    catch(e){
+      if(!(e && /quota/i.test(String(e.name)+' '+String(e.message||'')))){ console.warn('essential cache save failed',e); return -1; }
+      /* حصة ممتلئة — جرّب المستوى الأصغر */
+    }
+  }
+  console.info('essential cache: لا تتسع ولو مُهزولة — بقيت الذخيرة السابقة كما هي');
+  return -1;
+}
 function saveEssentialCacheNow(){
   try{
     const data={saved_at:new Date().toISOString(),locations,suppliers,stock,purchases,purchaseItems,products,transfers,sales,saleItems,salePayments,customers,customerLedger,userRoles,financeAccounts,financeMovements,expenseCategories,expenses,dailyCashClosings};
-    localStorage.setItem(ESSENTIAL_CACHE_KEY,JSON.stringify(data));
+    persistEssentialCache(data);
   }catch(e){console.warn('essential cache save failed',e)}
 }
 let __cacheHandle=null, __cacheIsIdle=false;
@@ -479,7 +503,9 @@ function restoreBackup(input){
         salePayments:data.salePayments||[],customers:data.customers||[],customerLedger:data.customerLedger||[],
         userRoles:data.userRoles||[],financeAccounts:data.financeAccounts||[],financeMovements:data.financeMovements||[],
         expenseCategories:data.expenseCategories||[],expenses:data.expenses||[],dailyCashClosings:data.dailyCashClosings||[]};
-      localStorage.setItem(ESSENTIAL_CACHE_KEY,JSON.stringify(cache));
+      /* (20261006d) عبر السلّم: ملف كبير قد يتجاوز حصة localStorage —
+         العرض يستعمل الكائن كاملاً في كل الأحوال، والمحفوظ ما يتّسع منه */
+      persistEssentialCache(cache);
       applyEssentialCache(cache);
       toast('تمت استعادة النسخة الاحتياطية محليًا وعرضها. عند توفّر الاتصال سيتم تحديثها تلقائيًا من الخادم.','success');
     }catch(e){console.error(e);toast('ملف النسخة الاحتياطية غير صالح','error')}
@@ -494,7 +520,7 @@ function gDriveDropToken(){gDrive.token=null;gDrive.expires=0; try{localStorage.
 const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata openid email';
 const GDRIVE_FILE='pos-backup.json';
 function gatherBackupData(){return {_meta:{app:'benamor-pos',exported_at:new Date().toISOString(),branch:appUser?.branch_name||'',user:appUser?.identifier||''},locations,suppliers,supplier_ledger:ledger,supplier_payments:payments,stock,purchases,purchaseItems,products,transfers,sales,saleItems,salePayments,proformas,proformaItems,saleReturns,saleReturnItems,stockMovements,customers,customerLedger,userRoles,financeAccounts,financeMovements,dailyCashClosings,expenseCategories,expenses,employees,salaryPayments,settings:{businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold}};}
-function applyBackupData(data){const cache={saved_at:new Date().toISOString(),locations:data.locations||[],suppliers:data.suppliers||[],stock:data.stock||[],purchases:data.purchases||[],purchaseItems:data.purchaseItems||[],products:data.products||[],transfers:data.transfers||[],sales:data.sales||[],saleItems:data.saleItems||[],salePayments:data.salePayments||[],customers:data.customers||[],customerLedger:data.customerLedger||[],userRoles:data.userRoles||[],financeAccounts:data.financeAccounts||[],financeMovements:data.financeMovements||[],expenseCategories:data.expenseCategories||[],expenses:data.expenses||[],dailyCashClosings:data.dailyCashClosings||[]};localStorage.setItem(ESSENTIAL_CACHE_KEY,JSON.stringify(cache));applyEssentialCache(cache);}
+function applyBackupData(data){const cache={saved_at:new Date().toISOString(),locations:data.locations||[],suppliers:data.suppliers||[],stock:data.stock||[],purchases:data.purchases||[],purchaseItems:data.purchaseItems||[],products:data.products||[],transfers:data.transfers||[],sales:data.sales||[],saleItems:data.saleItems||[],salePayments:data.salePayments||[],customers:data.customers||[],customerLedger:data.customerLedger||[],userRoles:data.userRoles||[],financeAccounts:data.financeAccounts||[],financeMovements:data.financeMovements||[],expenseCategories:data.expenseCategories||[],expenses:data.expenses||[],dailyCashClosings:data.dailyCashClosings||[]};persistEssentialCache(cache);applyEssentialCache(cache);}
 function renderGDriveStatus(){
   const inp=q('gDriveClientID'); if(inp && !inp.value && gDrive.clientId) inp.value=gDrive.clientId;
   const cb=q('gDriveAuto'); if(cb) cb.checked=!!gDrive.auto;
@@ -1197,7 +1223,7 @@ async function loadHeavy(){
   } else {
     [sales,saleItems,salePayments]=await Promise.all([
       apiAll('pos_sales',`?select=*&sale_date=gte.${salesHorizonDate()}&order=sale_date.desc,created_at.desc,id.asc`).catch(e=>{console.warn('sales not setup yet',e); return []}),
-      apiAll('pos_sale_items',`?select=${SEL_SALE_ITEMS}&created_at=gte.${salesHorizonDate()}&order=created_at.desc,id.asc`).catch(e=>{console.warn('sale items not setup yet',e); return []}),
+      apiAll('pos_sale_items',`?select=${await saleItemsSelect()}&created_at=gte.${salesHorizonDate()}&order=created_at.desc,id.asc`).catch(e=>{console.warn('sale items not setup yet',e); return []}),
       apiAll('pos_sale_payments','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('sale payments not setup yet',e); return []}),
     ]);
   }
@@ -3972,7 +3998,7 @@ async function ensureSalesHistory(fromDate){
       const ids=older.map(x=>x.id);
       try{
         const [items,pays] = await Promise.all([
-          fetchByKeys('pos_sale_items','sale_id',ids,SEL_SALE_ITEMS,'created_at.asc,id.asc'),
+          fetchByKeys('pos_sale_items','sale_id',ids,await saleItemsSelect(),'created_at.asc,id.asc'),
           fetchByKeys('pos_sale_payments','sale_id',ids,'*','created_at.asc,id.asc')
         ]);
         saleItems    = replaceGroups(saleItems, items, 'sale_id', ids);
@@ -4091,9 +4117,26 @@ async function loadReportDetails(){
    pos_sale_items وحده ~54 ألف سطر؛ الأعمدة غير المستعملة تُنقل بلا فائدة.
    أعِد LEAN_SELECT إلى false لو ظهر عمود ناقص — يعود كل شيء إلى select=*. */
 const LEAN_SELECT = true;
+/* (20261006d) ⚠ price_edited ليست عمود pos_sale_items — عمود pos_sale_return_items
+   فقط (0055). وجودها هنا كان يُرجع 400 من PostgREST على كل جلب لبنود البيع،
+   فتفشل المزامنة بصمت ويبقى التطبيق على بيانات بنود قديمة. */
 const SEL_SALE_ITEMS = LEAN_SELECT
-  ? 'id,sale_id,product_code,product_name,qty,unit_price,line_total,discount,unit_cost_at_sale,price_edited,created_at'
+  ? 'id,sale_id,product_code,product_name,qty,unit_price,line_total,discount,unit_cost_at_sale,created_at'
   : '*';
+/* (20261006d) شبكة أمان: لو رفض الخادم الأعمدة النحيلة مستقبلاً (عمود ناقص
+   بعد ترقية ناقصة = 400) نتراجع إلى select=* لبقية الجلسة — بدل البقاء
+   على بيانات قديمة بلا أي تنبيه. الفحص مرة واحدة في الجلسة وطلب شبه فارغ. */
+let __saleItemsSel=null;
+async function saleItemsSelect(){
+  if(__saleItemsSel===null){
+    __saleItemsSel=SEL_SALE_ITEMS;
+    if(SEL_SALE_ITEMS!=='*'){
+      try{ await fetchWithAuthRetry(`${SUPABASE_URL}/rest/v1/pos_sale_items?select=${SEL_SALE_ITEMS}&limit=0`,{method:'GET',headers:H},[]); }
+      catch(e){ __saleItemsSel='*'; console.warn('pos_sale_items: الخادم رفض الأعمدة النحيلة — select=* لبقية الجلسة',e); }
+    }
+  }
+  return __saleItemsSel;
+}
 const SEL_STOCK = LEAN_SELECT
   ? 'id,location_id,product_code,product_name,qty,updated_at'
   : '*';
@@ -4126,7 +4169,7 @@ async function refreshSalesDomain(o={}){
       const saleIds=(chSales||[]).map(s=>s.id);
       const retIds =(chReturns||[]).map(r=>r.id);
       const [items, pays, retItems] = await Promise.all([
-        saleIds.length ? fetchByKeys('pos_sale_items','sale_id',saleIds,SEL_SALE_ITEMS,'created_at.asc,id.asc') : [],
+        saleIds.length ? fetchByKeys('pos_sale_items','sale_id',saleIds,await saleItemsSelect(),'created_at.asc,id.asc') : [],
         saleIds.length ? fetchByKeys('pos_sale_payments','sale_id',saleIds,'*','created_at.asc,id.asc') : [],
         retIds.length  ? fetchByKeys('pos_sale_return_items','return_id',retIds,'*','created_at.asc,id.asc') : []
       ]);
@@ -4176,7 +4219,7 @@ async function refreshSalesDomain(o={}){
   const hz = __salesHorizon || salesHorizonDate();
   const r=await Promise.all([
     apiAll('pos_sales',`?select=*&sale_date=gte.${hz}&order=sale_date.desc,created_at.desc,id.asc`).catch(()=>null),
-    apiAll('pos_sale_items',`?select=${SEL_SALE_ITEMS}&created_at=gte.${hz}&order=created_at.desc,id.asc`).catch(()=>null),
+    apiAll('pos_sale_items',`?select=${await saleItemsSelect()}&created_at=gte.${hz}&order=created_at.desc,id.asc`).catch(()=>null),
     apiAll('pos_sale_payments',`?select=*&created_at=gte.${hz}&order=created_at.desc,id.asc`).catch(()=>null),
     apiAll('pos_stock',`?select=${SEL_STOCK}&order=updated_at.desc,id.asc`).catch(()=>null),
     apiAll('pos_sale_returns',`?select=*&return_date=gte.${hz}&order=return_date.desc,created_at.desc,id.asc`).catch(()=>null),
