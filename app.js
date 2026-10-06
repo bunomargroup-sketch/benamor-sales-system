@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261006-1829';
+const APP_BUILD='b20261006-1920';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1469,8 +1469,8 @@ const ROLE_TABS={
   /* (0116) priceReview = قائمة دائمة يفتحها الجميع (البائع قراءة فقط —
      الكتابة مرفوضة على مستوى القاعدة)؛ bulkPrice للمدير/المبرمج فقط */
   programmer:['dashboard','locations','products','priceReview','bulkPrice','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','stockCount','composites','transfers','expensesQuick','dailyCashClosing','finance','reports','auditLog','users','settings'],
-  seller_11:['dashboard','products','priceReview','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
-  seller_sarraj:['dashboard','products','priceReview','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
+  seller_11:['dashboard','products','priceReview','bulkPrice','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
+  seller_sarraj:['dashboard','products','priceReview','bulkPrice','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
   sales_purchase:['dashboard','products','priceReview','suppliers','sales','salesList','proformas','customers','purchases','stock','transfers','stockCount','composites','expensesQuick','dailyCashClosing'],
   warehouse:['dashboard','products','priceReview','stock','stockCount','composites','transfers','purchases'],
   accountant:['dashboard','suppliers','ledger','payments','customers','expensesQuick','dailyCashClosing','finance','reports','auditLog'],
@@ -10733,7 +10733,9 @@ function bpScope(){
   };
 }
 function renderBulkPrice(){
-  if(!isManager()){ q('bulkPrice')?.classList.remove('active'); return; }
+  /* (20261006f) القائمة عرضٌ لا تصريح: البائع يفتح الشاشة ويرى المنتجات
+     والتكلفة والهوامش — زرّا «معاينة الأثر» و«تطبيق التعديل» للمدير/
+     المبرمج فقط، والقاعدة ترفض الكتابة من البائع مهما فعلت الواجهة. */
   const fill=(id,key,label)=>{ const el=q(id); if(!el) return;
     const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort();
     el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''); };
@@ -10743,6 +10745,10 @@ function renderBulkPrice(){
   { const el=q('bpSupplierFilter'); if(el){ const keep=el.value;
     el.innerHTML=`<option value="">كل الموردين</option>`+(suppliers||[]).map(s=>`<option value="${esc(s.id)}">${esc(s.name||'')}</option>`).join('');
     if(keep && [...(el.options||[])].some(o=>o.value===keep)) el.value=keep; } }
+  const mgr=isManager();
+  q('bpPreviewBtn')&&(q('bpPreviewBtn').style.display=mgr?'':'none');
+  q('bpApplyBtn')&&(q('bpApplyBtn').style.display=mgr?'':'none');
+  renderBulkPriceList();
   renderBulkPriceBatches();
 }
 async function renderBulkPriceBatches(){
@@ -10761,35 +10767,144 @@ async function renderBulkPriceBatches(){
       <td><button class="btn secondary mini" type="button" onclick="rollbackPriceBatch(&quot;${esc(b.id)}&quot;)">تراجع</button></td></tr>`;
   }).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا دفعات بعد</td></tr>';
 }
-/* (0119) مربع البحث: يضيّق المعروض من المعاينة المخزَّنة (بلا طلب شبكة)،
-   والتطبيق يشمل المنتجات المعروضة أمام المستخدم فقط — ما يُرى هو ما يتغيّر */
+/* ═══ (20261006f) SPEC «تعديل الأسعار — Show the List While Filtering»
+   القائمة الحيّة تظهر من أول حرف في البحث أو أول فلتر — بلا أي طلب شبكة:
+   التصفية على مصفوفة products المحمّلة، والنسبة تضيف أعمدة «بعد» فوراً.
+   الأرقام الملزِمة تبقى من pos_bulk_price_preview (الخادم) — القائمة
+   الحيّة للسرعة والقرار، والمعاينة الخادمية شرط التطبيق لا تُستبدل. ═══ */
+const BP_LIST_PAGE=300;          /* حد الرسم — كقائمة الفواتير بالضبط */
+let __bpListLimit=BP_LIST_PAGE;  /* يُعاد إلى 300 مع كل تغيير فلتر/بحث */
+let __bpSearchTimer=null;        /* debounce ~200ms للبحث */
 function bpSearchTerm(){ return String(q('bpSearch')?.value||'').trim().toLowerCase(); }
+/* مورّد الفلتر: معرّف uuid من القائمة المنسدلة — منتجات القائمة تحمل
+   supplier_name، فنطابق بالاسم المستخرج من جدول الموردين (وبالمعرّف
+   أيضاً إن كان العمود معروضاً في وجهة النظر) */
+function bpSupplierMatch(p){
+  const sid=String(q('bpSupplierFilter')?.value||''); if(!sid) return true;
+  if(String(p.supplier_id||'')===sid) return true;
+  const sup=(suppliers||[]).find(s=>String(s.id)===sid);
+  return sup ? String(p.supplier_name||'')===String(sup.name||'') : false;
+}
+/* نفس فpredicate الخادم (0118): active/النطاقات — والبحث محلي إضافي.
+   بلا نسبة وبلا معاينة: هذه قائمة «ما لديك» لا قائمة «ما سيتغيّر». */
+function bpLiveRows(){
+  const s=bpScope(); const t=bpSearchTerm();
+  return (products||[]).filter(p=>{
+    const active=p.active===undefined?true:!!p.active; /* العمود قد لا يُعرَّض — غيابه = نشط */
+    if(!active && !s.include_inactive) return false;
+    if(s.brand && String(p.brand||'')!==s.brand) return false;
+    if(!bpSupplierMatch(p)) return false;
+    if(s.category && String(p.category||'')!==s.category) return false;
+    if(t){
+      const c=String(p.code||'').toLowerCase(), n=String(p.name||'').toLowerCase();
+      if(!(c.includes(t)||n.includes(t))) return false;
+    }
+    return true;
+  });
+}
+/* هامش واحد بمعادلة واحدة (marginOf) — سالبه أحمر: البيع تحت التكلفة
+   يجب أن يُرى في شاشة تُتخذ فيها قرارات الأسعار */
+function bpMarginCell(price,cost){
+  if(!(cost>0) || !(price>0)) return '<span style="opacity:.55">—</span>';
+  const m=marginOf(price,cost);
+  return `<span style="${m<0?'color:var(--bad);font-weight:700':''}">${m.toFixed(1)}%</span>`;
+}
+function renderBulkPriceList(){
+  const body=q('bpListBody'); if(!body) return;
+  const head=q('bpListHead'), wrap=q('bpListWrap'), idle=q('bpIdle');
+  if(!head||!wrap||!idle) return;
+  const s=bpScope(); const t=bpSearchTerm();
+  if(!(t||s.brand||s.supplier_id||s.category)){
+    /* لم يُكتب شيء ولم يُختر فلتر: إرشاد لا لوح فارغ */
+    wrap.style.display='none'; idle.style.display='';
+    idle.textContent='اختر ماركة أو مورّداً أو اكتب في البحث لعرض المنتجات';
+    const b=q('bpServerBadge'); b&&(b.style.display='none');
+    return;
+  }
+  wrap.style.display=''; idle.style.display='none';
+  const rows=bpLiveRows();
+  const pct=s.pct, showAfter=pct>0;
+  head.innerHTML='<tr><th>الكود</th><th>الاسم</th><th>الماركة</th><th>المورّد</th><th>التكلفة</th><th>سعر البيع</th><th>هامش البيع %</th><th>سعر الجملة</th><th>هامش الجملة %</th>'
+    +(showAfter?'<th>سعر البيع الجديد</th><th>الهامش الجديد %</th><th>الفرق</th>':'')+'</tr>';
+  const badge=q('bpCountBadge'), deltaEl=q('bpTotalDelta');
+  if(!rows.length){
+    body.innerHTML='<tr><td colspan="12" style="text-align:center;opacity:.6">لا منتجات مطابقة</td></tr>';
+    badge&&(badge.textContent='0 منتج'); deltaEl&&(deltaEl.textContent='');
+    bpMarkServerMatch();
+    return;
+  }
+  let deltaSum=0;
+  const allHtml=rows.map(p=>{
+    const cost=productCost(p.code);
+    const retail=Number(p.retail_price||0), whole=Number(p.wholesale_price||0);
+    let after='';
+    if(showAfter){
+      if(!(retail>0)){ after='<td colspan="3" style="opacity:.6">بلا سعر — مستثنى من النسبة</td>'; }
+      else{
+        const nr=roundPriceUp(retail*(1+pct/100));   /* التقريب نفسه الذي يكتبه الخادم */
+        const diff=nr-retail; deltaSum+=diff;
+        after=`<td><b>${money(nr)}</b></td><td>${bpMarginCell(nr,cost)}</td><td>${diff>=0?'+':''}${money(diff)}</td>`;
+      }
+    }
+    return `<tr><td class="ltr">${esc(p.code)}</td><td>${esc(p.name||'')}</td><td>${esc(p.brand||'—')}</td><td>${esc(p.supplier_name||'—')}</td>
+      <td>${cost>0?money(cost):'<span style="opacity:.55">—</span>'}</td>
+      <td>${retail>0?money(retail):'<span style="opacity:.6">0</span>'}</td><td>${bpMarginCell(retail,cost)}</td>
+      <td>${whole>0?money(whole):'<span style="opacity:.55">—</span>'}</td><td>${bpMarginCell(whole,cost)}</td>${after}</tr>`;
+  });
+  const slice=allHtml.slice(0,__bpListLimit);
+  body.innerHTML=slice.join('')
+    +(rows.length>slice.length?`<tr><td colspan="12" style="text-align:center;padding:6px"><button class="btn secondary mini" type="button" onclick="bpShowMore()">⬇ عرض المزيد (${slice.length} من ${rows.length})</button></td></tr>`:'');
+  badge&&(badge.textContent=rows.length+' منتج');
+  deltaEl&&(deltaEl.textContent=showAfter?('مجموع الفرق: '+(deltaSum>=0?'+':'−')+money(Math.abs(deltaSum))+' '+APP_CONFIG.currency):'');
+  bpMarkServerMatch();
+}
+function bpShowMore(){ __bpListLimit+=BP_LIST_PAGE; renderBulkPriceList(); }
+/* (اختبار القبول ١٠) بعد معاينة الخادم: كل صف خادمي يجب أن يطابق حساب
+   المتصفح (نفس roundPriceUp) — الشارة الخضراء تُطمئن، الحمراء تُحذّر */
+function bpMarkServerMatch(){
+  const b=q('bpServerBadge'); if(!b) return;
+  if(!__bpPreview){ b.style.display='none'; return; }
+  const byCode=new Map((products||[]).map(p=>[String(p.code),p]));
+  let ok=true, n=0;
+  for(const r of __bpPreview.rows){
+    const p=byCode.get(String(r.product_code));
+    if(!p){ ok=false; break; }
+    const nr=roundPriceUp(Number(p.retail_price||0)*(1+Number(__bpPreview.pct||0)/100));
+    if(Number(r.new_price)>0 && Math.abs(nr-Number(r.new_price))>0.001){ ok=false; break; }
+    n++;
+  }
+  b.style.display='';
+  b.className='badge '+(ok?'green':'red');
+  b.textContent=ok?(n+' منتج — ✔ مطابق للخادم'):'⚠ اختلاف عن الخادم — أعد المعاينة قبل التطبيق';
+}
+/* البحث: debounce 200ms ثم إعادة الرسم + تصفير الحدّ — القائمة تتحرك مع
+   الكتابة. إن وُجدت معاينة خادمية فقد ضيّقنا نطاق التطبيق أيضاً (0119). */
+function bulkPriceSearchChanged(){
+  clearTimeout(__bpSearchTimer);
+  __bpSearchTimer=setTimeout(()=>{ __bpListLimit=BP_LIST_PAGE; renderBulkPriceList(); },200);
+}
+/* فلتر/شمل المعطّل: يُبطل المعاينة (الخادم لم يُعاين النطاق الجديد)
+   ويصفّر الحدّ ويرسم فوراً */
+function bulkPriceFilterChanged(){
+  __bpListLimit=BP_LIST_PAGE;
+  bulkPriceInvalidatePreview();
+  renderBulkPriceList();
+}
+/* النسبة تضيف/تنعّش أعمدة «بعد» فقط — بلا طلب شبكة وبلا تصفير الحدّ
+   (طقم الصفوف نفسه لم يتغير) */
+function bulkPricePctChanged(){ renderBulkPriceList(); }
+/* ما يُرى هو ما يتغيّر (0119): صفوف القائمة الحيّة الحالية مقيّدة
+   بمعاينة الخادم — لا تطبيق بلا معاينة، ولا منتج لم يمرّ عليها */
 function bpVisibleRows(){
   if(!__bpPreview) return [];
-  const t=bpSearchTerm();
-  if(!t) return __bpPreview.rows;
-  return __bpPreview.rows.filter(r=>String(r.product_code||'').toLowerCase().includes(t)||String(r.product_name||'').toLowerCase().includes(t));
+  const previewCodes=new Set(__bpPreview.rows.map(r=>String(r.product_code)));
+  return bpLiveRows().filter(p=>previewCodes.has(String(p.code)));
 }
-function renderBulkPricePreviewTable(){
-  if(!__bpPreview) return;
-  const list=bpVisibleRows();
-  const total=__bpPreview.rows.length;
-  const delta=list.reduce((a,r)=>a+(Number(r.new_price||0)-Number(r.old_price||0)),0);
-  q('bpCountBadge').textContent=list.length+' منتج'+(list.length!==total?` (من ${total})`:'');
-  q('bpTotalDelta').textContent='إجمالي تغيّر قيمة المعروض: '+(delta>=0?'+':'−')+money(Math.abs(delta))+' '+APP_CONFIG.currency;
-  q('bpPreviewBody').innerHTML=list.map(r=>`<tr>
-    <td class="ltr">${esc(r.product_code)}</td><td>${esc(r.product_name||'')}</td><td>${esc(r.brand||'—')}</td>
-    <td>${money(r.old_price)}</td><td><b>${money(r.new_price)}</b></td>
-    <td>${Number(r.new_margin_pct||0).toFixed(1)}%</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;opacity:.6">لا نتائج لهذا البحث ضمن المعاينة</td></tr>';
-  q('bpApplyBtn').disabled=!list.length;
-}
-function bulkPriceSearchChanged(){ if(__bpPreview) renderBulkPricePreviewTable(); }
 /* تغيير فلتر يُبطل المعاينة — لا يصحّ التطبيق على نطاق لم يُعاين */
 function bulkPriceInvalidatePreview(){
   __bpPreview=null;
   q('bpApplyBtn')&&(q('bpApplyBtn').disabled=true);
-  q('bpPreviewWrap')&&(q('bpPreviewWrap').style.display='none');
-  q('bpIdle')&&(q('bpIdle').style.display='');
+  const b=q('bpServerBadge'); b&&(b.style.display='none');
 }
 async function bulkPricePreview(){
   const s=bpScope();
@@ -10798,10 +10913,12 @@ async function bulkPricePreview(){
     showLoading(true);
     const rows=await rpc('pos_bulk_price_preview',{p_brand:s.brand,p_supplier_id:s.supplier_id,p_category:s.category,p_pct:s.pct,p_include_inactive:s.include_inactive});
     const list=Array.isArray(rows)?rows:[];
-    __bpPreview={rows:list};
-    q('bpIdle').style.display='none';
-    q('bpPreviewWrap').style.display='';
-    renderBulkPricePreviewTable();
+    /* (20261006f) المعاينة الخادمية تُخزَّن بنسبتها — القائمة الحيّة تعرض
+       الأرقام محلياً فوراً، وهذه الشارة تطابقها مع الخادم منتجاً منتجاً */
+    __bpPreview={rows:list,pct:s.pct};
+    renderBulkPriceList();           /* يعيد الرسم ويُظهر شارة المطابقة */
+    const vis=bpVisibleRows();
+    q('bpApplyBtn')&&(q('bpApplyBtn').disabled=!vis.length);
   }catch(e){ console.error(e); toast('تعذّرت المعاينة: '+e.message,'error'); }
   finally{ showLoading(false); }
 }
@@ -10818,7 +10935,7 @@ async function bulkPriceApply(){
     showLoading(true);
     /* (0119) القائمة الصريحة المعروضة — لا النطاق: ما يُرى هو ما يتغيّر */
     const res=await rpc('pos_bulk_price_update_codes',{
-      p_codes:list.map(r=>r.product_code),
+      p_codes:list.map(r=>r.code), /* (20261006f) صفوف القائمة الحيّة — كائنات منتجات (code) */
       p_pct:s.pct,
       p_scope:{brand:s.brand,supplier_id:s.supplier_id,category:s.category,search:t||null},
       p_note:'تعديل أسعار من الواجهة'
@@ -10829,6 +10946,10 @@ async function bulkPriceApply(){
     q('bpPct')&&(q('bpPct').value='');
     q('bpSearch')&&(q('bpSearch').value='');
     await refreshParts(['products'],{silent:true});
+    /* (20261006f) الأسعار تغيّرت: القائمة الحيّة تعيد الرسم فوراً — حتى
+       داخل نافذة عائمة لا يغطّيها renderTab(activeTabId()) */
+    __bpListLimit=BP_LIST_PAGE;
+    renderBulkPriceList();
     renderBulkPriceBatches();
   }catch(e){ console.error(e); toast('تعذّر التطبيق: '+e.message,'error'); }
   finally{ showLoading(false); }
@@ -10841,6 +10962,8 @@ async function rollbackPriceBatch(batchId){
     await logAction('bulk_price_rollback','pos_products','',`تراجع دفعة ${String(batchId).slice(0,8)} — ${res?.restored??0} منتج`);
     toast(`عادت ${res?.restored??0} منتج إلى سعرها السابق`);
     await refreshParts(['products'],{silent:true});
+    __bpListLimit=BP_LIST_PAGE;   /* (20261006f) التراجع غيّر الأسعار — أعد الرسم */
+    renderBulkPriceList();
     renderBulkPriceBatches();
   }catch(e){ console.error(e); toast('تعذّر التراجع: '+e.message,'error'); }
   finally{ showLoading(false); }
