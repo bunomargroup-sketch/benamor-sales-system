@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261006-1157';
+const APP_BUILD='b20261006-1231';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10532,6 +10532,16 @@ function renderPriceReview(){
   const rows=priceReviewFilteredRows();
   const mgr=isManager();
   q('prAcceptAllBtn').style.display=mgr?'':'none';
+  /* (20261006c) ما يكتبه المستخدم أمانة: أي إعادة رسم (تحديث دوري، تحديث
+     جزئي بعد حفظ من هذا الجهاز أو غيره) كانت تُصفّر الحقل إلى السعر المقترح
+     فيضيع ما كُتب في اللحظة الخطأ. نلتقط القيم والتركيز قبل المسح ونستردها. */
+  const keep={}; let keepFocus=null;
+  try{
+    body.querySelectorAll('tr[data-code] input[inputmode="decimal"]').forEach(inp=>{
+      const c=inp.closest('tr')?.dataset?.code;
+      if(c){ keep[c]=inp.value; if(inp===document.activeElement) keepFocus=c; }
+    });
+  }catch(_e){}
   body.innerHTML=rows.map(r=>{
     const p=products.find(x=>String(x.code)===String(r.product_code))||{};
     const oldC=Number(r.old_cost||0), newC=Number(r.new_cost||0), retail=Number(p.retail_price||0);
@@ -10559,6 +10569,18 @@ function renderPriceReview(){
       <td style="white-space:nowrap">${actions}</td>
     </tr>`;
   }).join('');
+  /* (20261006c) استرجاع القيم المكتوبة والتركيز بعد إعادة الرسم */
+  if(mgr){
+    try{
+      body.querySelectorAll('tr[data-code] input[inputmode="decimal"]').forEach(inp=>{
+        const c=inp.closest('tr')?.dataset?.code;
+        if(c && Object.prototype.hasOwnProperty.call(keep,c)){
+          inp.value=keep[c];
+          if(keepFocus===c){ inp.focus(); try{ inp.setSelectionRange(inp.value.length,inp.value.length); }catch(_e){} }
+        }
+      });
+    }catch(_e){}
+  }
   q('priceReviewEmpty').style.display=rows.length?'none':'';
   /* سجّل حقل السعر لكل سطر وابدأ «الهامش بعد التعديل» من القيم المعروضة */
   for(const k of Object.keys(__prInputs)) delete __prInputs[k];
@@ -10586,11 +10608,16 @@ function priceReviewMarginAfterEdit(input,code){
   span.textContent=money(price-newCost)+' · '+marginOf(price,newCost).toFixed(1)+'%';
   span.style.color=marginOf(price,newCost)<0?'var(--bad)':'';
 }
-/* (20261006) إعادة رسم القائمة بعد أي حلّ/تجاهل/قبول: القسم مفتوح في نافذة
-   عائمة لا يغطّيه renderTab(activeTabId()) — زرّه ليس النشط — فكان
-   «تجاهل» يعمل على الخادم والسطر يبقى ظاهراً في النافذة. نرسمه مباشرة. */
+/* (20261006) إعادة رسم القائمة بعد أي حلّ/تجاهل/قبول.
+   (20261006c) تصحيح مهم: كان الشرط «ارسم فقط إن لم يكن القسم active» —
+   لكن openWindow يضيف active للقسم داخل النافذة العائمة، فكان الشرط
+   يستثني بالضبط الحالة التي كُتب لها: النافذة العائمة لا تُحدَّث أبداً
+   بعد تجاهل/حفظ/قبول، يبقى السطر المُحلَّل ظاهراً، والضغط عليه ثانيةً
+   يُخطئ PRICE_REVIEW_ROW_NOT_FOUND فيبدو الزر «يعمل مرة ثم يتوقف».
+   نرسم دائماً — الرسم مُساكن (idempotent) ورخيص، وrenderTab يغطي
+   وضع التبويب مسبقاً فلا ضرر في الرسم المزدوج. */
 function priceReviewRefreshUI(){
-  if(!q('priceReview')?.classList.contains('active')){ try{ renderPriceReview(); }catch(_e){} }
+  try{ renderPriceReview(); }catch(_e){}
 }
 async function priceReviewSaveRow(code){
   const input=__prInputs[code];
