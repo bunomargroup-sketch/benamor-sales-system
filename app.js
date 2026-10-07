@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261007-1503';
+const APP_BUILD='b20261007-1748';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -660,10 +660,10 @@ function applySaleLocally(saleId, body, items, paymentsForRpc){
 function applyPurchaseLocally(saved, body, items, payment){
   purchases.unshift({...body,id:saved.id,purchase_no:saved.purchase_no,created_at:new Date().toISOString()});
   items.forEach(it=>{ purchaseItems.push({...it,purchase_id:saved.id}); localAdjustStock(body.location_id,it.product_code,it.product_name,Number(it.qty||0),'purchase','pos_purchases',saved.id,'فاتورة شراء'); });
-  supplierLedger.unshift({supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',description:body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء',debit:0,credit:Number(body.total),reference_table:'pos_purchases',reference_id:saved.id,created_at:new Date().toISOString()});
+  supplierLedger.unshift({supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',/* (0125) رقم النظام أولاً ثم رقم المورد */description:saved.purchase_no?`فاتورة شراء رقم ${saved.purchase_no}`:(body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء'),debit:0,credit:Number(body.total),reference_table:'pos_purchases',reference_id:saved.id,created_at:new Date().toISOString()});
   if(Number(body.paid_amount)>0){
     supplierLedger.unshift({supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'payment',description:'دفعة على فاتورة شراء',debit:Number(body.paid_amount),credit:0,reference_table:'pos_purchases',reference_id:saved.id,created_at:new Date().toISOString()});
-    if(payment&&payment.account_id) localMovement(payment.account_id,'out','supplier_payment',body.paid_amount,body.purchase_date,'pos_purchases',saved.id,'دفع فاتورة شراء');
+    if(payment&&payment.account_id) localMovement(payment.account_id,'out','supplier_payment',body.paid_amount,body.purchase_date,'pos_purchases',saved.id,`دفع فاتورة شراء ${saved.purchase_no||''}`);
   }
   const s=suppliers.find(x=>x.id===body.supplier_id); if(s) s.balance=Number(s.balance||0)+Number(body.total)-Number(body.paid_amount||0);
 }
@@ -3823,7 +3823,7 @@ async function viewPurchaseDetails(id){
     const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
     q('pvdTitle').textContent=p.purchase_no||String(id).slice(0,8);
     q('pvdMeta').textContent=`${p.purchase_date||''} · المورد: ${s?.name||'—'} · المكان: ${l?.name||'—'} · ${typeLabel(p.status)}`;
-    const info=[['رقم فاتورة المورد',p.invoice_no],['الإجمالي',money(p.total)+' '+APP_CONFIG.currency],['المدفوع للمورد',p.paid_amount!=null?money(p.paid_amount)+' '+APP_CONFIG.currency:null],['طريقة الدفع',p.payment_method?typeLabel(p.payment_method):null],['ملاحظات',p.notes]].filter(x=>x[1]);
+    const info=[['رقم فاتورة الشراء',p.purchase_no],['رقم فاتورة المورد',p.invoice_no],['الإجمالي',money(p.total)+' '+APP_CONFIG.currency],['المدفوع للمورد',p.paid_amount!=null?money(p.paid_amount)+' '+APP_CONFIG.currency:null],['طريقة الدفع',p.payment_method?typeLabel(p.payment_method):null],['ملاحظات',p.notes]].filter(x=>x[1]);
     q('pvdBody').innerHTML=`<table style="width:100%"><thead><tr>${info.map(x=>`<th>${x[0]}</th>`).join('')}</tr></thead><tbody><tr>${info.map(x=>`<td>${esc(String(x[1]))}</td>`).join('')}</tr></tbody></table>
       <table style="width:100%;margin-top:12px"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody>${
         (items||[]).map(it=>`<tr><td class="ltr">${esc(it.product_code||'')}</td><td>${esc(it.product_name||'')}</td><td>${money(it.qty)}</td><td>${money(it.unit_cost)}</td><td><b>${money(it.line_total)}</b></td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف.</td></tr>'
@@ -8494,7 +8494,7 @@ q('purchaseForm').addEventListener('submit', async e=>{
       clearDraftKey('purchase');
       logAction('purchase','pos_purchases',saved.id,`${saved.purchase_no||saved.id?.slice(0,8)||''} - ${money(total)} ${APP_CONFIG.currency}`);
       purchaseId=saved.id; if(q('purchaseAutoNo')) q('purchaseAutoNo').value=saved.purchase_no||saved.id?.slice(0,8)||'';
-      resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون رقم '+(saved.purchase_no||''),'success'); applyPurchaseLocally(saved, body, items, payment); refreshAfterLocalUpdate();
+      resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون'+(saved.purchase_no?' رقم '+saved.purchase_no:''),'success'); applyPurchaseLocally(saved, body, items, payment); refreshAfterLocalUpdate();
       /* (0116) فاتورة شراء قد تغيّرت تكاليف ⇒ طابور المراجعة والعداد يُحدَّثان */
       refreshParts(['priceReviewQueue'],{silent:true}).catch(()=>{});
       return;
