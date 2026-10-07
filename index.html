@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261007-1247">
+<link rel="stylesheet" href="app.css?v=20261007-1338">
 </head>
 <body class="auth-locked">
   <header>
@@ -237,11 +237,11 @@
           <div class="table-scroll" style="max-height:70vh">
             <table>
               <thead><tr>
-                <th>الكود</th><th>الاسم</th><th>الماركة</th>
-                <th>التكلفة القديمة</th><th>التكلفة الجديدة</th><th>نسبة التغيّر</th>
-                <th>سعر البيع الحالي</th><th>الهامش القديم</th><th>الهامش الحالي</th>
-                <th>السعر المقترح</th><th>سعر البيع الجديد</th><th>الهامش بعد التعديل</th>
-                <th>إجراء</th>
+                <th data-min="110">الكود</th><th data-min="160">الاسم</th><th data-min="90">الماركة</th>
+                <th data-min="100">التكلفة القديمة</th><th data-min="100">التكلفة الجديدة</th><th data-min="90">نسبة التغيّر</th>
+                <th data-min="100">سعر البيع الحالي</th><th data-min="90">الهامش القديم</th><th data-min="90">الهامش الحالي</th>
+                <th data-min="100">السعر المقترح</th><th data-min="100">سعر البيع الجديد</th><th data-min="90">الهامش بعد التعديل</th>
+                <th data-noresize>إجراء</th>
               </tr></thead>
               <tbody id="priceReviewBody"></tbody>
             </table>
@@ -465,7 +465,7 @@
                 </div>
                 <div class="table-scroll sale-lines-scroll">
                   <table>
-                    <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الماركة</th><th>الموديل</th><th>الكمية</th><th>سعر البيع</th><th class="th-margin">الهامش</th><th class="th-margin-pct">نسبة الهامش</th><th>خصم السطر %</th><th>المتوفر</th><th>الإجمالي</th><th></th></tr></thead>
+                    <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="90">الماركة</th><th data-min="90">الموديل</th><th data-min="70">الكمية</th><th data-min="100">سعر البيع</th><th class="th-margin" data-min="90">الهامش</th><th class="th-margin-pct" data-min="90">نسبة الهامش</th><th data-min="80">خصم السطر %</th><th data-min="100">المتوفر</th><th data-min="100">الإجمالي</th><th data-noresize></th></tr></thead>
                     <tbody id="saleItemsBody"></tbody>
                   </table>
                 </div>
@@ -550,7 +550,7 @@
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
             <button class="btn secondary" type="button" onclick="resetTableColumns('salesList')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
           </div>
-          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>طريقة الدفع</th><th>الإجمالي</th><th>المدفوع</th><th>الدين</th><th>هامش</th><th>البائع</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th data-min="110">رقم</th><th data-min="90">التاريخ</th><th data-min="90">الفرع</th><th data-min="140">الزبون</th><th data-min="100">طريقة الدفع</th><th data-min="100">الإجمالي</th><th data-min="100">المدفوع</th><th data-min="90">الدين</th><th data-min="90">هامش</th><th data-min="90">البائع</th></tr></thead><tbody id="salesBody"></tbody></table></div>
           <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
           </div>
 
@@ -655,7 +655,7 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الماركة</th><th>الموديل</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th><th></th></tr></thead>
+                <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="90">الماركة</th><th data-min="90">الموديل</th><th data-min="70">الكمية</th><th data-min="100">سعر الشراء</th><th data-min="100">الإجمالي</th><th data-noresize></th></tr></thead>
                 <tbody id="purchaseItemsBody"></tbody>
               </table>
             </div>
@@ -736,7 +736,7 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>المتوفر في المصدر</th><th></th></tr></thead>
+                <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="70">الكمية</th><th data-min="100">المتوفر في المصدر</th><th data-noresize></th></tr></thead>
                 <tbody id="transferItemsBody"></tbody>
               </table>
             </div>
@@ -1497,6 +1497,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261007-1247"></script>
+<script src="app.js?v=20261007-1338"></script>
 </body>
 </html>

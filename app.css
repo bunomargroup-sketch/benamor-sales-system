@@ -59,7 +59,7 @@
     .ltr{direction:ltr;unicode-bidi:embed}.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin:10px 0}.hidden{display:none!important}
     /* (المهمة ١) إصلاح الجذر: input داخل .row لا ينفرد بسطر كامل */
     .row > input,.row > select,.row > textarea{width:auto;flex:0 1 auto}
-    .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:10020;display:none}.toast{position:fixed;left:18px;bottom:18px;background:var(--card);color:var(--text);border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:10030;display:none;max-width:340px}
+    .loading{position:fixed;inset:auto 18px 18px auto;background:#0f172a;color:white;border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:10020;display:none}.toast{position:fixed;left:18px;bottom:118px;background:var(--card);color:var(--text);border:1px solid var(--border);border-right:5px solid var(--blue);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);z-index:10030;display:none;max-width:340px;pointer-events:none} /* (20261007b) فوق شريط الإنهاء وشريط الحالة — ولا يحجب نقر زر تحته */
     .mini{font-size:12px;color:var(--muted)}.totalBox{background:var(--accent-soft);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;justify-content:space-between;gap:10px;align-items:center}.totalBox b{font-size:23px;color:var(--blue);font-variant-numeric:tabular-nums}
     .item-actions{display:flex;gap:8px;align-items:center;justify-content:flex-start}.sticky-actions{position:sticky;top:82px;z-index:6;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow)}.modal{position:fixed;inset:0;background:rgba(15,23,42,.54);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.modal-card{background:var(--card);color:var(--text);border-radius:calc(var(--radius) + 6px);box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(1100px,96vw);max-height:88vh;overflow:auto;padding:18px;border:1px solid var(--border)}.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.stock-negative{color:var(--bad);font-weight:700}.stock-positive{color:var(--good);font-weight:700}
 
@@ -1179,15 +1179,14 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
     #transferItemsBody input.ti-qty{min-width:64px;text-align:center;font-variant-numeric:tabular-nums}
     #transferItemsBody .ti-available{white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums}
 
-    /* (ج) السطر الفرعي تحت الكود: سطر واحد بنقاط نهاية والعنوان الكامل
-       عند التحويم — لا التفاف إلى سطرين/ثلاثة فيرفع ارتفاع الصف */
-    #saleItemsBody .si-product-note,#purchaseItemsBody .pi-product-note,#transferItemsBody .ti-product-note{
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
-    }
-    /* الوضع المضغوط: يخفي السطر الفرعي كلياً ويشدّ الحشو — صف نصّ واحد */
-    #sales.sale-compact #saleItemsBody .si-product-note{display:none}
+    /* (20261007b) لا سطر فرعي تحت الكود إطلاقاً (طلب المالك) — الماركة
+       والموديل عمودان مستقلّان، والمورّد مكانه شاشة المنتج. الكثافة
+       المضغوطة تشدّ الحشو فقط. */
     #sales.sale-compact #saleItemsBody td{padding-top:1px;padding-bottom:1px}
     #sales.sale-compact #saleItemsBody input{min-height:26px}
+    /* (20261007b) حارس القصّ: الخلية تُقصّ ولا تُرسم فوق جارتها —
+       الرقم الضيّق لا يقفز عموداً (المواصفة ٢-حارس CSS) */
+    #saleItemsBody td,#purchaseItemsBody td,#transferItemsBody td{overflow:hidden;text-overflow:ellipsis}
 
     /* (ب) مقابض سحب الأعمدة — على الحافة الطرفية (inline-end: اليسار في
        العربية)؛ العرض الحدّي الأدنى يفرضه POS_COL_MIN في المحرّك */

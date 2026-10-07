@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261007-1247';
+const APP_BUILD='b20261007-1338';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -107,7 +107,7 @@ function colorChip(name){
   const fg=hexLuminance(hex)>0.45?'#111827':'#ffffff';
   return `<span class="color-chip" style="background:${hex};color:${fg}" title="${esc(raw)}">${esc(raw)}</span>`;
 }
-function fillProductNote(tr,sel,code){
+function fillProductNote(tr,sel,code){   /* (20261007b) للمبدئية (.pr-note) فقط — سطور البيع/الشراء/التحويل بلا سطر فرعي بطلب المالك */
   const p=productByCode(code); if(!p||!tr) return;
   const note=tr.querySelector(sel);
   /* (0082) الماركة والموديل صارا عمودين مستقلّين بعد الاسم، فالسطر الصغير
@@ -1326,8 +1326,15 @@ function markAllTabsDirty(){Object.keys(TAB_RENDERERS).forEach(t=>{tabDirty[t]=t
    الكاش المتخم — وكل قراءة/كتابة داخل try/catch: فشل الحصة = افتراضيات،
    لا جدول مكسور (المواصفة 🔴). */
 const POS_COL_WIDTHS_KEY='posColWidths';
-const POS_COL_MIN=48;                       /* أرضية عمود — لا يُسحب إلى صفر */
+const POS_COL_MIN=48;                       /* أرضية افتراضية — الجدول يعلن حاجته بـ data-min */
 const __colTables={};                       /* storageKey -> table */
+/* (20261007b) الحدّ الأدنى من الجدول نفسه: <th data-min="100">
+   (نقود/إجمالي 100 · كمية 70 · كود 120 · نصّ 160). و<th data-noresize>
+   لعمود الأزرار: يُلائم محتواه ولا يُسحب. */
+function colMinFor(th){
+  const m=th&&th.dataset?parseInt(th.dataset.min,10):NaN;
+  return (m>0)?m:POS_COL_MIN;
+}
 
 function posColStore(){
   try{ const m=JSON.parse(localStorage.getItem(POS_COL_WIDTHS_KEY)||'{}');
@@ -1367,7 +1374,51 @@ function __colFreezeWidths(table,cg){
     if(cg.children[i]) cg.children[i].style.width=Math.round(Number(th.offsetWidth)||0)+'px';
   });
   table.style.tableLayout='fixed'; table.__colFixed=true;
+  __colFitToContainer(table,cg);   /* (20261007b) اللقطة نفسها لا تفلت من الحاوية */
 }
+/* (20261007b) عرض الحاوية القابل للاستعمال — نصعد حتى عنصر ظاهر
+   (قسم مخفي ⇒ clientWidth صفر ⇒ لا قياس) */
+function __colContainerWidth(table){
+  let el=table.parentElement, w=0;
+  try{
+    while(el && !(w=Math.round(Number(el.clientWidth)||0)) && el!==document.body) el=el.parentElement;
+  }catch(e){ return 0; }
+  return w||0;
+}
+/* (20261007b) تجاوز المجموع الحاوية؟ يُقاس الباقي ليتّسع — العمود
+   المسحوب (keepIdx) يُحترم كما طلبه المستخدم. المقادير الدنيا لها
+   الأولوية؛ فإن منعت الاتّساع فالحاوية تمرّر أفقياً (العمود الأخير
+   قابل للوصول دائماً). */
+function __colFitToContainer(table,cg,keepIdx){
+  if(!table.__colFixed) return;
+  const cols=[...cg.children];
+  if(!cols.length) return;
+  const ths=[...table.querySelectorAll('thead th')];
+  const widths=cols.map(c=>parseFloat(c.style.width)||0);
+  const avail=__colContainerWidth(table);
+  if(!avail) return;
+  const sum=widths.reduce((a,b)=>a+b,0);
+  if(sum<=avail+2) return;
+  const kept=(keepIdx!=null&&keepIdx>=0)?widths[keepIdx]:0;
+  const othersSum=sum-kept;
+  const nOthers=cols.length-(keepIdx!=null&&keepIdx>=0?1:0);
+  if(othersSum>0&&nOthers>0){
+    const scale=Math.max(0,(avail-kept))/othersSum;
+    cols.forEach((c,i)=>{
+      if(i===keepIdx) return;
+      c.style.width=Math.max(colMinFor(ths[i]),Math.floor(widths[i]*scale))+'px';
+    });
+  }
+}
+/* (20261007b) إعادة التحقّق للجميع: تغيّر النافذة (debounce) أو الكثافة */
+function __colReflowAll(){
+  Object.keys(__colTables).forEach(k=>{
+    const t=__colTables[k];
+    if(t&&t.__colFixed&&t.__colgroup) __colFitToContainer(t,t.__colgroup);
+  });
+}
+let __colResizeT=null;
+window.addEventListener('resize',()=>{ clearTimeout(__colResizeT); __colResizeT=setTimeout(__colReflowAll,200); });
 function posColPersist(table,cg,storageKey){
   if(!table.__colFixed) return;
   const m=posColStore();
@@ -1386,9 +1437,10 @@ function colResizeStart(ev,table,cg,idx,th,storageKey){
   const x0=ev.clientX;
   /* RTL: المقبض على الحافة الطرفية (inline-end = يسار)؛ جرّه يساراً (dx سالب)
      يوسّع العمود — الحساب معكوس الاتجاه كما في المواصفة (ب-٢). */
+  const minW=colMinFor(th);
   const move=e2=>{
     const dx=e2.clientX-x0;
-    const w=Math.max(POS_COL_MIN,Math.round(w0+(rtl?-dx:dx)));
+    const w=Math.max(minW,Math.round(w0+(rtl?-dx:dx)));
     col.style.width=w+'px';                  /* حيّ — الحيّز المجاور يتكيّف */
   };
   const finish=()=>{
@@ -1396,6 +1448,7 @@ function colResizeStart(ev,table,cg,idx,th,storageKey){
     h.removeEventListener('pointerup',finish);
     h.removeEventListener('pointercancel',finish);
     try{ h.releasePointerCapture(ev.pointerId); }catch(e){}
+    __colFitToContainer(table,cg,idx);       /* (20261007b) المسحوب يُحترم والباقي يتّسع */
     posColPersist(table,cg,storageKey);      /* الحفظ عند الإفلات فقط */
   };
   h.addEventListener('pointermove',move);
@@ -1417,7 +1470,8 @@ function colAutoFit(table,cg,idx,storageKey){
   const natural=Math.round(Number(ths[idx].offsetWidth)||0);
   cols.forEach((c,i)=>c.style.width=prev[i]);
   table.style.tableLayout=prevLayout;
-  cg.children[idx].style.width=Math.max(POS_COL_MIN,natural)+'px';
+  cg.children[idx].style.width=Math.max(colMinFor(ths[idx]),natural)+'px';
+  __colFitToContainer(table,cg,idx);
   posColPersist(table,cg,storageKey);
 }
 function makeTableResizable(table,storageKey){
@@ -1438,8 +1492,10 @@ function makeTableResizable(table,storageKey){
       if(w>=POS_COL_MIN) cg.children[i].style.width=w+'px';
     });
     table.style.tableLayout='fixed'; table.__colFixed=true;
+    __colFitToContainer(table,cg);   /* (20261007b) حُفظ على شاشة عريضة؟ يقاس ليتّسع هنا */
   }
   ths.forEach((th,idx)=>{
+    if(th&&th.dataset&&('noresize' in th.dataset)) return;   /* (20261007b) عمود الأزرار يُلائم محتواه — لا يُسحب */
     th.classList.add('col-th');
     if(th.__colHandle) return;               /* الرأس أعيد بناؤه جزئياً */
     const h=document.createElement('div');
@@ -1476,6 +1532,7 @@ function toggleSaleDensity(){
   const m=posColStore(); m._density=m._density||{};
   m._density.saleItems=posDensityGet()==='compact'?'comfort':'compact';
   posColStoreSave(m); applySaleDensity();
+  try{ __colReflowAll(); }catch(e){}   /* (20261007b) الكثافة غيّرت المتاح — أعد الاتّساع */
 }
 /* الجداول المشمولة (المواصفة ب-٥): فواتير البيع/الشراء، التحويل، المنتجات،
    قائمة البيع، مراجعة الأسعار، تعديل الأسعار — نداء واحد لكل جدول */
@@ -2116,8 +2173,6 @@ function fillPurchaseRow(input){
   tr.querySelector('.pi-cost').value=Number(p.purchase_price||0);
   /* (0082) الماركة والموديل في عمودين مستقلّين الآن — لا نكرّرهما في السطر الصغير */
   fillLineAttrs(tr,p);
-  const note=tr.querySelector('.pi-product-note');
-  if(note) note.textContent = [p.supplier_name, p.category].filter(Boolean).join(' - ');
   updatePurchaseTotal();
 }
 
@@ -2258,11 +2313,11 @@ function selectProductCategory(cat){
 }
 
 const PRODUCT_COLS=[
-  {id:'code',label:'الكود'},{id:'name',label:'الصنف'},{id:'brand',label:'الماركة/الموديل'},
-  {id:'color',label:'اللون'},{id:'barcode',label:'الباركود'},{id:'supplier',label:'المورد'},{id:'notes',label:'ملاحظات'},
-  {id:'category',label:'التصنيف'},{id:'cost',label:'التكلفة'},{id:'purchase',label:'شراء'},{id:'retail',label:'بيع'},
-  {id:'margin',label:'الهامش'},{id:'margin_pct',label:'نسبة الهامش'},
-  {id:'s11',label:'11 يونيو'},{id:'ssr',label:'السراج'},{id:'sjz',label:'جنزور'},{id:'total',label:'الإجمالي'}
+  {id:'code',min:110,label:'الكود'},{id:'name',min:160,label:'الصنف'},{id:'brand',min:100,label:'الماركة/الموديل'},
+  {id:'color',min:90,label:'اللون'},{id:'barcode',min:110,label:'الباركود'},{id:'supplier',min:130,label:'المورد'},{id:'notes',min:140,label:'ملاحظات'},
+  {id:'category',min:140,label:'التصنيف'},{id:'cost',min:90,label:'التكلفة'},{id:'purchase',min:90,label:'شراء'},{id:'retail',min:100,label:'بيع'},
+  {id:'margin',min:90,label:'الهامش'},{id:'margin_pct',min:90,label:'نسبة الهامش'},
+  {id:'s11',min:90,label:'11 يونيو'},{id:'ssr',min:90,label:'السراج'},{id:'sjz',min:90,label:'جنزور'},{id:'total',min:90,label:'الإجمالي'}
 ];
 function getProductHiddenCols(){
   /* (0060) اعتماد التكلفة بدل سعر الشراء: عمود «شراء» يُخفى مرّة واحدة عند أول
@@ -2288,7 +2343,7 @@ function toggleProductCol(colId){
 function applyProductColVisibility(shown, smartParsed=null){
   const hidden=getProductHiddenCols();
   const vis=id=>!hidden.includes(id);
-  const heads=PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>`<th>${c.label}</th>`).join('');
+  const heads=PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>`<th${c.min?` data-min="${c.min}"`:''}>${c.label}</th>`).join(''); /* (20261007b) الحدّ الأدنى معلَن من الجدول */
   const cells=(p,isComp,vS)=>{
     const safe=String(p.code||'').replace(/'/g,"\\'");
     const nm='<span class="name">'+esc(pLabel(p.code,p.name))+'</span>'+(isComp?' <span class="chip br-sr">مركّب</span>':'');
@@ -3801,12 +3856,12 @@ function addOrIncrementTransferProduct(p, qty=1){
   const existing=rows.find(tr=>String(tr.querySelector('.ti-code')?.value||'').trim().toLowerCase()===String(p.code||'').toLowerCase());
   if(existing){const inp=existing.querySelector('.ti-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updateTransferAvailable(inp); return;}
   addTransferRow({product_code:p.code,product_name:p.name,qty});
-  const last=q('transferItemsBody').lastElementChild; if(last){const note=last.querySelector('.ti-product-note'); if(note){ note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - '); note.title=note.textContent; } updateTransferAvailable(last.querySelector('.ti-qty'));} /* (20261006h) موحّد مع 0082 — سطر واحد بالنقاط */
+  const last=q('transferItemsBody').lastElementChild; if(last){ updateTransferAvailable(last.querySelector('.ti-qty')); } /* (20261007b) لا سطر فرعي تحت الكود */
 }
 function addTransferRow(item={}){
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"><div class="mini ti-product-note"></div></td><td><input class="ti-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
-  q('transferItemsBody').appendChild(tr); fillProductNote(tr,'.ti-product-note',item.product_code); updateTransferAvailable(tr.querySelector('.ti-qty'));
+  tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"></td><td><input class="ti-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
+  q('transferItemsBody').appendChild(tr); updateTransferAvailable(tr.querySelector('.ti-qty'));
 }
 function fillTransferRow(input){
   const p=findProductByInput(input.value);
@@ -3814,9 +3869,6 @@ function fillTransferRow(input){
   const tr=input.closest('tr');
   tr.querySelector('.ti-code').value=p.code||'';
   tr.querySelector('.ti-name').value=p.name||'';
-  const brandModel=[p.brand,p.model].filter(Boolean).join(' / ');
-  const note=tr.querySelector('.ti-product-note');
-  if(note) note.textContent = [brandModel, p.supplier_name, p.category].filter(Boolean).join(' - ');
   updateTransferAvailable(input);
 }
 function compositeAvailableAt(compositeCode, location_id){
@@ -5417,8 +5469,8 @@ async function adjustStockDoc(location_id, item, qtyChange, movementType, refere
 function addSaleRow(item={}){
   const tr=document.createElement('tr');
   const isReturn=Number(item.qty||1)<0 || item.line_type==='return'; const qv=Math.abs(Number(item.qty||1))||1;
-  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><select class="si-kind hidden" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select><div class="mini si-product-note"></div></td><td><textarea class="si-name" required readonly tabindex="-1" title="${esc(item.product_name||'')}" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td class="si-brand line-attr"></td><td class="si-model line-attr ltr"></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
-  q('saleItemsBody').appendChild(tr); fillProductNote(tr,'.si-product-note',item.product_code); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty'));
+  tr.innerHTML=`<td><input class="si-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillSaleRow(this)}" onchange="fillSaleRow(this)"><select class="si-kind hidden" onchange="updateSaleLineKind(this);updateSaleTotal()"><option value="sale" selected>بيع</option></select></td><td><textarea class="si-name" required readonly tabindex="-1" title="${esc(item.product_name||'')}" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td class="si-brand line-attr"></td><td class="si-model line-attr ltr"></td><td><input class="si-qty" type="number" step="1" min="1" value="${qv}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.closest('tr').querySelector('.si-price').focus()}" oninput="updateSaleTotal();updateSaleAvailable(this)"></td><td><input class="si-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addSaleRowAndFocus()}" oninput="updateSaleTotal()"></td><td class="si-margin">0.00</td><td class="si-margin-pct">0%</td><td><input class="si-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="مثال: 5 = 5%" onfocus="this.select()" oninput="updateSaleTotal()"></td><td class="si-available"><b>0.00</b></td><td class="si-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateSaleTotal()">حذف</button></td>`;
+  q('saleItemsBody').appendChild(tr); fillLineAttrs(tr,productByCode(item.product_code)); updateSaleTotal(); updateSaleAvailable(tr.querySelector('.si-qty')); /* (20261007b) لا سطر فرعي — طلب المالك */
 }
 function updateSaleLineKind(el){
   const tr=el.closest('tr');
@@ -5430,8 +5482,6 @@ function fillSaleRow(input){
   tr.querySelector('.si-code').value=p.code||''; tr.querySelector('.si-name').value=p.name||''; tr.querySelector('.si-price').value=Number(p.retail_price||0);
   if(mergeSaleDuplicateRows(tr,p.code)) return;
   fillLineAttrs(tr,p);   /* (0082) الماركة والموديل عمودان مستقلّان */
-  const note=tr.querySelector('.si-product-note');
-  if(note){ note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - '); note.title=note.textContent; }
   updateSaleTotal(); updateSaleAvailable(input); renderSaleStockInfo(p.code);
 }
 function updateSaleAvailable(el){
@@ -5466,9 +5516,7 @@ function addOrIncrementSaleProduct(p, qty=1){
     addSaleRow({product_code:p.code,product_name:p.name,qty,unit_price:(getSaleWholesale()&&Number(p.wholesale_price)>0)?Number(p.wholesale_price):Number(p.retail_price||0)});
     const last=q('saleItemsBody').lastElementChild;
     if(last){
-      last.style.boxShadow='inset 3px 0 0 #7c3aed';
-      const note=last.querySelector('.si-product-note');
-      if(note){ note.innerHTML='<span style="color:#7c3aed;font-weight:800">مركّب:</span> '+comps.map(ci=>`<span class="ltr" style="color:#7c3aed;font-weight:700">${esc(ci.component_code)}×${Number(ci.qty||1)}</span>`).join('<span style="color:#7c3aed">، </span>'); note.title=note.textContent; }
+      last.style.boxShadow='inset 3px 0 0 #7c3aed';   /* (20261007b) لا سطر فرعي — التركيب يُعلن بالتوست */
       updateSaleAvailable(last.querySelector('.si-qty'));
     }
     updateSaleTotal(); renderSaleStockInfo(p.code);
@@ -5479,7 +5527,7 @@ function addOrIncrementSaleProduct(p, qty=1){
   const existing=rows.find(tr=>String(tr.querySelector('.si-code')?.value||'').trim().toLowerCase()===String(p.code||'').toLowerCase());
   if(existing){const inp=existing.querySelector('.si-qty'); inp.value=Number(inp.value||0)+Number(qty||1); updateSaleTotal(); updateSaleAvailable(inp); return;}
   addSaleRow({product_code:p.code,product_name:p.name,qty,unit_price:(getSaleWholesale()&&Number(p.wholesale_price)>0)?Number(p.wholesale_price):Number(p.retail_price||0)});
-  const last=q('saleItemsBody').lastElementChild; if(last){const note=last.querySelector('.si-product-note'); if(note){ note.textContent=[p.supplier_name,p.category].filter(Boolean).join(' - '); note.title=note.textContent; } updateSaleAvailable(last.querySelector('.si-qty'));} renderSaleStockInfo(p.code); /* (20261006h) نفس محتوى 0082 — الماركة والموديل عمودان مستقلّان، والسطر سطر واحد */
+  const last=q('saleItemsBody').lastElementChild; if(last){ updateSaleAvailable(last.querySelector('.si-qty')); } renderSaleStockInfo(p.code); /* (20261007b) لا سطر فرعي تحت الكود */
 }
 
 function mergeSaleDuplicateRows(currentTr, productCode){
@@ -6410,8 +6458,8 @@ function addPurchaseRow(item={}){
   const p=item.product_code?productByCode(item.product_code):null;
   const oldCost=Number(item.old_cost ?? p?.purchase_price ?? item.unit_cost ?? 0);
   tr.dataset.oldCost=oldCost;
-  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"><div class="mini pi-product-note"></div></td><td><textarea class="pi-name" readonly tabindex="-1" required title="${esc(item.product_name||'')}" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td class="pi-brand line-attr"></td><td class="pi-model line-attr ltr"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
-  q('purchaseItemsBody').appendChild(tr); fillProductNote(tr,'.pi-product-note',item.product_code); updatePurchaseCostColor(tr); updatePurchaseTotal();
+  tr.innerHTML=`<td><input class="pi-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillPurchaseRow(this)" onchange="fillPurchaseRow(this)"></td><td><textarea class="pi-name" readonly tabindex="-1" required title="${esc(item.product_name||'')}" placeholder="يتم تعبئته من المنتج">${esc(item.product_name||'')}</textarea></td><td class="pi-brand line-attr"></td><td class="pi-model line-attr ltr"></td><td><input class="pi-qty" type="number" step="1" min="1" value="${item.qty||1}" oninput="updatePurchaseTotal()"></td><td><input class="pi-cost" type="text" inputmode="decimal" value="${item.unit_cost||0}" onfocus="this.select()" oninput="updatePurchaseTotal()"><div class="mini pi-cost-note"></div></td><td class="pi-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updatePurchaseTotal()">حذف</button></td>`;
+  q('purchaseItemsBody').appendChild(tr); fillLineAttrs(tr,productByCode(item.product_code)); updatePurchaseCostColor(tr); updatePurchaseTotal();
 }
 function updatePurchaseCostColor(tr){
   if(!tr) return;
@@ -11039,8 +11087,8 @@ function renderBulkPriceList(){
   wrap.style.display=''; idle.style.display='none';
   const rows=bpLiveRows();
   const pct=s.pct, showAfter=pct>0;
-  head.innerHTML='<tr><th>الكود</th><th>الاسم</th><th>الماركة</th><th>المورّد</th><th>التكلفة</th><th>سعر البيع</th><th>هامش البيع %</th><th>سعر الجملة</th><th>هامش الجملة %</th>'
-    +(showAfter?'<th>سعر البيع الجديد</th><th>الهامش الجديد %</th><th>الفرق</th>':'')+'</tr>';
+  head.innerHTML='<tr><th data-min="110">الكود</th><th data-min="160">الاسم</th><th data-min="90">الماركة</th><th data-min="100">المورّد</th><th data-min="100">التكلفة</th><th data-min="100">سعر البيع</th><th data-min="90">هامش البيع %</th><th data-min="100">سعر الجملة</th><th data-min="90">هامش الجملة %</th>'
+    +(showAfter?'<th data-min="100">سعر البيع الجديد</th><th data-min="90">الهامش الجديد %</th><th data-min="90">الفرق</th>':'')+'</tr>';
   try{ makeTableResizable(head.closest('table'),'bulkPrice'); }catch(e){} /* (20261006h) الرأس أُعيد بناؤه — المقابض تُعاد */
   const badge=q('bpCountBadge'), deltaEl=q('bpTotalDelta');
   if(!rows.length){
