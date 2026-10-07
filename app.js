@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261006-2022';
+const APP_BUILD='b20261007-1135';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1408,12 +1408,14 @@ function colAutoFit(table,cg,idx,storageKey){
   const ths=[...table.querySelectorAll('thead th')];
   if(!ths[idx]) return;
   if(!table.__colFixed) __colFreezeWidths(table,cg);
-  const prev=cg.children.map(c=>c.style.width);
-  cg.children.forEach(c=>c.style.width='');
+  /* HTMLCollection لا تملك map/forEach في المتصفح — بثّها مصفوفة أولاً */
+  const cols=[...cg.children];
+  const prev=cols.map(c=>c.style.width);
+  cols.forEach(c=>c.style.width='');
   const prevLayout=table.style.tableLayout;
   table.style.tableLayout='auto';
   const natural=Math.round(Number(ths[idx].offsetWidth)||0);
-  cg.children.forEach((c,i)=>c.style.width=prev[i]);
+  cols.forEach((c,i)=>c.style.width=prev[i]);
   table.style.tableLayout=prevLayout;
   cg.children[idx].style.width=Math.max(POS_COL_MIN,natural)+'px';
   posColPersist(table,cg,storageKey);
@@ -4302,8 +4304,14 @@ const LEAN_SELECT = true;
 /* (20261006d) ⚠ price_edited ليست عمود pos_sale_items — عمود pos_sale_return_items
    فقط (0055). وجودها هنا كان يُرجع 400 من PostgREST على كل جلب لبنود البيع،
    فتفشل المزامنة بصمت ويبقى التطبيق على بيانات بنود قديمة. */
+/* (20261006i) ⚠ «discount» ليست عمود pos_sale_items أيضاً (عمود الفاتورة
+   الرأس pos_sales.discount هو الآخر) — عمود السطر اسمه line_discount، ومعه
+   discount_text. الاسم الخاطئ كان يُسقط الجلب النحيل كله (400 كل جلسة)
+   فيتراجع التطبيق إلى select=* بلا تنبيه. القائمة الآن تطابق أعمدة
+   insert في post_sale_transaction بالضبط + id/created_at — وهي الأعمدة
+   التي يقرؤها محرّك التكلفة ومسار تعديل الفاتورة والتقارير. */
 const SEL_SALE_ITEMS = LEAN_SELECT
-  ? 'id,sale_id,product_code,product_name,qty,unit_price,line_total,discount,unit_cost_at_sale,created_at'
+  ? 'id,sale_id,product_code,product_name,qty,unit_price,line_discount,discount_text,line_total,unit_cost_at_sale,created_at'
   : '*';
 /* (20261006d) شبكة أمان: لو رفض الخادم الأعمدة النحيلة مستقبلاً (عمود ناقص
    بعد ترقية ناقصة = 400) نتراجع إلى select=* لبقية الجلسة — بدل البقاء
