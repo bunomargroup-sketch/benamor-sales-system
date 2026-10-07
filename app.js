@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261007-1135';
+const APP_BUILD='b20261007-1247';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -9766,11 +9766,40 @@ setInterval(renderStatusBar,60000);
 
 let auditLog=[];
 async function refreshAuditLog(){try{auditLog=await api('pos_audit_log',{qs:'?order=created_at.desc&limit=200'});renderAuditLog();}catch(e){console.warn('audit load failed',e);}}
+/* (20261007a) سجل التدقيق بالعربية — طلب المالك: الإجراء والتفاصيل مفهومة للجميع.
+   الخادم (0123) يحوّل التفاصيل إلى سطر عربي؛ وهنا تُعرَب أسماء الإجراءات،
+   والكود الأصلي يبقى في التلميح (title) للتصحيح. */
+const AUDIT_ACTION_LABELS={
+  sale:'فاتورة بيع', sale_edit:'تعديل فاتورة بيع', sale_delete:'حذف فاتورة بيع',
+  sale_return:'مرتجع بيع', return_edit:'تعديل مرتجع', return_delete:'حذف مرتجع',
+  no_invoice_return:'مرتجع بدون فاتورة',
+  purchase:'فاتورة شراء', purchase_return:'مرتجع شراء',
+  transfer:'تحويل مخزون', stock_waste:'إتلاف مخزون',
+  settle_shortage:'تسوية عجز جرد', settle_surplus:'تسوية زيادة جرد',
+  stock_orphan_cleanup:'تنظيف حركات يتيمة', pos_stock:'تصحيح مخزون',
+  expense:'مصروف', expense_edit:'تعديل مصروف', expense_delete:'حذف مصروف',
+  closing_update:'تعديل إقفال يوم',
+  customer_add_quick:'إضافة زبون', customer_edit:'تعديل زبون',
+  customer_delete:'حذف زبون', customer_deactivate:'تعطيل زبون',
+  customer_opening_set:'رصيد افتتاحي لزبون', customer_payment_update:'تعديل دفعة زبون',
+  sale_payment_delete:'حذف دفعة فاتورة', sale_payment_update:'تعديل دفعة فاتورة',
+  invoice_payment:'تحصيل دفعة فاتورة',
+  supplier_add_quick:'إضافة مورّد', composite_update:'تحديث منتج مركّب',
+  price_review_save:'حفظ سعر من المراجعة', price_review_dismiss:'تجاهل من المراجعة',
+  price_review_accept_all:'قبول كل المقترح',
+  bulk_price_update:'تعديل جماعي للأسعار', bulk_price_rollback:'تراجع عن دفعة أسعار',
+  sale_offline_queue:'فاتورة في طابور دون اتصال', sale_offline_sync:'مزامنة فاتورة محلية',
+  offline_sale_delete:'حذف فاتورة من الطابور', offline_sale_force_retry:'إعادة إرسال فاتورة من الطابور',
+  location_category_rules_save:'قواعد تصنيف الموقع',
+  customer_debt_repair:'إصلاح ديون زبائن', supplier_debt_repair:'إصلاح ديون مورّدين',
+  supplier_payments_apply:'تسوية دفعات مورّدين',
+};
+function auditActionLabel(a){ return AUDIT_ACTION_LABELS[a]||a; }
 function renderAuditLog(){
   const body=q('auditLogBody'); if(!body)return;
   const term=(q('auditLogSearch')?.value||'').trim().toLowerCase();
-  const rows=(auditLog||[]).filter(a=>!term||[a.user_identifier,a.action,a.details,a.entity_type].join(' ').toLowerCase().includes(term));
-  body.innerHTML=rows.map(a=>`<tr><td class="ltr">${esc((a.created_at||'').replace('T',' ').slice(0,19))}</td><td><b>${esc(a.user_identifier||'')}</b></td><td>${esc(a.action||'')}</td><td class="mini">${esc(a.details||'')}</td></tr>`).join('')||'<tr><td colspan="4">لا توجد سجلات.</td></tr>';
+  const rows=(auditLog||[]).filter(a=>!term||[a.user_identifier,a.action,auditActionLabel(a.action),a.details,a.entity_type].join(' ').toLowerCase().includes(term));
+  body.innerHTML=rows.map(a=>`<tr><td class="ltr">${esc((a.created_at||'').replace('T',' ').slice(0,19))}</td><td><b>${esc(a.user_identifier||'')}</b></td><td title="${esc(a.action||'')}">${esc(auditActionLabel(a.action||''))}</td><td class="mini">${esc(a.details||'')}</td></tr>`).join('')||'<tr><td colspan="4">لا توجد سجلات.</td></tr>';
 }
 async function logAction(action,entityType='',entityId='',details=''){try{await api('pos_audit_log',{method:'POST',body:{user_identifier:appUser?.identifier||'',action,entity_type:entityType,entity_id:String(entityId||''),details,branch_id:appUser?.branch_id||null}});}catch(e){console.warn('audit log failed',e)}}
 let stockCountData={};
