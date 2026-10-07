@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261007-1338">
+<link rel="stylesheet" href="app.css?v=20261007-1425">
 </head>
 <body class="auth-locked">
   <header>
@@ -875,12 +875,16 @@
 
         <div class="panel">
           <h2>الموظفون والمرتبات</h2>
+          <!-- (20261007c) النموذجان يخفيان لغير المدير/المبرمج — سياسات القاعدة
+               تسمح بالكتابة لهما فقط (0040/0112)، فلا يبقى زر ميت على الشاشة -->
+          <div id="salaryFormsWrap">
           <form class="form" id="employeeForm">
             <div><label>اسم الموظف</label><input id="employeeName" required></div>
             <div><label>الهاتف</label><input id="employeePhone" class="ltr"></div>
             <div><label>الوظيفة</label><input id="employeePosition"></div>
             <div><label>المرتب الشهري</label><input id="employeeMonthlySalary" type="text" inputmode="decimal" value="0"></div>
-            <button class="btn" type="submit">حفظ الموظف</button>
+            <button class="btn" type="submit" id="employeeSubmitBtn">حفظ الموظف</button>
+            <button class="btn secondary hidden" type="button" id="employeeCancelBtn" onclick="resetEmployeeForm()">إلغاء التعديل</button>
           </form>
           <hr style="border:0;border-top:1px solid var(--border);margin:18px 0">
           <form class="form" id="salaryPaymentForm">
@@ -892,6 +896,11 @@
             <div style="grid-column:1/-1"><label>ملاحظات</label><input id="salaryNotes" placeholder="اختياري"></div>
             <button class="btn" type="submit">دفع مرتب</button>
           </form>
+          </div>
+          <!-- (20261007c) قبل هذا الإصلاح لم يكن للموظفين أي ظهور بعد الحفظ:
+               القائمة المنسدلة وحدها كانت تعرفهم ولا تُحدَّث إلا مع رأس الموردين -->
+          <div class="table-scroll"><table><thead><tr><th>الموظف</th><th>الهاتف</th><th>الوظيفة</th><th>المرتب الشهري</th><th>مدفوع هذا الشهر</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="employeesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>الفترة</th><th>المبلغ</th><th>الحساب</th></tr></thead><tbody id="salaryPaymentsBody"></tbody></table></div>
         </div>
 
         <div class="panel">
@@ -1497,6 +1506,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261007-1338"></script>
+<script src="app.js?v=20261007-1425"></script>
 </body>
 </html>
