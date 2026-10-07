@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261007-1748';
+const APP_BUILD='b20261007-1958';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3637,7 +3637,9 @@ function fillSupplierSelects(){
   if(q('expenseCategory')) q('expenseCategory').innerHTML='<option value="">بدون تصنيف</option>'+expenseCategories.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
   selectDefaultExpenseAccount();
   if(q('saleCashAccount')) q('saleCashAccount').innerHTML='<option value="">خزينة الفرع تلقائيًا</option>'+financeAccounts.filter(a=>a.account_type==='cash').map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
-  if(q('saleBankAccount')) q('saleBankAccount').innerHTML=financeAccountOptionsFor('bank_transfer','اختر مصرف التحويل');
+  /* (20261007e) القائمة تعاد بناؤها كثيراً: احفظ اختيار المستخدم إن
+     وُجد، وإلا فالافتراضي مصرف شمال افريقيا */
+  if(q('saleBankAccount')){ const __pb=q('saleBankAccount').value; q('saleBankAccount').innerHTML=financeAccountOptionsFor('bank_transfer','اختر مصرف التحويل'); const __want=__pb||preferredBankAccountId(); if(__want && [...q('saleBankAccount').options].some(o=>o.value===__want)) q('saleBankAccount').value=__want; }
   if(q('saleCardAccount')) q('saleCardAccount').innerHTML=financeAccountOptionsFor('card','اختر حساب البطاقة');
   if(q('purchaseFinanceAccount')) q('purchaseFinanceAccount').innerHTML=financeAccountOptionsFor(q('purchasePaymentMethod')?.value||'cash','تلقائي حسب الطريقة');
 }
@@ -5787,12 +5789,29 @@ function setFullPayment(type){
   q('salePaymentMethod').value=type==='bank'?'bank_transfer':type==='card'?'card':'cash';
   focusPay(type); updateSaleTotal();
 }
+/* (20261007e) مصرف التحويل الافتراضي في كل مسارات المال: مصرف شمال
+   افريقيا — ما لم يغيّره المستخدم يدوياً في الحركة نفسها (قرار صاحب
+   المنشأة 07/10). يغطي: البيع والشراء وتحصيل دفعة زبون ودفع مورد
+   (وكل ما يستعمل الدالتين أدناه من مرتجعات ونوافذ). المطابقة بالاسم
+   المطوَّع — بلا همزات/تشكيل/تطويل ومسافة مفردة — فتصيب «شمال افريقيا»
+   و«شمال أفريقيا» وكل حساب يحمل الاسم ولو لُحق بفرع أو رقم. إن غاب
+   الحساب يسلسل الاحتياط القديم كما هو (بنك الفرع ثم أول بنك). */
+function __normBankName(s){return String(s||'').replace(/[ ً-ْ ـ]/g,'').replace(/[آأإ]/g,'ا').replace(/\s+/g,' ').trim();}
+function preferredBankAccountId(){
+  const needle=__normBankName('شمال افريقيا');
+  return financeAccounts.find(a=>a.account_type==='bank' && __normBankName(a.name).includes(needle))?.id
+      || financeAccounts.find(a=>(a.account_type==='bank'||a.account_type==='card') && __normBankName(a.name).includes(needle))?.id
+      || null;
+}
 function defaultFinanceAccountFor(method, location_id){
   /* ⚠ وسيط location_id صريح (اختياري — يتراجع لفرع المستخدم):
      مرتجع السراج يخرج من خزينة السراج حتى لو سجّله مديرٌ فرعه 11 يونيو */
   const loc=location_id||appUser?.branch_id;
   if(method==='cash') return financeAccounts.find(a=>a.account_type==='cash' && a.location_id===loc)?.id || financeAccounts.find(a=>a.account_type==='cash')?.id || null;
-  if(method==='bank_transfer') return financeAccounts.find(a=>a.account_type==='bank' && a.location_id===loc)?.id || financeAccounts.find(a=>a.account_type==='bank')?.id || financeAccounts.find(a=>a.account_type==='card')?.id || null;
+  /* (20261007e) الحوالة/التحويل المصرفي: شمال افريقيا أولاً حتى لو كان
+     لفرق الفاتورة مصرف آخر — النقد يبقى خزينة الفرع، والمصرف واحد للجميع */
+  if(method==='bank_transfer'){ const nafb=preferredBankAccountId(); if(nafb) return nafb;
+    return financeAccounts.find(a=>a.account_type==='bank' && a.location_id===loc)?.id || financeAccounts.find(a=>a.account_type==='bank')?.id || financeAccounts.find(a=>a.account_type==='card')?.id || null; }
   if(method==='card') return financeAccounts.find(a=>a.account_type==='card' && a.location_id===loc)?.id || financeAccounts.find(a=>a.account_type==='card')?.id || financeAccounts.find(a=>a.account_type==='bank' && a.location_id===loc)?.id || financeAccounts.find(a=>a.account_type==='bank')?.id || null;
   return null;
 }
@@ -5981,7 +6000,7 @@ async function ensureSaleCustomer(balanceDue){
 function resetSaleForm(){
   suppressSaleDraftSave=true; saleSupervisorApproved=false; sourcePriceCheckerCartId=null;
   editingSaleId=null; originalSale=null; originalSaleItems=[];
-  q('saleForm').reset(); if(q('saleLocation') && appUser?.branch_id) q('saleLocation').value=appUser.branch_id; if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0;} q('saleItemsBody').innerHTML=''; setToday(); ensureSaleInvoiceNo(true); syncSaleInvoiceNoText(); syncSaleWholesaleChip();
+  q('saleForm').reset(); if(q('saleLocation') && appUser?.branch_id) q('saleLocation').value=appUser.branch_id; if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0;} /* (20261007e) إعادة النموذج أعادت القائمة لبدايتها — مصرف التحويل الافتراضي شمال افريقيا */ {const __nafb=preferredBankAccountId(); if(__nafb && q('saleBankAccount') && [...q('saleBankAccount').options].some(o=>o.value===__nafb)) q('saleBankAccount').value=__nafb;} q('saleItemsBody').innerHTML=''; setToday(); ensureSaleInvoiceNo(true); syncSaleInvoiceNoText(); syncSaleWholesaleChip();
   q('saleSubmitBtn').textContent='حفظ البيع'; q('saleCancelEditBtn').classList.add('hidden'); q('saleEditAlert')?.classList.add('hidden');
   q('saleKeepPayBtn')?.classList.add('hidden'); q('saleFinishCancelEditBtn')?.classList.add('hidden');
   keepOriginalPaymentsOnSave=false; if(q('salePaymentDetected'))q('salePaymentDetected').textContent='طريقة الدفع تحفظ تلقائيًا حسب المبالغ المدخلة'; setActivePayInput(q('saleCashAmount')); renderSaleStockInfo(''); renderSaleCustomerInfo(); updateSaleTotal(); suppressSaleDraftSave=false; setTimeout(()=>q('saleBarcodeInput')?.focus(),50);
@@ -7265,7 +7284,9 @@ function selectedFinanceAcceptedMethods(){
 function financeAccountName(id){return financeAccounts.find(a=>a.id===id)?.name||''}
 function defaultAccountFor(method, location_id){
   if(method==='cash') return q('saleCashAccount')?.value || financeAccounts.find(a=>accountSupports(a,'cash') && a.location_id===location_id)?.id || financeAccounts.find(a=>accountSupports(a,'cash'))?.id || null;
-  if(method==='bank_transfer') return q('saleBankAccount')?.value || financeAccounts.find(a=>accountSupports(a,'bank_transfer'))?.id || null;
+  /* (20261007e) اختيار الكاشير في شاشة الدفع يفوز دائماً؛ وإلا فمصرف
+     شمال افريقيا هو مصرف التحويل الافتراضي */
+  if(method==='bank_transfer') return q('saleBankAccount')?.value || preferredBankAccountId() || financeAccounts.find(a=>accountSupports(a,'bank_transfer'))?.id || null;
   if(method==='card') return q('saleCardAccount')?.value || financeAccounts.find(a=>accountSupports(a,'card'))?.id || null;
   return null;
 }
