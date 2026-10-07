@@ -1190,6 +1190,9 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
 
     /* (ب) مقابض سحب الأعمدة — على الحافة الطرفية (inline-end: اليسار في
        العربية)؛ العرض الحدّي الأدنى يفرضه POS_COL_MIN في المحرّك */
-    th.col-th{position:relative;padding-inline-end:14px}
+    /* (20261007d) sticky لا relative — relative كانت تطغى على لصق الرأس
+       العام (th{position:sticky}) فتفقد الجداول القابلة للسحب رأسها اللاصق
+       عند التمرير. sticky سياق تموضع للمقبض تماماً كـrelative */
+    th.col-th{position:sticky;top:0;padding-inline-end:14px}
     .col-resizer{position:absolute;top:0;bottom:0;inset-inline-end:-3px;width:7px;cursor:col-resize;touch-action:none;z-index:3}
     .col-resizer:hover,.col-resizer:active{background:color-mix(in srgb,var(--blue) 45%,transparent);border-radius:3px}

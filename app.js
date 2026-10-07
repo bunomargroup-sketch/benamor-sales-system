@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261007-1425';
+const APP_BUILD='b20261007-1503';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1329,12 +1329,30 @@ function markAllTabsDirty(){Object.keys(TAB_RENDERERS).forEach(t=>{tabDirty[t]=t
 const POS_COL_WIDTHS_KEY='posColWidths';
 const POS_COL_MIN=48;                       /* أرضية افتراضية — الجدول يعلن حاجته بـ data-min */
 const __colTables={};                       /* storageKey -> table */
+const __colTbodyId={};                      /* (20261007d) storageKey -> tbodyId — إعادة العرض تصيب الجدول الحيّ */
 /* (20261007b) الحدّ الأدنى من الجدول نفسه: <th data-min="100">
    (نقود/إجمالي 100 · كمية 70 · كود 120 · نصّ 160). و<th data-noresize>
    لعمود الأزرار: يُلائم محتواه ولا يُسحب. */
 function colMinFor(th){
   const m=th&&th.dataset?parseInt(th.dataset.min,10):NaN;
   return (m>0)?m:POS_COL_MIN;
+}
+/* (20261007d) تقرير المالك: «أي سحب يفسد جدول الفاتورة». السبب الجذري:
+   عمودا الهامش يخفيهما CSS بـdisplay:none على الخليّة نفسها، والتخطيط
+   الثابت يوزّع الخلايا الظاهرة على أعمدة الـcolgroup **بالترتيب** — فتنزلق
+   كل خلية بعد العمودين المخفيين عمودين كاملين: الإجمالي يُفرَغ، عمود
+   الحذف يختفي، وكل شيء ينزاح عن رأسه. الحل: الـcolgroup يُبنى من الرؤوس
+   الظاهرة ذاتياً فقط. ملاحظة: نفلتر «الخليّة نفسها» لا السلف المخفي —
+   القسم المخفي عند الإقلاع يبقي كل رؤوسه مرئية لهذا الفحص (المتصفح
+   يعيد قيمة display المحسوبة للخليّة حتى داخل شجرة مخفية). */
+function __colVisibleThs(table){
+  const all=[...table.querySelectorAll('thead th')];
+  try{
+    if(typeof getComputedStyle==='function'){
+      return all.filter(th=>getComputedStyle(th).display!=='none');
+    }
+  }catch(e){}
+  return all;
 }
 
 function posColStore(){
@@ -1371,7 +1389,15 @@ function __colRtl(table){
 /* تثبيت العروض الحالية بالبكسل ثم التخطيط الثابت — قبل أول سحب/ملاءمة
    (العروض لا تُطبَّق بموثوقية تحت table-layout:auto) */
 function __colFreezeWidths(table,cg){
-  [...table.querySelectorAll('thead th')].forEach((th,i)=>{
+  const ths=__colVisibleThs(table);
+  if(!ths.length) return;
+  /* (20261007d) الجدول بُني عند الإقلاع والهوامش ظاهرة (12) ثم أُخفيت؟
+     الـcolgroup هنا يعود لطول الرؤوس الظاهرة قبل قياس أي عرض — وإلا
+     سُحبت الأعمدة فوق بعضها */
+  if(!cg||cg!==table.__colgroup||cg.parentNode!==table||cg.children.length!==ths.length){
+    cg=__colEnsureColgroup(table,ths.length);
+  }
+  ths.forEach((th,i)=>{
     if(cg.children[i]) cg.children[i].style.width=Math.round(Number(th.offsetWidth)||0)+'px';
   });
   table.style.tableLayout='fixed'; table.__colFixed=true;
@@ -1394,7 +1420,7 @@ function __colFitToContainer(table,cg,keepIdx){
   if(!table.__colFixed) return;
   const cols=[...cg.children];
   if(!cols.length) return;
-  const ths=[...table.querySelectorAll('thead th')];
+  const ths=__colVisibleThs(table);
   const widths=cols.map(c=>parseFloat(c.style.width)||0);
   const avail=__colContainerWidth(table);
   if(!avail) return;
@@ -1432,8 +1458,12 @@ function colResizeStart(ev,table,cg,idx,th,storageKey){
   const h=ev.currentTarget;
   try{ h.setPointerCapture(ev.pointerId); }catch(e){}
   if(!table.__colFixed) __colFreezeWidths(table,cg);
+  /* (20261007d) احتياط: مجموعة الأعمدة الظاهرة تغيّرت بعد التحاق هذا المقبض —
+     الـcolgroup الحيّ هو المرجع، وإن لم يعد للمقبض عمود فلا سحب */
+  cg=table.__colgroup||cg;
   const rtl=__colRtl(table);
   const col=cg.children[idx];
+  if(!col){ try{ h.releasePointerCapture(ev.pointerId); }catch(e){} return; }
   const w0=parseFloat(col.style.width)||Math.round(Number(th.offsetWidth)||0);
   const x0=ev.clientX;
   /* RTL: المقبض على الحافة الطرفية (inline-end = يسار)؛ جرّه يساراً (dx سالب)
@@ -1459,7 +1489,7 @@ function colResizeStart(ev,table,cg,idx,th,storageKey){
 function colAutoFit(table,cg,idx,storageKey){
   /* ملاءمة أوسع خلية ظاهرة: قياس طبيعي لحظي (تغييرات متزامنة بلا رسم
      بينهما فلا وميض)، ثم إعادة التثبيت */
-  const ths=[...table.querySelectorAll('thead th')];
+  const ths=__colVisibleThs(table);
   if(!ths[idx]) return;
   if(!table.__colFixed) __colFreezeWidths(table,cg);
   /* HTMLCollection لا تملك map/forEach في المتصفح — بثّها مصفوفة أولاً */
@@ -1477,23 +1507,49 @@ function colAutoFit(table,cg,idx,storageKey){
 }
 function makeTableResizable(table,storageKey){
   if(!table) return;
-  const ths=[...table.querySelectorAll('thead th')];
+  const ths=__colVisibleThs(table);
   if(!ths.length) return;
   __colTables[storageKey]=table;
   /* إعادة تهيئة عند تغيّر عدد الأعمدة أو إعادة بناء الرأس (قائمة أعمدة
      المنتجات، أعمدة النسبة في تعديل الأسعار) — وإلا فلا عمل مكرر */
   if(table.__colKey===storageKey && table.__colCount===ths.length
      && ths[0].__colHandle) return;
+  const prevFixed=table.__colFixed, prevCount=table.__colCount;
   table.__colKey=storageKey; table.__colCount=ths.length;
+  /* (20261007d) المقابض القديمة تحمل فهارس مجموعة الأعمدة القديمة وت captured
+     الـcolgroup القديم — تُزال كلها وتُعاد بفهارس المجموعة الحالية (والرؤوس
+     التي صارت مخفية تبقى بلا مقبض) */
+  [...table.querySelectorAll('thead th')].forEach(th=>{
+    if(th.__colHandle){ try{th.__colHandle.remove();}catch(e){} th.__colHandle=null; }
+  });
   const cg=__colEnsureColgroup(table,ths.length);
-  /* عروض محفوظة ⇒ طبّقها وفعّل التخطيط الثابت (بلا قياس — يعمل والقسم مخفي) */
+  /* عروض محفوظة ⇒ طبّقها وفعّل التخطيط الثابت (بلا قياس — يعمل والقسم مخفي).
+     (20261007d) طولها يجب أن يطابق مجموعة الأعمدة الظاهرة الحالية — عرض
+     حُفظ بعمودين مخفيّين لا يُطبَّق على اثني عشر عموداً */
   const saved=posColStore()[storageKey];
-  if(Array.isArray(saved)&&saved.some(w=>w>=POS_COL_MIN)){
+  if(Array.isArray(saved)&&saved.length===ths.length&&saved.some(w=>w>=POS_COL_MIN)){
     saved.slice(0,ths.length).forEach((w,i)=>{
       if(w>=POS_COL_MIN) cg.children[i].style.width=w+'px';
     });
     table.style.tableLayout='fixed'; table.__colFixed=true;
     __colFitToContainer(table,cg);   /* (20261007b) حُفظ على شاشة عريضة؟ يقاس ليتّسع هنا */
+  }
+  /* (20261007d) مجموعة الأعمدة الظاهرة تغيّرت (إخفاء/إظهار الهامش) والجدول
+     مثبّت؟ قياس جديد من التخطيط التلقائي — لا من الثابت القديم المشوّه —
+     ثم يحفظ. يعمل فقط والرؤوس معروضة فعلاً (offsetWidth حقيقي) */
+  if(prevFixed && prevCount!=null && prevCount!==ths.length
+     && ths.some(th=>Number(th.offsetWidth)||0)>0){
+    try{
+      [...cg.children].forEach(c=>c.style.width='');
+      const prevLayout=table.style.tableLayout;
+      table.style.tableLayout='auto';
+      const ws=ths.map(th=>Math.round(Number(th.offsetWidth)||0));
+      table.style.tableLayout=prevLayout;
+      ws.forEach((w,i)=>{ if(cg.children[i]&&w>0) cg.children[i].style.width=w+'px'; });
+      table.style.tableLayout='fixed'; table.__colFixed=true;
+      __colFitToContainer(table,cg);
+      posColPersist(table,cg,storageKey);
+    }catch(e){}
   }
   ths.forEach((th,idx)=>{
     if(th&&th.dataset&&('noresize' in th.dataset)) return;   /* (20261007b) عمود الأزرار يُلائم محتواه — لا يُسحب */
@@ -1510,11 +1566,21 @@ function makeTableResizable(table,storageKey){
   });
 }
 function resetTableColumns(storageKey){
-  const table=__colTables[storageKey]; if(!table) return;
+  /* (20261007d) تقرير المالك: «إعادة الأعمدة الافتراضية جمّدت أزرار السطر».
+     أعيد بناء كل شيء نظيفاً: الجدول **الحيّ** من الصفحة (لا مرجعاً قديماً
+     إن استُبدل العصر يوماً)، بلا colgroup قديم ولا حالة نصف مهيّأة، ثم
+     تهيئة جديدة كاملة — فلا يبقى شيء معلّق فوق الصفوف */
+  let table=__colTables[storageKey];
+  const tbodyId=__colTbodyId[storageKey];
+  if(tbodyId){ const tb=q(tbodyId); const t=(tb&&tb.closest)?tb.closest('table'):null; if(t) table=t; }
+  if(!table) return;
   const m=posColStore(); delete m[storageKey]; posColStoreSave(m);
-  const cg=__colEnsureColgroup(table,table.querySelectorAll('thead th').length);
-  [...cg.children].forEach(c=>c.style.width='');
-  table.style.tableLayout=''; table.__colFixed=false;
+  table.__colKey=null; table.__colCount=null; table.__colFixed=false;
+  table.style.tableLayout='';
+  const cg=table.__colgroup;
+  if(cg&&cg.parentNode===table&&typeof cg.remove==='function') cg.remove();
+  table.__colgroup=null;
+  makeTableResizable(table,storageKey);
   toast('أعيدت أعمدة الجدول إلى العرض الافتراضي');
 }
 /* كثافة صفوف فاتورة البيع: مضغوط/مريح — محفوظة مع عروض الأعمدة */
@@ -1548,6 +1614,7 @@ const RESIZABLE_TABLES=[
 ];
 function initResizableTables(){
   RESIZABLE_TABLES.forEach(([tbodyId,key])=>{
+    __colTbodyId[key]=tbodyId;
     const tb=q(tbodyId); if(tb) makeTableResizable(tb.closest('table'),key);
   });
   applySaleDensity();
@@ -6758,6 +6825,9 @@ function toggleSupervisorMargins(){
   const hidden=sales.classList.toggle('hide-margins');
   const btn=[...document.querySelectorAll('.rail-btn')].find(b=>b.textContent.includes('الهامش'));
   btn?.classList.toggle('margin-toggle-active',!hidden);
+  /* (20261007d) مجموعة الأعمدة الظاهرة تغيّرت — الـcolgroup يجب أن يتبعها
+     وإلا انزلقت كل خلية بعد العمودين المخفيين عند أول سحب */
+  try{ makeTableResizable(q('saleItemsBody')?.closest('table'),'saleItems'); }catch(e){}
   toast(hidden?'تم إخفاء الهامش':'تم إظهار الهامش');
 }
 function removeSelectedSaleRow(){
