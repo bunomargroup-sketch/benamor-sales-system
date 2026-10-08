@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261008-1751">
+<link rel="stylesheet" href="app.css?v=20261008-1829">
 </head>
 <body class="auth-locked">
   <header>
@@ -906,7 +906,27 @@
         <div class="panel">
           <h2>الأرصدة والحركات</h2>
           <div class="table-scroll"><table><thead><tr><th>الحساب</th><th>النوع</th><th>طرق الدفع</th><th>الفرع</th><th>المصرف</th><th>الرصيد</th><th>إجراء</th></tr></thead><tbody id="financeAccountsBody"></tbody></table></div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الحساب</th><th>النوع</th><th>داخل</th><th>خارج</th><th>ملاحظات</th></tr></thead><tbody id="financeMovementsBody"></tbody></table></div>
+          <!-- (0127) سجل الحركة المالية — كل الداخل والخارج بفلترة خادمية (مواصفة الصندوق).
+               القرار المؤكَّد: فلترة الفرع تتبع فرع المستند، وفرع الخزينة عمود مستقل. -->
+          <div id="financeRegisterWrap">
+            <form class="form" id="financeRegisterForm" autocomplete="off">
+              <div><label>من تاريخ *</label><input type="date" id="regFrom" required></div>
+              <div><label>إلى تاريخ *</label><input type="date" id="regTo" required></div>
+              <div><label>الخزينة / الحساب (متعدد)</label><select id="regAccounts" multiple size="4"></select></div>
+              <div><label>الفرع</label><select id="regBranch"></select></div>
+              <div><label>النوع (متعدد)</label><select id="regTypes" multiple size="4"></select></div>
+              <div><label>الاتجاه</label><select id="regDirection"><option value="">الكل</option><option value="in">داخل</option><option value="out">خارج</option></select></div>
+              <div><label>البائع / المستخدم</label><select id="regUser"></select></div>
+              <div><label>بحث</label><input id="regSearch" placeholder="رقم مستند · طرف · ملاحظات"></div>
+              <div style="display:flex;gap:8px;align-items:flex-end"><button class="btn" type="submit">تطبيق</button><button class="btn secondary" type="button" id="regExportBtn" title="تصدير النتائج المفلترة كلها (Excel/CSV)">📤 CSV</button></div>
+            </form>
+            <div class="row" id="regTotals" style="gap:8px;flex-wrap:wrap;margin:8px 0"></div>
+            <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الخزينة</th><th>فرع الخزينة</th><th>الفرع</th><th>النوع</th><th>داخل</th><th>خارج</th><th>رقم المستند</th><th>الطرف</th><th>البائع</th><th>ملاحظات</th></tr></thead><tbody id="financeRegisterBody"></tbody></table></div>
+            <div class="row" style="justify-content:space-between;align-items:center;margin-top:8px">
+              <button class="btn secondary hidden" type="button" id="regMoreBtn">⬇ عرض المزيد</button>
+              <span class="muted" id="regCount"></span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1506,6 +1526,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261008-1751"></script>
+<script src="app.js?v=20261008-1829"></script>
 </body>
 </html>

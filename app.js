@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261008-1751';
+const APP_BUILD='b20261008-1829';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7319,6 +7319,136 @@ async function addFinanceMovement(account_id,direction,movement_type,amount,date
   await api('pos_finance_movements',{method:'POST',body:{account_id,direction,movement_type,amount:Number(amount),movement_date:date,reference_table,reference_id,notes}});
 }
 /* ⚙️ المرحلة 1: recordSaleFinanceMovements أُزيلت — الحركات المالية للفاتورة تُكتب داخل الـ RPC فقط بلا مسار يدوي */
+/* ═══ (0127) سجل الحركة المالية — MONEY-REGISTER-SPEC ═══
+   كل الداخل والخارج في نافذة واحدة قابلة للتصفية، بفلترة خادمية حصراً:
+   استعلام واحد للصفحة (200 صف) واستعلام مستقل للإجماليات على كامل النتائج
+   المفلترة — لا تنزيل للجدول كاملاً في المتصفح (حصة Supabase ‏5GB/شهر).
+   قرار §3 المؤكَّد من المستخدم: فلترة الفرع تتبع فرع المستند باحتياط فرع
+   الخزينة (branch_id في العرض 0127) وفرع الخزينة عمود مستقل. */
+const REG_PAGE=200;
+let regRows=[], regTotal=null, regOffset=0, regBusy=false;
+const REGISTER_MOVEMENT_TYPES=[['sale_payment','دفعة بيع'],['customer_payment','تحصيل دين زبون'],['supplier_refund','استرداد من مورد'],['customer_refund','استرداد للزبون'],['expense','مصروف'],['supplier_payment','دفع مورد'],['transfer_in','تحويل وارد'],['transfer_out','تحويل صادر']];
+/* المحاسب كان يرى جدول الحركات (آخر 200) قبل السجل فبقي يرى السجل كاملاً؛
+   البائع لا يفتح تبويب الخزائن أصلاً، وحارس العرض يمنعه حتى عبر REST مباشرة */
+function canSeeRegister(){ return ['admin','programmer','accountant'].includes(String(currentRole?.role||'')); }
+function registerTypeLabel(t){ const f=REGISTER_MOVEMENT_TYPES.find(x=>x[0]===t); return f?f[1]:(typeLabel(t)||t); }
+function initFinanceRegister(){
+  const keep=(sel)=>[...(q(sel)?.selectedOptions||[])].map(o=>o.value);
+  const restore=(sel,vals)=>{ const el=q(sel); if(el) [...el.options].forEach(o=>o.selected=vals.includes(o.value)); };
+  const accSel=keep('regAccounts'), typeSel=keep('regTypes');
+  const acc=q('regAccounts'); if(acc) acc.innerHTML=financeAccounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  const br=q('regBranch'); if(br){ const v=br.value; br.innerHTML='<option value="">كل الفروع</option>'+locations.filter(l=>l.active!==false).map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join(''); br.value=v; }
+  const ty=q('regTypes'); if(ty) ty.innerHTML=REGISTER_MOVEMENT_TYPES.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  const us=q('regUser'); if(us){ const v=us.value; us.innerHTML='<option value="">الكل</option>'+userRoles.slice().sort((a,b)=>String(a.identifier||'').localeCompare(String(b.identifier||''),'ar')).map(r=>`<option value="${esc(String(r.identifier||''))}">${esc(r.identifier)}${r.role?' — '+esc(String(r.role)):''}</option>`).join(''); us.value=v; }
+  restore('regAccounts',accSel); restore('regTypes',typeSel);
+  const now=new Date().toISOString().slice(0,10);
+  if(q('regFrom')&&!q('regFrom').value) q('regFrom').value=now.slice(0,8)+'01'; /* الشهر الحالي افتراضاً */
+  if(q('regTo')&&!q('regTo').value) q('regTo').value=now;
+}
+function registerParams(){
+  const accounts=[...(q('regAccounts')?.selectedOptions||[])].map(o=>o.value).filter(Boolean);
+  const types=[...(q('regTypes')?.selectedOptions||[])].map(o=>o.value).filter(Boolean);
+  const search=String(q('regSearch')?.value||'').trim();
+  return {
+    p_from:q('regFrom')?.value||'', p_to:q('regTo')?.value||'',
+    p_accounts:accounts.length?accounts:null,
+    p_branch:q('regBranch')?.value||null,
+    p_types:types.length?types:null,
+    p_direction:q('regDirection')?.value||null,
+    p_user:q('regUser')?.value||null,
+    p_search:search||null
+  };
+}
+async function loadFinanceRegister(reset=true){
+  if(regBusy) return;
+  const p=registerParams();
+  if(!p.p_from||!p.p_to){ toast('حدّد نطاق التاريخ أولاً — السجل لا يُحمَّل كاملاً أبداً','warn'); return; }
+  regBusy=true;
+  try{
+    if(reset){ regRows=[]; regOffset=0; }
+    /* فتح/تطبيق = استعلامان فقط: الصفحة والإجماليات (اختبار القبول ٩).
+       «عرض المزيد» يجلب الصفحة التالية وحدها — الإجماليات لا تُعاد */
+    const [page,totals]=await Promise.all([
+      rpc('pos_finance_register_page',{...p,p_limit:REG_PAGE,p_offset:regOffset}),
+      reset?rpc('pos_finance_register_totals',p):Promise.resolve(regTotal)
+    ]);
+    if(reset) regTotal=(Array.isArray(totals)?totals[0]:totals)||{};
+    const rows=Array.isArray(page)?page:[];
+    regRows=reset?rows.slice():regRows.concat(rows);
+    regOffset=regRows.length;
+    renderFinanceRegisterRows();
+  }catch(err){
+    console.error('finance register load failed',err);
+    toast('تعذّر جلب السجل ('+err.message+') — عرض آخر ذخيرة محلية','error');
+    renderFinanceRegisterFallback();
+  }finally{ regBusy=false; }
+}
+function renderFinanceRegisterRows(){
+  const tb=q('financeRegisterBody'); if(!tb) return;
+  tb.innerHTML=regRows.map(m=>{
+    const accLoc=locations.find(l=>l.id===m.account_location_id)?.name||'عام';
+    const branch=locations.find(l=>l.id===m.branch_id)?.name||'—';
+    const ref=String(m.reference_table||''), rid=m.reference_id?String(m.reference_id):'';
+    const clickable=!!(ref&&rid&&FINANCE_REGISTER_DOC_OPEN[ref]);
+    return `<tr${clickable?` style="cursor:pointer" onclick="financeRegisterOpenDoc('${esc(ref)}','${esc(rid)}')"`:''}><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(accLoc)}</td><td>${esc(branch)}</td><td>${esc(registerTypeLabel(m.movement_type))}</td><td>${m.direction==='in'?money(m.amount):''}</td><td>${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${esc(m.user_identifier||'—')}</td><td>${esc(m.notes||'')}</td></tr>`;
+  }).join('')||'<tr><td colspan="11">لا توجد حركات في هذا النطاق.</td></tr>';
+  const t=regTotal||{}, total=Number(t.count||0), loaded=regRows.length;
+  if(q('regTotals')) q('regTotals').innerHTML=`<span class="chip">إجمالي الداخل: <b>${money(t.total_in||0)}</b></span> <span class="chip">إجمالي الخارج: <b>${money(t.total_out||0)}</b></span> <span class="chip">الصافي: <b>${money(t.net||0)}</b></span> <span class="chip">عدد الحركات: <b>${total}</b></span>`;
+  if(q('regMoreBtn')) q('regMoreBtn').classList.toggle('hidden',loaded>=total);
+  if(q('regCount')) q('regCount').textContent=`المعروض ${loaded} من ${total}`;
+}
+/* (0127) فتح المستند الأصلي من سطر السجل — سجلٌ بلا فتح مستند يثير أسئلة فقط */
+const FINANCE_REGISTER_DOC_OPEN={
+  'pos_sales':id=>viewSaleInvoice(id),
+  'pos_sale_returns':id=>{const r=saleReturns.find(x=>x.id===id); r?viewSaleInvoice(r.sale_id):toast('افتح الفاتورة الأصلية من قائمة الفواتير','warn');},
+  'pos_expenses':id=>editExpense(id),
+  'pos_purchases':id=>viewPurchaseDetails(id),
+  'pos_purchase_returns':id=>{const pr=purchaseReturns.find(x=>x.id===id); pr?viewPurchaseDetails(pr.purchase_id):toast('افتح فاتورة الشراء الأصلية من قائمة المشتريات','warn');},
+  'pos_customer_ledger':id=>{const l=customerLedger.find(x=>x.id===id); l?openCustomerLedger(l.customer_id):toast('افتح كشف حساب الزبون من تبويب الزبائن','warn');}
+};
+function financeRegisterOpenDoc(ref,id){ const fn=FINANCE_REGISTER_DOC_OPEN[ref]; if(fn){ try{fn(id);}catch(e){console.error(e);toast('تعذّر فتح المستند','error');} } }
+/* (0127) الصفوف القديمة: عرض الطوارئ دون اتصال ومن لا يملك السجل (دفاعياً) */
+function legacyRegisterRowsHTML(list){
+  return list.map(m=>`<tr><td>${esc(m.movement_date)}</td><td>${esc(financeAccountName(m.account_id))}</td><td>—</td><td>—</td><td>${esc(registerTypeLabel(m.movement_type))}</td><td>${m.direction==='in'?money(m.amount):''}</td><td>${m.direction==='out'?money(m.amount):''}</td><td>—</td><td>—</td><td>—</td><td>${esc(m.notes)}</td></tr>`).join('');
+}
+function renderFinanceRegisterFallback(){
+  const tb=q('financeRegisterBody'); if(!tb) return;
+  tb.innerHTML=legacyRegisterRowsHTML(financeMovements.slice(0,200))||'<tr><td colspan="11">لا توجد حركات محفوظة محلياً.</td></tr>';
+  if(q('regTotals')) q('regTotals').innerHTML='<span class="chip">وضع دون اتصال — آخر ذخيرة محلية (بلا فلاتر ولا إجماليات)</span>';
+  if(q('regMoreBtn')) q('regMoreBtn').classList.add('hidden');
+  if(q('regCount')) q('regCount').textContent='';
+}
+/* (0127) تصدير CSV لكامل النتائج المفلترة — عدد الصفوف = عدد الرأس بالضبط */
+async function exportFinanceRegisterCSV(){
+  if(regBusy) return;
+  const p=registerParams();
+  if(!p.p_from||!p.p_to){ toast('حدّد نطاق التاريخ أولاً','warn'); return; }
+  regBusy=true;
+  try{
+    showLoading(true);
+    const totals=await rpc('pos_finance_register_totals',p);
+    const t=(Array.isArray(totals)?totals[0]:totals)||{};
+    const expected=Number(t.count||0);
+    const all=[]; let off=0;
+    for(;;){
+      const page=await rpc('pos_finance_register_page',{...p,p_limit:REG_PAGE,p_offset:off});
+      const rows=Array.isArray(page)?page:[];
+      all.push(...rows); off+=rows.length;
+      if(rows.length<REG_PAGE) break;
+      if(all.length>200000){ toast('النطاق ضخم جداً للتصدير — ضيّق الفلاتر','warn'); return; }
+    }
+    if(all.length!==expected){ toast('تنبيه: تغيّرت البيانات أثناء التصدير ('+all.length+' ≠ '+expected+')','warn'); }
+    const head=['التاريخ','الخزينة','فرع الخزينة','الفرع','النوع','داخل','خارج','رقم المستند','الطرف','البائع','ملاحظات'];
+    const lines=all.map(m=>[m.movement_date,m.account_name,locations.find(l=>l.id===m.account_location_id)?.name||'',locations.find(l=>l.id===m.branch_id)?.name||'',registerTypeLabel(m.movement_type),m.direction==='in'?m.amount:'',m.direction==='out'?m.amount:'',m.doc_no||'',m.counterparty||'',m.user_identifier||'',m.notes||'']);
+    const csv='\ufeff'+[head,...lines].map(row=>row.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download='سجل-الحركة-'+p.p_from+'_'+p.p_to+'.csv';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast('تم تصدير '+all.length+' حركة (Excel/CSV)','success');
+  }catch(err){ console.error(err); toast('تعذّر التصدير: '+err.message,'error'); }
+  finally{ showLoading(false); regBusy=false; }
+}
 function renderFinance(){
   if(!q('financeAccountsBody')) return;
   /* (20261007c) القوائم تُملأ عند كل عرض للنافذة — لا عند رأس الموردين فقط */
@@ -7329,7 +7459,11 @@ function renderFinance(){
   q('financeCashTotal').textContent=money(cash); q('financeBankTotal').textContent=money(bank); q('financeCardTotal').textContent=money(card);
   const month=new Date().toISOString().slice(0,7); q('financeMonthExpenses').textContent=money(expenses.filter(e=>(e.expense_date||'').startsWith(month)).reduce((a,e)=>a+Number(e.amount||0),0)+salaryPayments.filter(e=>(e.payment_date||'').startsWith(month)).reduce((a,e)=>a+Number(e.amount||0),0));
   q('financeAccountsBody').innerHTML=financeAccounts.map(a=>{const l=locations.find(x=>x.id===a.location_id); const methods=accountAcceptedMethods(a).map(typeLabel).join(' / '); return `<tr><td>${esc(a.name)}</td><td>${accountTypeLabel(a.account_type)}</td><td>${esc(methods)}</td><td>${esc(l?.name||'عام')}</td><td>${esc(a.bank_name)}</td><td><b>${money(a.balance)}</b></td><td><button class="btn secondary" type="button" onclick="editFinanceAccount('${a.id}')">تعديل</button></td></tr>`}).join('')||'<tr><td colspan="7">لا توجد حسابات مالية.</td></tr>';
-  q('financeMovementsBody').innerHTML=financeMovements.slice(0,80).map(m=>`<tr><td>${esc(m.movement_date)}</td><td>${esc(financeAccountName(m.account_id))}</td><td>${esc(typeLabel(m.movement_type))}</td><td>${m.direction==='in'?money(m.amount):''}</td><td>${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.notes)}</td></tr>`).join('')||'<tr><td colspan="6">لا توجد حركات مالية.</td></tr>';
+  /* (0127) سجل الحركة المالية يحلّ محل جدول آخر 80 حركة: فلترة خادمية +
+     إجماليات من استعلام مستقل + عرض المزيد + CSV + فتح المستند الأصلي.
+     من لا يملك السجل (دفاعياً — لا يصل هذا التبويب أصلاً) يبقى على العرض المختصر */
+  if(canSeeRegister()){ initFinanceRegister(); loadFinanceRegister(true); }
+  else { q('financeRegisterBody').innerHTML=legacyRegisterRowsHTML(financeMovements.slice(0,80))||'<tr><td colspan="11">لا توجد حركات مالية.</td></tr>'; }
   /* (20261007c) جدول الموظفين: الظهور الفوري بعد الحفظ + إدارة من النافذة نفسها */
   if(q('employeesBody')){
     q('employeesBody').innerHTML=employees.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ar')).map(e=>{
@@ -7486,6 +7620,10 @@ q('saleReturnForm').addEventListener('submit', async e=>{
 
 q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:moneyVal(q('financeOpeningBalance').value),notes:q('financeAccountNotes').value.trim()||null}; if(editingFinanceAccountId){await api('pos_finance_accounts',{method:'PATCH',qs:`?id=eq.${editingFinanceAccountId}`,body:{...body,updated_at:new Date().toISOString()}}); toast('تم تعديل الحساب');}else{await api('pos_finance_accounts',{method:'POST',body}); toast('تم حفظ الحساب');} resetFinanceAccountForm(); await refreshParts(['financeAccounts']);}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message+' - تأكد من تشغيل SQL طرق الدفع للحسابات')}finally{showLoading(false);window.__busy=false}});
 q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=moneyVal(q('financeTransferAmount').value),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}validateAccountingTransfer(amount);await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await refreshParts(['financeAccounts','financeMovements']);}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
+/* (0127) سجل الحركة المالية: تطبيق الفلاتر + عرض المزيد + تصدير CSV */
+q('financeRegisterForm')?.addEventListener('submit',e=>{e.preventDefault();loadFinanceRegister(true);});
+q('regMoreBtn')?.addEventListener('click',()=>loadFinanceRegister(false));
+q('regExportBtn')?.addEventListener('click',()=>exportFinanceRegisterCSV());
 q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const method=q('expensePaymentMethod')?.value||'cash'; if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; if(method==='cash') selectDefaultExpenseAccount(); const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null,created_by:appUser?.identifier||''}; if(!body.location_id)throw new Error('لا يوجد فرع مرتبط بالمستخدم'); if(!body.account_id)throw new Error('اختر الخزينة / الحساب'); validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await logAction('expense','pos_expenses',r[0].id,`${body.title} - ${money(body.amount)} ${APP_CONFIG.currency}`);await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset(); if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; selectDefaultExpenseAccount(); setToday();toast('تم حفظ المصروف'); expenses.unshift(r[0]); if(expensesListInit && expenseMatchesListFilters(r[0])){ expensesListCache.unshift(r[0]); renderExpensesList(); } localMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title); refreshAfterLocalUpdate();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 /* ═════════════ سجل المصاريف: قائمة + فلاتر + تعديل/حذف ذرّي عبر RPC ═════════════
