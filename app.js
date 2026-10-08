@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261008-1439';
+const APP_BUILD='b20261008-1612';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -6176,8 +6176,10 @@ table.items{width:100%;border-collapse:collapse;margin:0 0 18px}
 .ft{margin-top:24px;border-top:1px solid #eef1f6;padding-top:11px;text-align:center;page-break-inside:avoid}
 .ft .thx{color:#0f2a5f;font-size:14.5px;font-weight:700}
 .ft .site{direction:ltr;color:#475569;font-size:13px;font-weight:700;margin-top:2px;letter-spacing:.6px}
-/* (20261008a) سياسة الاستبدال والرد + هواتف التواصل */
-.ft .policy{color:#0f2a5f;font-size:14.5px;font-weight:800;margin-bottom:3px}
+/* (20261008c) السياسة: آخر سطر بالفاتورة، صغيرة وبوزن عادي —
+   الغامق للكلمات المفتاحية <b> فقط (قبلها كان السطر كله 800) */
+.ft .policy{color:#64748b;font-size:11.5px;font-weight:400;margin-top:5px}
+.ft .policy b{font-weight:800}
 .ft .contacts{color:#334155;font-size:13px;font-weight:600;margin-bottom:4px}
 .ft .contacts .cl{color:#94a3b8}
 .ft .contacts bdo{font-variant-numeric:tabular-nums;font-weight:800;color:#0f172a}
@@ -6234,10 +6236,10 @@ ${mode==='view'?'':'<div class="bar"><button class="pbtn" onclick="window.print(
     <div class="sg"><div class="who">توقيع البائع</div><div class="line">الاسم والتوقيع</div></div>
   </div>
   <div class="ft">
-    <div class="policy">⇄ ${INVOICE_POLICY}</div>
     <div class="contacts"><span class="cl">للتواصل:</span> ${INVOICE_CONTACTS.map(c=>esc(c.name)+(c.branch?' ('+esc(c.branch)+')':'')+' <bdo dir="ltr">'+esc(c.phone)+'</bdo>').join(' · ')}</div>
     <div class="thx">شكرًا لتعاملكم معنا — ${esc(APP_CONFIG.businessName)}</div>
     <div class="site">benamorgroup.store</div>
+    <div class="policy">${INVOICE_POLICY}</div>
   </div>
 </div></body></html>`;
     if(mode==='print') showInAppPrint(html);
