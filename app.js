@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261008-1612';
+const APP_BUILD='b20261008-1751';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10032,7 +10032,7 @@ function renderAuditLog(){
   const rows=(auditLog||[]).filter(a=>!term||[a.user_identifier,a.action,auditActionLabel(a.action),a.details,a.entity_type].join(' ').toLowerCase().includes(term));
   body.innerHTML=rows.map(a=>`<tr><td class="ltr">${esc((a.created_at||'').replace('T',' ').slice(0,19))}</td><td><b>${esc(a.user_identifier||'')}</b></td><td title="${esc(a.action||'')}">${esc(auditActionLabel(a.action||''))}</td><td class="mini">${esc(a.details||'')}</td></tr>`).join('')||'<tr><td colspan="4">لا توجد سجلات.</td></tr>';
 }
-async function logAction(action,entityType='',entityId='',details=''){try{await api('pos_audit_log',{method:'POST',body:{user_identifier:appUser?.identifier||'',action,entity_type:entityType,entity_id:String(entityId||''),details,branch_id:appUser?.branch_id||null}});}catch(e){console.warn('audit log failed',e)}}
+async function logAction(action,entityType='',entityId='',details=''){try{ /* (20261008d) بلا جلسة حقيقية لا كتابة تدقيق: anon مرفوض سياستاً (0039/0126) — المحاولة ضجيج 403 فقط */ if(!authSession?.access_token) return; await api('pos_audit_log',{method:'POST',body:{user_identifier:appUser?.identifier||'',action,entity_type:entityType,entity_id:String(entityId||''),details,branch_id:appUser?.branch_id||null}});}catch(e){console.warn('audit log failed',e)}}
 let stockCountData={};
 let __scEditing=null; /* (1945) قائمة جرد محفوظة مفتوحة للتحرير: {id,status,no,orig:Map(code→سطر)} */
 let __scItems=[]; /* أسطر جدول الجرد آخر رسم — لنافذة F3 والإجماليات */
