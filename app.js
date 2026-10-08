@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261007-1958';
+const APP_BUILD='b20261008-1419';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -5046,7 +5046,7 @@ async function printReturn(id){
   const r=saleReturns.find(x=>x.id===id); if(!r){toast('لا يوجد مستند مرتجع لهذه الحركة التاريخية','warn');return;}
   try{
     const items=saleReturnItems.filter(i=>i.return_id===id);
-    const orig=sales.find(x=>x.id===r.sale_id); const cust=customers.find(c=>x.id===r.customer_id); const loc=locations.find(x=>x.id===r.location_id);
+    const orig=sales.find(x=>x.id===r.sale_id); const cust=customers.find(c=>c.id===r.customer_id); /* (20261008a) كان c=>x.id — خطأ مطبعي أقعده طباعة المرتجع دائماً */ const loc=locations.find(x=>x.id===r.location_id);
     const {name}=returnAccountName(id);
     const rows=items.map((it,i)=>`<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(pLabel(it.product_code,it.product_name))}</td><td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_price)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`).join('');
     const dp=String(r.return_date||'').split('-'); const dateDisp=(dp.length===3)?(dp[2]+'-'+dp[1]+'-'+dp[0]):String(r.return_date||'');
@@ -5058,7 +5058,7 @@ async function printReturn(id){
 .pbtn.ghost{background:#fff;color:#1d4ed8;border:1px solid #c7d2fe}
 .sheet{max-width:800px;margin:14px auto 40px;background:#fff;padding:34px 38px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,.10)}
 .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:12px}
-.brand h1{margin:0;color:#0f2a5f;font-size:27px;font-weight:800}.brand .sub{color:#64748b;font-size:13px;font-weight:600;margin-top:2px}
+.brand{display:flex;align-items:center;gap:13px}.brand .logo{height:62px;width:auto;border-radius:8px;display:block;flex-shrink:0}.brand h1{margin:0;color:#0f2a5f;font-size:27px;font-weight:800}.brand .sub{color:#64748b;font-size:13px;font-weight:600;margin-top:2px}
 .doc{text-align:left}.doc .title{font-size:29px;font-weight:800;color:#b91c1c}.doc .invno{direction:ltr;font-size:16.5px;font-weight:700;color:#1d4ed8;margin-top:4px}.doc .date{direction:ltr;color:#475569;font-size:13.5px;margin-top:2px}
 .badge{display:inline-block;border-radius:6px;padding:4px 11px;font-size:12.5px;font-weight:700;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;margin-top:8px}
 .brandline{height:3px;background:linear-gradient(90deg,#b91c1c,#ef4444);border-radius:2px;margin-bottom:14px}
@@ -5073,13 +5073,13 @@ table.items{width:100%;border-collapse:collapse;margin:0 0 18px}.items thead th{
 @media print{body{background:#fff}.bar{display:none}.sheet{box-shadow:none;margin:0;max-width:none;border-radius:0;padding:14mm 15mm}.items thead{display:table-header-group}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 @page{size:A4;margin:0}
 </style></head><body><div class="bar"><button class="pbtn" onclick="window.print()">طباعة</button><button class="pbtn ghost" onclick="window.close()">إغلاق</button></div>
-<div class="sheet"><div class="hd"><div class="brand"><h1>${esc(APP_CONFIG.businessName)}</h1><div class="sub">${esc(APP_CONFIG.tagline)}</div></div>
+<div class="sheet"><div class="hd"><div class="brand"><img class="logo" src="assets/logo-benamor.jpeg" alt="${esc(APP_CONFIG.businessName)}" onerror="this.remove()"><div><h1>${esc(APP_CONFIG.businessName)}</h1><div class="sub">${esc(APP_CONFIG.tagline)}</div></div></div>
 <div class="doc"><div class="title">فاتورة مرتجع بيع</div><div class="invno">${esc(String(id).slice(0,8))}</div><div class="date">${esc(dateDisp)}</div><span class="badge">استرداد ${esc(typeLabel(r.refund_method))}${name?' — '+esc(name):''}</span></div></div>
 <div class="brandline"></div>
 <div class="meta"><div class="f"><div class="lbl">الزبون</div><div class="val">${esc(cust?.name||'زبون نقدي')}</div></div><div class="f"><div class="lbl">الهاتف</div><div class="val" dir="ltr" style="text-align:right">${esc(cust?.phone||'—')}</div></div><div class="f"><div class="lbl">الفرع</div><div class="val">${esc(loc?.name||'-')}</div></div><div class="f"><div class="lbl">الفاتورة الأصلية</div><div class="val ltr">${esc(orig?.invoice_no||'—')}</div></div></div>
 <table class="items"><thead><tr><th class="n">#</th><th>الكود</th><th>الصنف</th><th class="n">الكمية</th><th class="n">سعر الوحدة</th><th class="n">الإجمالي</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="totals"><div class="grand"><span>إجمالي المرتجع</span><b>${money(r.total)} ${APP_CONFIG.currency}</b></div></div>
-<div class="ft">شكرًا لتعاملكم معنا — ${esc(APP_CONFIG.businessName)}</div></div></body></html>`;
+<div class="ft"><div class="contacts"><span style="color:#94a3b8">للتواصل:</span> ${INVOICE_CONTACTS.map(c=>esc(c.name)+' <bdo dir="ltr">'+esc(c.phone)+'</bdo>').join(' · ')}</div>شكرًا لتعاملكم معنا — ${esc(APP_CONFIG.businessName)}</div></div></body></html>`;
     showInAppPrint(html);
   }catch(err){console.error(err);toast('خطأ في طباعة المرتجع: '+err.message,'error')}
 }
@@ -6072,6 +6072,12 @@ function closePrintPreview(){
   printPreviewPrinting=false;
 }
 
+/* (20261008a) هوية الفاتورة — طلب صاحب المنشأة 08/10:
+   شعار المجموعة + هواتف التواصل + سياسة «البضاعة تُستبدل وتُرد في أجل
+   أقصاه 3 أيام». مصدر واحد يُعدَّل من هنا. */
+const INVOICE_CONTACTS=[{name:'سليم',phone:'0910816971'},{name:'عبد الوهاب',phone:'0912151790'},{name:'أحمد',phone:'0910101669'},{name:'عبد الله',phone:'0946159542'}];
+const INVOICE_POLICY='البضاعة تُستبدل وتُرد في أجل أقصاه 3 أيام';
+
 /* (2+) مشاهدة ≠ تعديل ≠ طباعة: كلها تعرض نفس مستند الفاتورة من دالة واحدة */
 async function viewSaleInvoice(id){ return showSaleInvoiceDoc(id,'view'); }
 async function printSale(id){ return showSaleInvoiceDoc(id,'print'); }
@@ -6112,6 +6118,8 @@ body{font-family:'Cairo',Tahoma,Arial,sans-serif;margin:0;color:#0f172a;line-hei
 .pbtn.ghost{background:#fff;color:#1d4ed8;border:1px solid #c7d2fe}
 .sheet{max-width:800px;margin:14px auto 40px;background:#fff;padding:34px 38px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,.10)}
 .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:12px}
+.brand{display:flex;align-items:center;gap:13px}
+.brand .logo{height:62px;width:auto;border-radius:8px;display:block;flex-shrink:0}
 .brand h1{margin:0;color:#0f2a5f;font-size:27px;font-weight:800}
 .brand .sub{color:#64748b;font-size:13px;font-weight:600;margin-top:2px}
 .doc{text-align:left}
@@ -6164,6 +6172,11 @@ table.items{width:100%;border-collapse:collapse;margin:0 0 18px}
 .ft{margin-top:24px;border-top:1px solid #eef1f6;padding-top:11px;text-align:center;page-break-inside:avoid}
 .ft .thx{color:#0f2a5f;font-size:14.5px;font-weight:700}
 .ft .site{direction:ltr;color:#475569;font-size:13px;font-weight:700;margin-top:2px;letter-spacing:.6px}
+/* (20261008a) سياسة الاستبدال والرد + هواتف التواصل */
+.ft .policy{color:#0f2a5f;font-size:14.5px;font-weight:800;margin-bottom:3px}
+.ft .contacts{color:#334155;font-size:13px;font-weight:600;margin-bottom:4px}
+.ft .contacts .cl{color:#94a3b8}
+.ft .contacts bdo{font-variant-numeric:tabular-nums;font-weight:800;color:#0f172a}
 @media print{
   body{background:#fff}
   .bar{display:none}
@@ -6178,7 +6191,7 @@ table.items{width:100%;border-collapse:collapse;margin:0 0 18px}
 ${mode==='view'?'':'<div class="bar"><button class="pbtn" onclick="window.print()">طباعة</button><button class="pbtn ghost" onclick="window.close()">إغلاق</button></div>'}
 <div class="sheet">
   <div class="hd">
-    <div class="brand"><h1>${esc(APP_CONFIG.businessName)}</h1><div class="sub">${esc(APP_CONFIG.tagline)}</div></div>
+    <div class="brand"><img class="logo" src="assets/logo-benamor.jpeg" alt="${esc(APP_CONFIG.businessName)}" onerror="this.remove()"><div><h1>${esc(APP_CONFIG.businessName)}</h1><div class="sub">${esc(APP_CONFIG.tagline)}</div></div></div>
     <div class="doc">
       <div class="title">فاتورة بيع</div>
       <div class="invno">${sl.offline_pending?'<span style="color:#b45309">محلية — بانتظار المزامنة</span>':esc(sl.invoice_no||sl.id.slice(0,8))}</div>
@@ -6217,7 +6230,12 @@ ${mode==='view'?'':'<div class="bar"><button class="pbtn" onclick="window.print(
     <div class="sg"><div class="who">توقيع الزبون</div><div class="line">الاسم والتوقيع</div></div>
     <div class="sg"><div class="who">توقيع البائع</div><div class="line">الاسم والتوقيع</div></div>
   </div>
-  <div class="ft"><div class="thx">شكرًا لتعاملكم معنا — ${esc(APP_CONFIG.businessName)}</div><div class="site">benamorgroup.store</div></div>
+  <div class="ft">
+    <div class="policy">⇄ ${esc(INVOICE_POLICY)}</div>
+    <div class="contacts"><span class="cl">للتواصل:</span> ${INVOICE_CONTACTS.map(c=>esc(c.name)+' <bdo dir="ltr">'+esc(c.phone)+'</bdo>').join(' · ')}</div>
+    <div class="thx">شكرًا لتعاملكم معنا — ${esc(APP_CONFIG.businessName)}</div>
+    <div class="site">benamorgroup.store</div>
+  </div>
 </div></body></html>`;
     if(mode==='print') showInAppPrint(html);
     else openSaleViewModal(sl,html);

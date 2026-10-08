@@ -13,12 +13,12 @@
      الحالي + clients.claim + إبلاغ الصفحات «صدر تحديث» لتعرض شريط
      إعادة التحميل (بلا إعادة تحميل تلقائية — الفاتورة المفتوحة أغلى).
    ═══════════════════════════════════════════════════════════════════ */
-const BUILD='20261007-1958'; /* يُستبدل بسكربت النشر */
+const BUILD='20261008-1419'; /* يُستبدل بسكربت النشر */
 const CACHE='benamor-pos-'+BUILD;
 /* (العمل دون اتصال) الخطوط ضمن التخزين المسبق: أول فتح دون اتصال
    يجب أن يعرض الخط والأيقونات، لا أن ينتظر زيارة سابقة تملأ الكاش. */
 const CORE=['./','./index.html','./app.css','./app.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
-  './assets/app-fonts.css',
+  './assets/app-fonts.css', './assets/logo-benamor.jpeg', /* (20261008a) شعار الفاتورة — يُطبع حتى دون اتصال */
   './assets/fonts/cairo-arabic.woff2','./assets/fonts/cairo-latin.woff2','./assets/fonts/cairo-latin-ext.woff2',
   './assets/fonts/tabler-icons.woff2'];
 const NETWORK_FIRST_PATHS=['/app.js','/app.css','/index.html','/manifest.webmanifest']; /* + كل طلب تنقل */
