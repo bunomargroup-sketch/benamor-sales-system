@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261010-1209';
+const APP_BUILD='b20261010-1240';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7332,6 +7332,167 @@ const REGISTER_MOVEMENT_TYPES=[['sale_payment','دفعة بيع'],['customer_pay
    البائع لا يفتح تبويب الخزائن أصلاً، وحارس العرض يمنعه حتى عبر REST مباشرة */
 function canSeeRegister(){ return ['admin','programmer','accountant'].includes(String(currentRole?.role||'')); }
 function registerTypeLabel(t){ const f=REGISTER_MOVEMENT_TYPES.find(x=>x[0]===t); return f?f[1]:(typeLabel(t)||t); }
+/* ═══ (20261010b) القوائم المتعددة المطوية — زر ملخّص + لوحة مربعات بدل <select multiple> ═══
+   لماذا: المتصفح يعرض select[multiple] صندوق قائمة مفتوحاً دائماً يبتلع
+   الشاشة (تحت الطية على 1366×768)، والاختيار المتعدد يحتاج Ctrl لا يعرفه
+   أحد — نقرة واحدة تمسح ما قبلها بصمت فيبدو الفلتر معطلاً.
+   الحل: زر مطوي بنفس هيئة الفرع/الاتجاه، ملخّص عربي مختار (الكل · خزينتان ·
+   3 أنواع)، يفتح لوحة مربعات اختيار بلا Ctrl، فيها تحديد الكل ومسح، يُغلق
+   بالنقر خارجه أو بـEsc (والأسهم تتنقل بين المربعات)، والاختيارات تسري
+   على «تطبيق» كما هي. الوسائط p_accounts/p_types لم تتغير — الـselect
+   الأصلي يبقى مصدر الحالة الوحيد لكنه مخفي. */
+const MS_UNITS={
+  accounts:{one:'خزينة واحدة',two:'خزينتان',few:'خزائن',many:'خزينة',all:'الكل'},
+  types:{one:'نوع واحد',two:'نوعان',few:'أنواع',many:'نوع',all:'الكل'}
+};
+function msSummary(sel,unit){
+  const chosen=[...(sel?.selectedOptions||[])];
+  if(!chosen.length) return unit.all;
+  if(chosen.length===1) return chosen[0].textContent||chosen[0].value;
+  if(chosen.length===[...(sel?.options||[])].length) return unit.all; /* الكل المختار = الكل */
+  if(chosen.length===2) return unit.two;
+  if(chosen.length<=10) return chosen.length+' '+unit.few;
+  return chosen.length+' '+unit.many;
+}
+function msInjectStyle(){
+  if(document.getElementById('mselStyle')) return;
+  const target=document.head||document.documentElement; if(!target) return;
+  const st=document.createElement('style');
+  st.id='mselStyle';
+  /* نفس مقاسات input,select,textarea (app.css): الحد والاستدارة والحشو والخلفية
+     — فيطابق الزر ارتفاع الفرع والاتجاه تماماً، ويتكيف مع الوضع الليلي تلقائياً */
+  st.textContent=
+    '.msel{position:relative;width:100%}'
+   +'.msel-btn{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;'
+   +'border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px;font:inherit;'
+   +'background:var(--input);color:var(--text);outline:none;cursor:pointer;text-align:right}'
+   +'.msel-btn:focus-visible{box-shadow:var(--focus)}'
+   +'.msel-btn .msel-caret{font-size:11px;color:var(--muted);flex:none}'
+   +'.msel-panel{position:absolute;z-index:80;top:calc(100% + 4px);right:0;width:100%;min-width:230px;max-width:320px;'
+   +'max-height:min(300px,50vh);overflow:auto;background:var(--input);border:1px solid var(--border);'
+   +'border-radius:var(--radius);box-shadow:0 10px 28px rgba(0,0,0,.16);padding:6px}'
+   +'.msel-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px;text-align:right}'
+   +'.msel-item:hover{background:color-mix(in srgb,var(--blue) 8%,transparent)}'
+   +'.msel-item input{width:auto;flex:none;padding:0;accent-color:var(--blue)}'
+   +'.msel-foot{display:flex;gap:8px;padding:6px 4px 2px;border-top:1px solid var(--border);margin-top:4px;'
+   +'position:sticky;bottom:0;background:var(--input)}'
+   +'.msel-foot button{flex:1;border:1px solid var(--border);border-radius:8px;background:var(--input);'
+   +'color:var(--text);padding:6px 8px;font:inherit;font-size:13px;cursor:pointer}';
+  target.appendChild(st);
+}
+function msRender(sel){
+  if(!sel||!sel.__msPanel) return;
+  const unit=sel.__msUnit||MS_UNITS.types;
+  const chosen=new Set([...(sel.selectedOptions||[])].map(o=>o.value));
+  const opts=[...(sel.options||[])];
+  const panel=sel.__msPanel;
+  panel.innerHTML='';
+  opts.forEach(o=>{
+    const lab=document.createElement('label');
+    lab.className='msel-item';
+    const cb=document.createElement('input');
+    cb.type='checkbox';
+    cb.value=o.value;
+    cb.checked=chosen.has(o.value);
+    cb.addEventListener('change',()=>msSyncFromPanel(sel));
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(o.textContent||o.value));
+    panel.appendChild(lab);
+  });
+  const foot=document.createElement('div');
+  foot.className='msel-foot';
+  const mkBtn=(txt,fn)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=txt; b.addEventListener('click',fn); return b; };
+  foot.appendChild(mkBtn('تحديد الكل',()=>{ opts.forEach(o=>{o.selected=true;}); msRender(sel); }));
+  foot.appendChild(mkBtn('مسح',()=>{ opts.forEach(o=>{o.selected=false;}); msRender(sel); }));
+  panel.appendChild(foot);
+  const lbl=sel.__msBtn?.querySelector('.msel-label');
+  if(lbl) lbl.textContent=msSummary(sel,unit);
+}
+function msSyncFromPanel(sel){
+  if(!sel||!sel.__msPanel) return;
+  const boxes=[...sel.__msPanel.querySelectorAll('input[type="checkbox"]')];
+  const vals=new Set(boxes.filter(b=>b.checked).map(b=>b.value));
+  [...(sel.options||[])].forEach(o=>{ o.selected=vals.has(o.value); });
+  /* الملخّص يتحدث فوراً؛ الفلترة تسري عند «تطبيق» كما هي */
+  const lbl=sel.__msBtn?.querySelector('.msel-label');
+  if(lbl) lbl.textContent=msSummary(sel,sel.__msUnit||MS_UNITS.types);
+}
+function msToggle(sel){
+  const panel=sel?.__msPanel; if(!panel) return;
+  if(panel.style.display!=='none'){ panel.style.display='none'; }
+  else{
+    document.querySelectorAll('.msel-panel').forEach(p=>{ if(p!==panel) p.style.display='none'; }); /* مفتوحة واحدة كحد أقصى */
+    panel.style.display='block';
+    const first=panel.querySelector('input[type="checkbox"]'); if(first) first.focus();
+  }
+  if(sel.__msBtn) sel.__msBtn.setAttribute('aria-expanded',String(panel.style.display!=='none'));
+}
+function msClose(sel){
+  const panel=sel?.__msPanel;
+  if(panel) panel.style.display='none';
+  if(sel?.__msBtn) sel.__msBtn.setAttribute('aria-expanded','false');
+}
+function msBuild(sel,unitKey){
+  if(!sel) return;
+  const unit=MS_UNITS[unitKey]||MS_UNITS.types;
+  if(!sel.dataset.msBuilt){
+    sel.dataset.msBuilt='1';
+    msInjectStyle();
+    sel.setAttribute('aria-hidden','true');
+    sel.setAttribute('tabindex','-1');
+    sel.style.display='none'; /* مخفي لكنه مصدر الحالة: selectedOptions كما كانت */
+    const box=document.createElement('div');
+    box.className='msel';
+    box.dir='rtl';
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='msel-btn';
+    btn.setAttribute('aria-haspopup','true');
+    btn.setAttribute('aria-expanded','false');
+    btn.innerHTML='<span class="msel-label">الكل</span><span class="msel-caret">▾</span>';
+    const panel=document.createElement('div');
+    panel.className='msel-panel';
+    panel.style.display='none';
+    panel.dir='rtl';
+    panel.setAttribute('role','group');
+    const syncAria=()=>{ if(sel.__msBtn) sel.__msBtn.setAttribute('aria-expanded',String(panel.style.display!=='none')); };
+    btn.addEventListener('click',()=>msToggle(sel));
+    /* السهم من الزر يفتح — بلا فقاعة كي لا يعالجه معالج الصندوق مرة ثانية */
+    btn.addEventListener('keydown',e=>{
+      if((e.key==='ArrowDown'||e.key==='ArrowUp')&&panel.style.display==='none'){
+        e.preventDefault(); e.stopPropagation(); msToggle(sel);
+      }
+    });
+    box.addEventListener('keydown',e=>{
+      if(e.key==='Escape'){ e.preventDefault(); msClose(sel); btn.focus(); }
+      else if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+        e.preventDefault();
+        if(panel.style.display==='none') return;
+        const boxes=[...panel.querySelectorAll('input[type="checkbox"]')];
+        if(!boxes.length) return;
+        const i=boxes.indexOf(document.activeElement);
+        if(i<0){ boxes[0].focus(); return; } /* قادم من الزر: يبدأ من الأول */
+        const n=(e.key==='ArrowDown')?Math.min(i+1,boxes.length-1):Math.max(i-1,0);
+        boxes[n].focus();
+      }
+    });
+    box.appendChild(btn); box.appendChild(panel);
+    if(sel.parentNode) sel.parentNode.insertBefore(box,sel.nextSibling); /* في بيئات بلا DOM حقيقي: نتخطى الإدراج بأمان */
+    sel.__msBtn=btn; sel.__msPanel=panel; sel.__msUnit=unit;
+    if(typeof window!=='undefined'&&!window.__msDocHook){
+      window.__msDocHook=true;
+      document.addEventListener('click',e=>{ /* النقر خارج أي لوحة يغلقها — الاختيار يبقى */
+        document.querySelectorAll('.msel').forEach(b=>{
+          const p=b.querySelector('.msel-panel'), t=b.querySelector('.msel-btn');
+          if(!p||!t) return;
+          if(p.style.display!=='none'&&!b.contains(e.target)) p.style.display='none';
+          t.setAttribute('aria-expanded',String(p.style.display!=='none'));
+        });
+      });
+    }
+  }
+  msRender(sel);
+}
 function initFinanceRegister(){
   const keep=(sel)=>[...(q(sel)?.selectedOptions||[])].map(o=>o.value);
   const restore=(sel,vals)=>{ const el=q(sel); if(el) [...el.options].forEach(o=>o.selected=vals.includes(o.value)); };
@@ -7344,6 +7505,8 @@ function initFinanceRegister(){
   const now=new Date().toISOString().slice(0,10);
   if(q('regFrom')&&!q('regFrom').value) q('regFrom').value=now.slice(0,8)+'01'; /* الشهر الحالي افتراضاً */
   if(q('regTo')&&!q('regTo').value) q('regTo').value=now;
+  /* (20261010b) القائمتان المتعددتان: زر مطوي + لوحة مربعات — الـselect الأصلي مخفي ومصدر الحالة */
+  msBuild(acc,'accounts'); msBuild(ty,'types');
 }
 function registerParams(){
   const accounts=[...(q('regAccounts')?.selectedOptions||[])].map(o=>o.value).filter(Boolean);
