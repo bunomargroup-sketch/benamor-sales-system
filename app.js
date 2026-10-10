@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261008-1829';
+const APP_BUILD='b20261010-1132';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7359,8 +7359,11 @@ function registerParams(){
     p_search:search||null
   };
 }
+/* (20261010a) أثناء تحميل سابق: لا نبلع «تطبيق» بصمت — نصفّ آخر طلب
+   وينفَّذ فور انتهاء الحالي (شبكة ليبيا بطيئة والضغط المتكرر كان يُهمل) */
+let regPending=null;
 async function loadFinanceRegister(reset=true){
-  if(regBusy) return;
+  if(regBusy){ regPending=reset; return; }
   const p=registerParams();
   if(!p.p_from||!p.p_to){ toast('حدّد نطاق التاريخ أولاً — السجل لا يُحمَّل كاملاً أبداً','warn'); return; }
   regBusy=true;
@@ -7379,9 +7382,17 @@ async function loadFinanceRegister(reset=true){
     renderFinanceRegisterRows();
   }catch(err){
     console.error('finance register load failed',err);
-    toast('تعذّر جلب السجل ('+err.message+') — عرض آخر ذخيرة محلية','error');
+    /* (20261010a) السبب الفعلي في لافتة حمراء داخل الشاشة — بلا حاجة لأدوات المطور.
+       الترتيب مقصود: fallback أولاً (يكتب لافتته العامة) ثم اللافتة الحمراء فوقها —
+       وإلا لابتلعت لافتة «دون اتصال» التشخيص الذي نريده */
     renderFinanceRegisterFallback();
-  }finally{ regBusy=false; }
+    const msg=String(err?.message||err||'خطأ غير معروف');
+    toast('تعذّر جلب السجل — التفاصيل داخل الشاشة','error');
+    if(q('regTotals')) q('regTotals').innerHTML=`<span class="chip" style="background:#fee2e2;color:#991b1b">⚠ فشل جلب السجل: ${esc(msg)} — البناء ${esc(APP_BUILD)}. يُعرض آخر ذخيرة محلية مؤقتاً.</span>`;
+  }finally{
+    regBusy=false;
+    if(regPending!==null){ const nxt=regPending; regPending=null; loadFinanceRegister(nxt); }
+  }
 }
 function renderFinanceRegisterRows(){
   const tb=q('financeRegisterBody'); if(!tb) return;
@@ -7462,8 +7473,13 @@ function renderFinance(){
   /* (0127) سجل الحركة المالية يحلّ محل جدول آخر 80 حركة: فلترة خادمية +
      إجماليات من استعلام مستقل + عرض المزيد + CSV + فتح المستند الأصلي.
      من لا يملك السجل (دفاعياً — لا يصل هذا التبويب أصلاً) يبقى على العرض المختصر */
-  if(canSeeRegister()){ initFinanceRegister(); loadFinanceRegister(true); }
-  else { q('financeRegisterBody').innerHTML=legacyRegisterRowsHTML(financeMovements.slice(0,80))||'<tr><td colspan="11">لا توجد حركات مالية.</td></tr>'; }
+  if(canSeeRegister()){ if(q('financeRegisterForm')) q('financeRegisterForm').classList.remove('hidden'); initFinanceRegister(); loadFinanceRegister(true); }
+  else {
+    /* (20261010a) دور لا يفتح السجل: لا فلاتر ميتة — لافتة صريحة والعرض المختصر */
+    if(q('financeRegisterForm')) q('financeRegisterForm').classList.add('hidden');
+    if(q('regTotals')) q('regTotals').innerHTML='<span class="chip">سجل الحركة المالية للمدير/المحاسب/المبرمج فقط — دورك الحالي ('+esc(String(currentRole?.role||'غير معروف'))+') يعرض الحركات المختصرة فقط</span>';
+    q('financeRegisterBody').innerHTML=legacyRegisterRowsHTML(financeMovements.slice(0,80))||'<tr><td colspan="11">لا توجد حركات مالية.</td></tr>';
+  }
   /* (20261007c) جدول الموظفين: الظهور الفوري بعد الحفظ + إدارة من النافذة نفسها */
   if(q('employeesBody')){
     q('employeesBody').innerHTML=employees.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ar')).map(e=>{
