@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261010-1240';
+const APP_BUILD='b20261011-1301';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2235,6 +2235,14 @@ function findProductByInput(value){
 function fillPurchaseRow(input){
   const p=findProductByInput(input.value);
   if(!p) return;
+  if(!p) return;
+  /* (0132) قاعدة الشراء: المركّب لا يُشترى ذاته — تُشترى مكوّناته (الخادم يرفض أيضاً) */
+  if(String(p.code||'') && compositeItems.some(ci=>String(ci.composite_code).toLowerCase()===String(p.code).toLowerCase())){
+    toast('«'+p.code+'» منتج مركّب (طقم يُركَّب داخلياً) — لا يُشترى ذاته. أضف مكوّناته بدلاً منه','warn');
+    input.value='';
+    const tr=input.closest('tr'); if(tr){const n=tr.querySelector('.pi-name'); if(n){n.value='';n.title='';}}
+    return;
+  }
   const tr=input.closest('tr');
   tr.querySelector('.pi-code').value=p.code||'';
   { const _n=tr.querySelector('.pi-name'); _n.value=p.name||''; _n.title=p.name||''; }  /* (0082) الاسم كاملاً في التلميح */
@@ -7522,6 +7530,23 @@ function registerParams(){
     p_search:search||null
   };
 }
+/* (20261010c) ملخص الفلتر النشط — تحت عنوان السجل وفي رأس كل طباعة:
+   جدول مطبوع أو مُلتقط بلا سياق لا يقول شيئاً عن محتواه */
+function registerFilterSummaryText(){
+  const accSel=q('regAccounts'), tySel=q('regTypes');
+  const accNames=(accSel?[...accSel.selectedOptions||[]].map(o=>financeAccounts.find(a=>a.id===o.value)?.name||o.value):[]);
+  const typeNames=(tySel?[...tySel.selectedOptions||[]].map(o=>registerTypeLabel(o.value)):[]);
+  const p=registerParams();
+  const parts=[(p.p_from||'—')+' → '+(p.p_to||'—')];
+  parts.push(p.p_branch?(locations.find(l=>l.id===p.p_branch)?.name||p.p_branch):'كل الفروع');
+  parts.push(accNames.length?accNames.join(' · '):'كل الحسابات');
+  if(typeNames.length) parts.push(typeNames.join(' · '));
+  if(p.p_direction) parts.push(p.p_direction==='in'?'داخل فقط':'خارج فقط');
+  if(p.p_user) parts.push('البائع: '+p.p_user);
+  if(p.p_search) parts.push('بحث: '+p.p_search);
+  return parts.join(' · ');
+}
+
 /* (20261010a) أثناء تحميل سابق: لا نبلع «تطبيق» بصمت — نصفّ آخر طلب
    وينفَّذ فور انتهاء الحالي (شبكة ليبيا بطيئة والضغط المتكرر كان يُهمل) */
 let regPending=null;
@@ -7551,7 +7576,7 @@ async function loadFinanceRegister(reset=true){
     renderFinanceRegisterFallback();
     const msg=String(err?.message||err||'خطأ غير معروف');
     toast('تعذّر جلب السجل — التفاصيل داخل الشاشة','error');
-    if(q('regTotals')) q('regTotals').innerHTML=`<span class="chip" style="background:#fee2e2;color:#991b1b">⚠ فشل جلب السجل: ${esc(msg)} — البناء ${esc(APP_BUILD)}. يُعرض آخر ذخيرة محلية مؤقتاً.</span>`;
+    if(q('regTotals')) q('regTotals').innerHTML=`<span class="chip reg-err">⚠ فشل جلب السجل: ${esc(msg)} — البناء ${esc(APP_BUILD)}. يُعرض آخر ذخيرة محلية مؤقتاً.</span>`;
   }finally{
     regBusy=false;
     if(regPending!==null){ const nxt=regPending; regPending=null; loadFinanceRegister(nxt); }
@@ -7564,10 +7589,20 @@ function renderFinanceRegisterRows(){
     const branch=locations.find(l=>l.id===m.branch_id)?.name||'—';
     const ref=String(m.reference_table||''), rid=m.reference_id?String(m.reference_id):'';
     const clickable=!!(ref&&rid&&FINANCE_REGISTER_DOC_OPEN[ref]);
-    return `<tr${clickable?` style="cursor:pointer" onclick="financeRegisterOpenDoc('${esc(ref)}','${esc(rid)}')"`:''}><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(accLoc)}</td><td>${esc(branch)}</td><td>${esc(registerTypeLabel(m.movement_type))}</td><td>${m.direction==='in'?money(m.amount):''}</td><td>${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${esc(m.user_identifier||'—')}</td><td>${esc(m.notes||'')}</td></tr>`;
+    return `<tr${clickable?` style="cursor:pointer" onclick="financeRegisterOpenDoc('${esc(ref)}','${esc(rid)}')"`:''}><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(accLoc)}</td><td>${esc(branch)}</td><td><span class="reg-type t-${esc(String(m.movement_type||'').replace(/[^a-z0-9_]/gi,''))}">${esc(registerTypeLabel(m.movement_type))}</span></td><td class="amount reg-amt-in">${m.direction==='in'?money(m.amount):''}</td><td class="amount reg-amt-out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${esc(m.user_identifier||'—')}</td><td>${esc(m.notes||'')}</td></tr>`;
   }).join('')||'<tr><td colspan="11">لا توجد حركات في هذا النطاق.</td></tr>';
   const t=regTotal||{}, total=Number(t.count||0), loaded=regRows.length;
-  if(q('regTotals')) q('regTotals').innerHTML=`<span class="chip">إجمالي الداخل: <b>${money(t.total_in||0)}</b></span> <span class="chip">إجمالي الخارج: <b>${money(t.total_out||0)}</b></span> <span class="chip">الصافي: <b>${money(t.net||0)}</b></span> <span class="chip">عدد الحركات: <b>${total}</b></span>`;
+  /* (20261010c) بطاقات كبيرة بدل سطر رمادي صغير — هذه الأرقام هي سبب وجود الشاشة.
+     الألوان من متغيرات السمة (--reg-in/--reg-out) لا hex في العلامة */
+  if(q('regTotals')){
+    const net=Number(t.net||0);
+    q('regTotals').innerHTML=
+      `<div class="reg-stat reg-in"><span class="lbl">إجمالي الداخل</span><b>${money(t.total_in||0)}</b></div>`+
+      `<div class="reg-stat reg-out"><span class="lbl">إجمالي الخارج</span><b>${money(t.total_out||0)}</b></div>`+
+      `<div class="reg-stat reg-net${net<0?' neg':''}"><span class="lbl">الصافي</span><b>${money(net)}</b></div>`+
+      `<div class="reg-stat reg-count"><span class="lbl">عدد الحركات</span><b>${total}</b></div>`;
+  }
+  if(q('regFilterSummary')) q('regFilterSummary').textContent=registerFilterSummaryText();
   if(q('regMoreBtn')) q('regMoreBtn').classList.toggle('hidden',loaded>=total);
   if(q('regCount')) q('regCount').textContent=`المعروض ${loaded} من ${total}`;
 }
@@ -7589,6 +7624,7 @@ function renderFinanceRegisterFallback(){
   const tb=q('financeRegisterBody'); if(!tb) return;
   tb.innerHTML=legacyRegisterRowsHTML(financeMovements.slice(0,200))||'<tr><td colspan="11">لا توجد حركات محفوظة محلياً.</td></tr>';
   if(q('regTotals')) q('regTotals').innerHTML='<span class="chip">وضع دون اتصال — آخر ذخيرة محلية (بلا فلاتر ولا إجماليات)</span>';
+  if(q('regFilterSummary')) q('regFilterSummary').textContent='وضع دون اتصال — آخر ذخيرة محلية (الفلاتر غير مطبَّقة)';
   if(q('regMoreBtn')) q('regMoreBtn').classList.add('hidden');
   if(q('regCount')) q('regCount').textContent='';
 }
@@ -7623,6 +7659,77 @@ async function exportFinanceRegisterCSV(){
   }catch(err){ console.error(err); toast('تعذّر التصدير: '+err.message,'error'); }
   finally{ showLoading(false); regBusy=false; }
 }
+
+/* (20261010c) طباعة PDF — كل النتائج المطابقة للفلتر، لا المعروض على الشاشة فقط:
+   الشاشة تعرض 200 صفحة تلو الأخرى، وطباعة المعروض كانت ستُنتحل تقريراً كاملاً
+   وهو جزئي. نجرّ كل الصفحات (كما في CSV) ونتحقق من العدد مقابل الإجماليات،
+   ونرفض فوق سقف معقول بدل طباعة جزء صامت. */
+async function printFinanceRegister(){
+  if(regBusy) return;
+  const p=registerParams();
+  if(!p.p_from||!p.p_to){ toast('حدّد نطاق التاريخ أولاً','warn'); return; }
+  regBusy=true;
+  try{
+    showLoading(true);
+    const totals=await rpc('pos_finance_register_totals',p);
+    const t=(Array.isArray(totals)?totals[0]:totals)||{};
+    const expected=Number(t.count||0);
+    const all=[]; let off=0;
+    for(;;){
+      const page=await rpc('pos_finance_register_page',{...p,p_limit:REG_PAGE,p_offset:off});
+      const rows=Array.isArray(page)?page:[];
+      all.push(...rows); off+=rows.length;
+      if(rows.length<REG_PAGE) break;
+      if(all.length>5000){ toast('النطاق ضخم جداً للطباعة ('+all.length+'+ حركة) — ضيّق الفلاتر أو استخدم CSV','warn'); return; }
+    }
+    if(all.length!==expected) toast('تنبيه: تغيّرت البيانات أثناء التحضير ('+all.length+' ≠ '+expected+')','warn');
+    const summary=registerFilterSummaryText();
+    const net=Number(t.net||0);
+    const rowsHtml=all.map(m=>`<tr><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(locations.find(l=>l.id===m.account_location_id)?.name||'عام')}</td><td>${esc(locations.find(l=>l.id===m.branch_id)?.name||'—')}</td><td>${esc(registerTypeLabel(m.movement_type))}</td><td class="in">${m.direction==='in'?money(m.amount):''}</td><td class="out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${esc(m.user_identifier||'—')}</td><td>${esc(m.notes||'')}</td></tr>`).join('');
+    const w=window.open('','_blank'); if(!w){toast('المتصفح منع نافذة الطباعة. اسمح بالنوافذ المنبثقة.'); return;}
+    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل الحركات المالية — ${esc(APP_CONFIG.businessName)}</title><style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+    *{box-sizing:border-box}
+    body{font-family:'Cairo',Tahoma,Arial,sans-serif;margin:0;color:#0f172a;line-height:1.55;background:#f1f5f9}
+    .bar{max-width:1050px;margin:14px auto 0;text-align:left;padding:0 6px}
+    .pbtn{background:#1d4ed8;color:#fff;border:0;border-radius:10px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}
+    .sheet{max-width:1050px;margin:14px auto;background:#fff;padding:30px 34px;border-radius:16px;box-shadow:0 10px 40px rgba(2,6,23,.12)}
+    .top{display:flex;align-items:center;gap:14px;border-bottom:3px solid #1d4ed8;padding-bottom:16px;margin-bottom:10px}
+    .logo{width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;text-align:center;padding:6px;background:linear-gradient(135deg,#1d4ed8,#2563eb)}
+    .top h1{margin:0;color:#1d4ed8;font-size:22px}.top .tag{color:#64748b;font-size:13px}
+    .sum{color:#475569;font-size:13.5px;margin:8px 0 2px;font-weight:700}
+    .tot{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0 16px}
+    .tot div{border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;background:#f8fafc}
+    .tot span{display:block;font-size:12px;color:#64748b;font-weight:700}
+    .tot b{font-size:20px;font-variant-numeric:tabular-nums}
+    .tot .tin b{color:#047857}.tot .tout b{color:#b91c1c}
+    .tot .tnet{background:#ecfdf5;border-color:#a7f3d0}.tot .tnet b{font-size:25px;color:#047857}
+    .tot .tnet.neg{background:#fef2f2;border-color:#fecaca}.tot .tnet.neg b{color:#b91c1c}
+    .tot .tcnt b{color:#334155}
+    table{width:100%;border-collapse:collapse;margin:8px 0}
+    thead{display:table-header-group}
+    tr{break-inside:avoid;page-break-inside:avoid}
+    th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:right;font-size:12px}
+    th{background:#1d4ed8;color:#fff;font-weight:700}
+    tbody tr:nth-child(even){background:#f8fafc}
+    td.in{color:#047857;font-weight:700}td.out{color:#b91c1c;font-weight:700}
+    .foot{color:#94a3b8;font-size:11px;margin-top:10px}
+    @media print{body{background:#fff}.sheet{box-shadow:none;margin:0;max-width:none;padding:0;border-radius:0}.bar{display:none}@page{size:A4;margin:12mm}}
+    </style></head><body>
+    <div class="bar"><button class="pbtn" onclick="window.print()">طباعة</button></div>
+    <div class="sheet">
+      <div class="top"><div class="logo">${esc(APP_CONFIG.businessName)}</div><div><h1>سجل الحركات المالية — ${esc(APP_CONFIG.businessName)}</h1><div class="tag">تاريخ الطباعة: ${new Date().toISOString().slice(0,10)} · عدد الحركات: ${all.length}</div></div></div>
+      <div class="sum">${esc(summary)}</div>
+      <div class="tot"><div class="tin"><span>إجمالي الداخل</span><b>${money(t.total_in||0)}</b></div><div class="tout"><span>إجمالي الخارج</span><b>${money(t.total_out||0)}</b></div><div class="tnet${net<0?' neg':''}"><span>الصافي</span><b>${money(net)}</b></div><div class="tcnt"><span>عدد الحركات</span><b>${all.length}</b></div></div>
+      <table><thead><tr><th>التاريخ</th><th>الخزينة</th><th>فرع الخزينة</th><th>الفرع</th><th>النوع</th><th>داخل</th><th>خارج</th><th>رقم المستند</th><th>الطرف</th><th>البائع</th><th>ملاحظات</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+      <div class="foot">طُبع من منظومة ${esc(APP_CONFIG.businessName)} — الورقة تشمل كل الحركات المطابقة للفلتر أعلاه، لا المعروض على الشاشة.</div>
+    </div>
+    </body></html>`);
+    w.document.close();
+  }catch(err){ console.error(err); toast('تعذّر تحضير الطباعة: '+err.message,'error'); }
+  finally{ showLoading(false); regBusy=false; }
+}
+
 function renderFinance(){
   if(!q('financeAccountsBody')) return;
   /* (20261007c) القوائم تُملأ عند كل عرض للنافذة — لا عند رأس الموردين فقط */
@@ -7803,6 +7910,7 @@ q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault()
 q('financeRegisterForm')?.addEventListener('submit',e=>{e.preventDefault();loadFinanceRegister(true);});
 q('regMoreBtn')?.addEventListener('click',()=>loadFinanceRegister(false));
 q('regExportBtn')?.addEventListener('click',()=>exportFinanceRegisterCSV());
+q('regPrintBtn')?.addEventListener('click',()=>printFinanceRegister());
 q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const method=q('expensePaymentMethod')?.value||'cash'; if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; if(method==='cash') selectDefaultExpenseAccount(); const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null,created_by:appUser?.identifier||''}; if(!body.location_id)throw new Error('لا يوجد فرع مرتبط بالمستخدم'); if(!body.account_id)throw new Error('اختر الخزينة / الحساب'); validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await logAction('expense','pos_expenses',r[0].id,`${body.title} - ${money(body.amount)} ${APP_CONFIG.currency}`);await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset(); if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; selectDefaultExpenseAccount(); setToday();toast('تم حفظ المصروف'); expenses.unshift(r[0]); if(expensesListInit && expenseMatchesListFilters(r[0])){ expensesListCache.unshift(r[0]); renderExpensesList(); } localMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title); refreshAfterLocalUpdate();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 /* ═════════════ سجل المصاريف: قائمة + فلاتر + تعديل/حذف ذرّي عبر RPC ═════════════
@@ -8842,6 +8950,9 @@ q('purchaseForm').addEventListener('submit', async e=>{
   if(window.__busy) return; window.__busy=true;
   const items=getPurchaseItems();
   if(!items.length){toast('أضف صنف واحد على الأقل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  /* (0132) حارس العميل لقاعدة الشراء — الخادم يرفض أيضاً (COMPOSITE_IN_PURCHASE_NOT_ALLOWED) */
+  const compLine=items.find(x=>compositeItems.some(ci=>String(ci.composite_code).toLowerCase()===String(x.product_code||'').toLowerCase()));
+  if(compLine){toast('«'+compLine.product_code+'» منتج مركّب — لا يُشترى ذاته؛ أضف مكوّناته إلى الفاتورة'+(editingPurchaseId?' (استبدل سطر الطقم بمكوّناته ثم احفظ)':''),'warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   try{
     showLoading(true);
     updatePurchaseTotal();

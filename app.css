@@ -1196,3 +1196,52 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
     th.col-th{position:sticky;top:0;padding-inline-end:14px}
     .col-resizer{position:absolute;top:0;bottom:0;inset-inline-end:-3px;width:7px;cursor:col-resize;touch-action:none;z-index:3}
     .col-resizer:hover,.col-resizer:active{background:color-mix(in srgb,var(--blue) 45%,transparent);border-radius:3px}
+
+    /* ═══ (20261010c) سجل الحركات المالية — بطاقات إجماليات كبيرة، ألوان داخل الجدول،
+           ورأس لاصق معتم. كل الألوان متغيرات سمة: تُعرَّف في :root وتُتجاوَز في الداكن —
+           لا قيم hex داخل العلامة. ═══ */
+    :root{
+      --reg-in:#047857; --reg-in-soft:#ecfdf5;
+      --reg-out:#b91c1c; --reg-out-soft:#fef2f2;
+      --reg-neutral:#334155;
+      --reg-zebra:rgba(15,23,42,.03);
+      --reg-chip-bg:#eef2f7; --reg-chip-text:#334155;
+    }
+    @media (prefers-color-scheme:dark){
+      :root{--reg-in:#34d399;--reg-in-soft:rgba(6,95,70,.25);--reg-out:#f87171;--reg-out-soft:rgba(153,27,27,.25);--reg-neutral:#cbd5e1;--reg-zebra:rgba(255,255,255,.04);--reg-chip-bg:#26344a;--reg-chip-text:#dbe4f0;}
+    }
+    html[data-theme="dark"]{--reg-in:#34d399;--reg-in-soft:rgba(6,95,70,.25);--reg-out:#f87171;--reg-out-soft:rgba(153,27,27,.25);--reg-neutral:#cbd5e1;--reg-zebra:rgba(255,255,255,.04);--reg-chip-bg:#26344a;--reg-chip-text:#dbe4f0;}
+    html[data-theme="light"]{--reg-in:#047857;--reg-in-soft:#ecfdf5;--reg-out:#b91c1c;--reg-out-soft:#fef2f2;--reg-neutral:#334155;--reg-zebra:rgba(15,23,42,.03);--reg-chip-bg:#eef2f7;--reg-chip-text:#334155;}
+    /* بطاقات الإجماليات — الصافي هو الأكبر */
+    .reg-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0}
+    .reg-stat{border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;background:var(--card);display:flex;flex-direction:column;gap:2px;min-width:0}
+    .reg-stat .lbl{font-size:13px;font-weight:700;color:var(--muted)}
+    .reg-stat b{font-size:27px;font-variant-numeric:tabular-nums;line-height:1.25;word-break:break-all}
+    .reg-stat.reg-in{background:var(--reg-in-soft);border-color:color-mix(in srgb,var(--reg-in) 32%,var(--border))}
+    .reg-stat.reg-in b{color:var(--reg-in)}
+    .reg-stat.reg-out{background:var(--reg-out-soft);border-color:color-mix(in srgb,var(--reg-out) 32%,var(--border))}
+    .reg-stat.reg-out b{color:var(--reg-out)}
+    .reg-stat.reg-net b{font-size:34px;color:var(--reg-in)}
+    .reg-stat.reg-net.neg b{color:var(--reg-out)}
+    .reg-stat.reg-count b{color:var(--reg-neutral)}
+    /* داخل الجدول: مبلغ ملوّن حسب الاتجاه + رقاقة النوع + تظليل متناوب */
+    #financeRegisterWrap td.reg-amt-in{color:var(--reg-in);font-weight:700;white-space:nowrap}
+    #financeRegisterWrap td.reg-amt-out{color:var(--reg-out);font-weight:700;white-space:nowrap}
+    #financeRegisterWrap tbody tr:nth-child(even){background:var(--reg-zebra)}
+    #financeRegisterWrap tbody tr:hover{background:var(--hover)}
+    .reg-type{display:inline-block;border-radius:999px;padding:2px 10px;font-size:11.5px;font-weight:700;background:var(--reg-chip-bg);color:var(--reg-chip-text);white-space:nowrap}
+    .reg-type.t-sale_payment{background:color-mix(in srgb,var(--reg-in) 15%,transparent);color:var(--reg-in)}
+    .reg-type.t-customer_payment{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+    .reg-type.t-supplier_refund{background:color-mix(in srgb,var(--reg-in) 26%,transparent);color:var(--reg-in)}
+    .reg-type.t-customer_refund{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+    .reg-type.t-expense{background:color-mix(in srgb,var(--reg-out) 15%,transparent);color:var(--reg-out)}
+    .reg-type.t-supplier_payment{background:color-mix(in srgb,var(--reg-out) 26%,transparent);color:var(--reg-out)}
+    .reg-type.t-transfer_in{background:color-mix(in srgb,var(--reg-neutral) 15%,transparent);color:var(--reg-neutral)}
+    .reg-type.t-transfer_out{background:color-mix(in srgb,var(--reg-neutral) 26%,transparent);color:var(--reg-neutral)}
+    .chip.reg-err{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 35%,transparent)}
+    /* العيب المُبلَّغ (لقطة 2026-10-10): الرأس اللاصق كان يشفّ عن الصف الأول
+       (سطر «وجبة عشاء…» مقطوع). خلفية معتمة من متغير السمة + ترتيب طبق صريح:
+       الصفوف relative z-0 تمرّ تحت الرأس z-5 لا عبره */
+    #financeRegisterWrap .table-scroll thead th{position:sticky;top:0;z-index:5;background:var(--table-head);box-shadow:0 1px 0 var(--border)}
+    #financeRegisterWrap .table-scroll tbody tr{position:relative;z-index:0}
+    @media(max-width:900px){.reg-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.reg-stat b{font-size:22px}.reg-stat.reg-net b{font-size:27px}}
