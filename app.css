@@ -673,6 +673,8 @@ tbody td .mini{display:inline;margin-inline-start:6px}   /* الهاتف بجا�
 .chip.paid{color:var(--ok);background:var(--ok-bg)}
 .chip.partial{color:var(--warn);background:var(--warn-bg)}
 .chip.due{color:var(--bad);background:var(--bad-bg)}
+.chip.refund{color:var(--bad);background:var(--bad-bg)}   /* (0135) فاتورة استبدال مستردّة */
+.si-refinv{display:inline-block;margin-inline-start:6px;font-size:11px;font-weight:700;color:var(--warn);white-space:nowrap}   /* (0135) وسم سطر مرتجع مربوط */
 .neg{color:var(--bad);font-weight:700}
 
 /* ضبط حدود القاعدة: لا نص تحت 12px + الأزرق للأزرار/الروابط فقط */
