@@ -7,13 +7,13 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261011-1301';
+const APP_BUILD='b20261011-1542';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], stockCounts=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costViewRows=[];
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], transferItems=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], stockCounts=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costViewRows=[];
 let costViewMap=null; /* (0076) تكلفة مرجعية من الخادم — أولوية على الحساب المحلي */
 /* (0060) قاعدة التكلفة: متوسط مرجّح محسوب من فواتير الشراء في المنظومة القديمة
    حتى تاريخ القطع. المنظومة الجديدة تكمل المتوسط من هذه القاعدة بما اشتُري بعدها. */
@@ -660,9 +660,9 @@ function applySaleLocally(saleId, body, items, paymentsForRpc){
 function applyPurchaseLocally(saved, body, items, payment){
   purchases.unshift({...body,id:saved.id,purchase_no:saved.purchase_no,created_at:new Date().toISOString()});
   items.forEach(it=>{ purchaseItems.push({...it,purchase_id:saved.id}); localAdjustStock(body.location_id,it.product_code,it.product_name,Number(it.qty||0),'purchase','pos_purchases',saved.id,'فاتورة شراء'); });
-  supplierLedger.unshift({supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',/* (0125) رقم النظام أولاً ثم رقم المورد */description:saved.purchase_no?`فاتورة شراء رقم ${saved.purchase_no}`:(body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء'),debit:0,credit:Number(body.total),reference_table:'pos_purchases',reference_id:saved.id,created_at:new Date().toISOString()});
+  ledger.unshift({supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'purchase',/* (0125) رقم النظام أولاً ثم رقم المورد */description:saved.purchase_no?`فاتورة شراء رقم ${saved.purchase_no}`:(body.invoice_no?`فاتورة شراء رقم ${body.invoice_no}`:'فاتورة شراء'),debit:0,credit:Number(body.total),reference_table:'pos_purchases',reference_id:saved.id,created_at:new Date().toISOString()});
   if(Number(body.paid_amount)>0){
-    supplierLedger.unshift({supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'payment',description:'دفعة على فاتورة شراء',debit:Number(body.paid_amount),credit:0,reference_table:'pos_purchases',reference_id:saved.id,created_at:new Date().toISOString()});
+    ledger.unshift({supplier_id:body.supplier_id,entry_date:body.purchase_date,entry_type:'payment',description:'دفعة على فاتورة شراء',debit:Number(body.paid_amount),credit:0,reference_table:'pos_purchases',reference_id:saved.id,created_at:new Date().toISOString()});
     if(payment&&payment.account_id) localMovement(payment.account_id,'out','supplier_payment',body.paid_amount,body.purchase_date,'pos_purchases',saved.id,`دفع فاتورة شراء ${saved.purchase_no||''}`);
   }
   const s=suppliers.find(x=>x.id===body.supplier_id); if(s) s.balance=Number(s.balance||0)+Number(body.total)-Number(body.paid_amount||0);
@@ -3652,7 +3652,7 @@ function fillSupplierSelects(){
   if(q('purchaseFinanceAccount')) q('purchaseFinanceAccount').innerHTML=financeAccountOptionsFor(q('purchasePaymentMethod')?.value||'cash','تلقائي حسب الطريقة');
 }
 async function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id;
-  try{ const rows=await api('pos_supplier_ledger',{qs:`?select=*&supplier_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(supplierLedger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) supplierLedger.push(r); }); }catch(e){ console.warn('supplier ledger history fetch failed — using loaded rows',e); }
+  try{ const rows=await api('pos_supplier_ledger',{qs:`?select=*&supplier_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(ledger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) ledger.push(r); }); }catch(e){ console.warn('supplier ledger history fetch failed — using loaded rows',e); }
   renderLedger(); }
 function renderLedger(){
   const sid=q('ledgerSupplier').value;
@@ -8723,7 +8723,7 @@ q('paymentForm').addEventListener('submit', async e=>{
     await addFinanceMovement(q('paymentFinanceAccount')?.value||defaultFinanceAccountFor(body.payment_method),'out','supplier_payment',body.amount,body.payment_date,'pos_supplier_payments',pay[0].id,body.notes||'دفعة للمورد');
     const spAcc=q('paymentFinanceAccount')?.value||defaultFinanceAccountFor(body.payment_method);
     payments.unshift(pay[0]);
-    supplierLedger.unshift({supplier_id:body.supplier_id,entry_date:body.payment_date,entry_type:'payment',description:body.notes||'دفعة للمورد',debit:body.amount,credit:0,reference_table:'pos_supplier_payments',reference_id:pay[0].id,created_at:new Date().toISOString()});
+    ledger.unshift({supplier_id:body.supplier_id,entry_date:body.payment_date,entry_type:'payment',description:body.notes||'دفعة للمورد',debit:body.amount,credit:0,reference_table:'pos_supplier_payments',reference_id:pay[0].id,created_at:new Date().toISOString()});
     localMovement(spAcc,'out','supplier_payment',body.amount,body.payment_date,'pos_supplier_payments',pay[0].id,body.notes||'دفعة للمورد');
     const sps=suppliers.find(x=>x.id===body.supplier_id); if(sps) sps.balance=Number(sps.balance||0)-Number(body.amount);
     e.target.reset(); setToday(); toast('تم حفظ الدفعة وتحديث كشف الحساب'); refreshAfterLocalUpdate();
