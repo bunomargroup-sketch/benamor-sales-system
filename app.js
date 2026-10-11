@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261011-1542';
+const APP_BUILD='b20261011-1607';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3753,7 +3753,80 @@ async function deleteCustomerPaymentAdmin(paymentId){
 }
 
 function renderPayments(){
-  q('paymentsBody').innerHTML = payments.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);return `<tr><td>${esc(p.payment_date)}</td><td>${esc(s?.name||'')}</td><td><b>${money(p.amount)}</b></td><td>${esc(typeLabel(p.payment_method))}</td><td>${esc(p.notes||'')}</td></tr>`}).join('') || '<tr><td colspan="5">لا توجد دفعات بعد.</td></tr>';
+  /* (0133) أزرار تعديل/حذف للمدير — نفس نمط دفعات الزبائن (0066/0064)
+     عبر RPC ذرّية تعكس الدفع + قيد الكشف + الحركة المالية معاً */
+  const isAdmin=isManager();
+  const rows=(payments||[]).slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||new Date(b.created_at||0)-new Date(a.created_at||0));
+  q('paymentsBody').innerHTML = rows.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);
+    const tools=isAdmin
+      ?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openSupplierPaymentEdit('${p.id}')">✏️</button>
+        <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteSupplierPaymentAdmin('${p.id}')">🗑</button>`:'';
+    return `<tr><td>${esc(p.payment_date)}</td><td>${esc(s?.name||'')}</td><td><b>${money(p.amount)}</b></td><td>${esc(typeLabel(p.payment_method))}</td><td>${esc(p.notes||'')}</td><td style="white-space:nowrap">${tools}</td></tr>`}).join('') || '<tr><td colspan="6">لا توجد دفعات بعد.</td></tr>';
+}
+/* ═══ (0133) تعديل/حذف دفعة مورد — نمط دفعات الزبائن ═══
+   الدافع: نافذة عيب supplierLedger خلّفت دفعات مكررة (تُحفظ ثم تظهر
+   «خطأ في حفظ الدفعة» فيُعاد الإدخال) وبلا أزرار لا سبيل لتنظيفها.
+   الذرّية في الخادم: admin_update_supplier_payment / admin_delete_supplier_payment. */
+function findSupplierPaymentAccount(p){
+  return (financeMovements||[]).find(m=>m.reference_table==='pos_supplier_payments'&&m.reference_id===p.id&&m.movement_type==='supplier_payment'&&m.direction==='out')?.account_id||'';
+}
+let supplierPaymentEditId=null;
+function ensureSupplierPaymentEditModal(){
+  if(q('supplierPaymentEditModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='supplierPaymentEditModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:460px">
+    <div class="modal-head"><div><h2 style="margin:0">✏️ تعديل دفعة مورد</h2><div class="mini" id="speSub">—</div></div><button class="btn secondary" type="button" onclick="q('supplierPaymentEditModal').classList.remove('show')">إغلاق</button></div>
+    <div class="grid" style="gap:10px;margin-top:8px">
+      <div><label>المبلغ</label><input id="speAmount" type="text" inputmode="decimal" class="ltr" style="text-align:center"></div>
+      <div><label>الطريقة</label><select id="speMethod" onchange="speFillAccounts()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
+      <div><label>التاريخ</label><input id="speDate" type="date" class="ltr"></div>
+      <div><label>الحساب المالي</label><select id="speAccount"></select></div>
+      <div style="grid-column:1/-1"><label>ملاحظات</label><input id="speNotes" placeholder="اختياري"></div>
+      <div class="mini">تُعكس آثارها ذرّياً على الخزينة وكشف المورد بتاريخ الدفعة الجديد.</div>
+      <div class="row"><button class="btn" type="button" onclick="saveSupplierPaymentEdit()">💾 حفظ</button><button class="btn secondary" type="button" onclick="q('supplierPaymentEditModal').classList.remove('show')">إلغاء</button></div>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
+function speFillAccounts(){
+  if(q('speAccount')) q('speAccount').innerHTML=financeAccountOptionsFor(q('speMethod')?.value||'cash','اختر الحساب');
+}
+function openSupplierPaymentEdit(paymentId){
+  if(!isManager()){toast('تعديل الدفعات للمدير فقط','warn');return;}
+  const p=(payments||[]).find(x=>x.id===paymentId); if(!p){toast('الدفعة غير موجودة','warn');return;}
+  ensureSupplierPaymentEditModal();
+  supplierPaymentEditId=paymentId;
+  const s=suppliers.find(x=>x.id===p.supplier_id);
+  q('speSub').textContent=`${s?.name||'مورد'} — المبلغ الحالي ${money(p.amount)} — ${p.payment_date||''}`;
+  q('speAmount').value=Number(p.amount||0);
+  q('speMethod').value=p.payment_method||'cash'; speFillAccounts();
+  const acc=findSupplierPaymentAccount(p); if(acc && [...q('speAccount').options].some(o=>o.value===acc)) q('speAccount').value=acc;
+  q('speDate').value=p.payment_date||''; q('speNotes').value=p.notes||'';
+  q('supplierPaymentEditModal').classList.add('show');
+}
+async function saveSupplierPaymentEdit(){
+  try{
+    showLoading(true);
+    const body={p_payment_id:supplierPaymentEditId,p_amount:moneyVal(q('speAmount').value),p_payment_method:q('speMethod').value,p_payment_date:q('speDate').value||null,p_account_id:q('speAccount').value||null,p_notes:q('speNotes').value.trim()||null,p_user_identifier:appUser?.identifier||''};
+    await rpc('admin_update_supplier_payment',body);
+    toast('تم تعديل الدفعة وعكس آثارها','success');
+    q('supplierPaymentEditModal').classList.remove('show');
+    await refreshParts(['suppliers','supplierPayments','supplierLedger','financeMovements','financeAccounts']); renderPayments();
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
+}
+async function deleteSupplierPaymentAdmin(paymentId){
+  if(!isManager()){toast('حذف الدفعات للمدير فقط','warn');return;}
+  const p=(payments||[]).find(x=>x.id===paymentId); if(!p)return;
+  const s=suppliers.find(x=>x.id===p.supplier_id);
+  if(!confirm(`حذف نهائي للدفعة: ${money(p.amount)} ${APP_CONFIG.currency} — ${s?.name||''} (${p.payment_date||''})؟\nتُمحى من الخزينة وكشف المورد نهائياً — لا رجوع.`))return;
+  try{
+    showLoading(true);
+    await rpc('admin_delete_supplier_payment',{p_payment_id:paymentId,p_user_identifier:appUser?.identifier||''});
+    toast('حُذفت الدفعة وعُكسَت آثارها','success');
+    await refreshParts(['suppliers','supplierPayments','supplierLedger','financeMovements','financeAccounts']); renderPayments();
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
 }
 
 let selectedPurchaseId=null;
