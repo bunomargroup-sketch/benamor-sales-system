@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261011-1922';
+const APP_BUILD='b20261012-1124';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7607,7 +7607,9 @@ function initFinanceRegister(){
   const acc=q('regAccounts'); if(acc) acc.innerHTML=financeAccounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
   const br=q('regBranch'); if(br){ const v=br.value; br.innerHTML='<option value="">كل الفروع</option>'+locations.filter(l=>l.active!==false).map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join(''); br.value=v; }
   const ty=q('regTypes'); if(ty) ty.innerHTML=REGISTER_MOVEMENT_TYPES.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
-  const us=q('regUser'); if(us){ const v=us.value; us.innerHTML='<option value="">الكل</option>'+userRoles.slice().sort((a,b)=>String(a.identifier||'').localeCompare(String(b.identifier||''),'ar')).map(r=>`<option value="${esc(String(r.identifier||''))}">${esc(r.identifier)}${r.role?' — '+esc(String(r.role)):''}</option>`).join(''); us.value=v; }
+  /* (20261012) اسم البائع لا دوره: sellerName المشتركة (display_name مع احتياط المعرّف) —
+     القيمة تبقى المعرّف لأن pos_finance_register_page/_totals تفلتر به، والترتيب بالاسم العربي */
+  const us=q('regUser'); if(us){ const v=us.value; us.innerHTML='<option value="">الكل</option>'+userRoles.slice().sort((a,b)=>sellerName(a.identifier).localeCompare(sellerName(b.identifier),'ar')).map(r=>`<option value="${esc(String(r.identifier||''))}">${esc(sellerName(r.identifier))} — ${esc(String(r.identifier||''))}</option>`).join(''); us.value=v; }
   restore('regAccounts',accSel); restore('regTypes',typeSel);
   const now=new Date().toISOString().slice(0,10);
   if(q('regFrom')&&!q('regFrom').value) q('regFrom').value=now.slice(0,8)+'01'; /* الشهر الحالي افتراضاً */
@@ -7688,7 +7690,7 @@ function renderFinanceRegisterRows(){
     const branch=locations.find(l=>l.id===m.branch_id)?.name||'—';
     const ref=String(m.reference_table||''), rid=m.reference_id?String(m.reference_id):'';
     const clickable=!!(ref&&rid&&FINANCE_REGISTER_DOC_OPEN[ref]);
-    return `<tr${clickable?` style="cursor:pointer" onclick="financeRegisterOpenDoc('${esc(ref)}','${esc(rid)}')"`:''}><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(accLoc)}</td><td>${esc(branch)}</td><td><span class="reg-type t-${esc(String(m.movement_type||'').replace(/[^a-z0-9_]/gi,''))}">${esc(registerTypeLabel(m.movement_type))}</span></td><td class="amount reg-amt-in">${m.direction==='in'?money(m.amount):''}</td><td class="amount reg-amt-out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${esc(m.user_identifier||'—')}</td><td>${esc(m.notes||'')}</td></tr>`;
+    return `<tr${clickable?` style="cursor:pointer" onclick="financeRegisterOpenDoc('${esc(ref)}','${esc(rid)}')"`:''}><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(accLoc)}</td><td>${esc(branch)}</td><td><span class="reg-type t-${esc(String(m.movement_type||'').replace(/[^a-z0-9_]/gi,''))}">${esc(registerTypeLabel(m.movement_type))}</span></td><td class="amount reg-amt-in">${m.direction==='in'?money(m.amount):''}</td><td class="amount reg-amt-out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${sellerCell(m.user_identifier)}</td><td>${esc(m.notes||'')}</td></tr>`;
   }).join('')||'<tr><td colspan="11">لا توجد حركات في هذا النطاق.</td></tr>';
   const t=regTotal||{}, total=Number(t.count||0), loaded=regRows.length;
   /* (20261010c) بطاقات كبيرة بدل سطر رمادي صغير — هذه الأرقام هي سبب وجود الشاشة.
@@ -7784,7 +7786,7 @@ async function printFinanceRegister(){
     if(all.length!==expected) toast('تنبيه: تغيّرت البيانات أثناء التحضير ('+all.length+' ≠ '+expected+')','warn');
     const summary=registerFilterSummaryText();
     const net=Number(t.net||0);
-    const rowsHtml=all.map(m=>`<tr><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(locations.find(l=>l.id===m.account_location_id)?.name||'عام')}</td><td>${esc(locations.find(l=>l.id===m.branch_id)?.name||'—')}</td><td>${esc(registerTypeLabel(m.movement_type))}</td><td class="in">${m.direction==='in'?money(m.amount):''}</td><td class="out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${esc(m.user_identifier||'—')}</td><td>${esc(m.notes||'')}</td></tr>`).join('');
+    const rowsHtml=all.map(m=>`<tr><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(locations.find(l=>l.id===m.account_location_id)?.name||'عام')}</td><td>${esc(locations.find(l=>l.id===m.branch_id)?.name||'—')}</td><td>${esc(registerTypeLabel(m.movement_type))}</td><td class="in">${m.direction==='in'?money(m.amount):''}</td><td class="out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${esc(sellerName(m.user_identifier))}</td><td>${esc(m.notes||'')}</td></tr>`).join('');
     const w=window.open('','_blank'); if(!w){toast('المتصفح منع نافذة الطباعة. اسمح بالنوافذ المنبثقة.'); return;}
     w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>سجل الحركات المالية — ${esc(APP_CONFIG.businessName)}</title><style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
