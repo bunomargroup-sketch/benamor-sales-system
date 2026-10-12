@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261012-1146">
+<link rel="stylesheet" href="app.css?v=20261012-1319">
 </head>
 <body class="auth-locked">
   <header>
@@ -47,7 +47,8 @@
       <button data-tab="priceReview" title="منتجات تغيّرت تكلفتها بفاتورة شراء — راجع سعر البيع"><i class="ti ti-tag"></i><span>مراجعة أسعار البيع</span><span class="nav-badge" id="priceReviewBadge" hidden></span></button>
       <button data-tab="bulkPrice" title="تعديل أسعار الماركات/الموردين/التصنيفات مع بحث بالكود والاسم (للمدير والمبرمج فقط)"><i class="ti ti-trending-up"></i><span>تعديل الأسعار</span></button>
       <button data-tab="suppliers"><i class="ti ti-truck"></i><span>الموردون</span></button>
-      <button data-tab="purchases"><i class="ti ti-receipt"></i><span>فواتير الشراء</span></button>
+      <button data-tab="purchases"><i class="ti ti-receipt"></i><span>فاتورة شراء جديدة</span></button>
+      <button data-tab="purchasesList"><i class="ti ti-shopping-bag"></i><span>فواتير الشراء</span></button>
       <button data-tab="stock"><i class="ti ti-stack-2"></i><span>المخزون الحالي</span></button>
       <button data-tab="stockCount"><i class="ti ti-clipboard-check"></i><span>الجرد الفعلي</span></button>
       <button data-tab="composites"><i class="ti ti-package"></i><span>المنتجات المركبة</span></button>
@@ -669,16 +670,35 @@
             </div>
           </form>
         </div>
+      </section>
+
+      <section id="purchasesList" class="section">
         <div class="panel">
-          <div class="tools"><h2>آخر فواتير الشراء</h2>
-            <button class="btn secondary" onclick="purchaseListAction('view')" title="محتويات الفاتورة المحددة — قراءة فقط">👁 مشاهدة</button>
-            <button class="btn secondary" onclick="purchaseListAction('edit')">✏️ فتح / تعديل</button>
-            <button class="btn secondary" onclick="purchaseListAction('return')" title="إرجاع بضاعة للفاتورة المحددة إلى المورد">↩ إرجاع</button>
-            <button class="btn danger" onclick="purchaseListAction('delete')">🗑 حذف</button>
-            <span class="mini" id="purchaseSelHint">حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها</span>
-            <button class="btn secondary" onclick="loadAll()">تحديث</button>
+          <div class="tools"><h2>فواتير الشراء</h2><button class="btn secondary" onclick="loadAll()">تحديث</button></div>
+          <div class="grid sales-filter-grid" style="margin:10px 0">
+            <div><label>بحث الفواتير</label><input id="purchaseListSearch" placeholder="رقم، مورد، رقم فاتورة المورد، صنف، كود..." oninput="purchaseListFilterChanged()"></div>
+            <div><label>من تاريخ</label><input id="purchaseFilterFrom" type="date" onchange="purchaseListFilterChanged()"></div>
+            <div><label>إلى تاريخ</label><input id="purchaseFilterTo" type="date" onchange="purchaseListFilterChanged()"></div>
+            <div><label>الشهر</label><input id="purchaseFilterMonth" type="month" onchange="purchaseListFilterChanged()"></div>
+            <div><label>السنة</label><input id="purchaseFilterYear" type="number" min="2020" max="2100" placeholder="مثال 2026" oninput="purchaseListFilterChanged()"></div>
+            <div><label>المورد</label><select id="purchaseFilterSupplier" onchange="purchaseListFilterChanged()"><option value="">كل الموردين</option></select></div>
+            <div><label>المكان</label><select id="purchaseFilterLocation" onchange="purchaseListFilterChanged()"><option value="">كل الأماكن</option></select></div>
+            <div><label>الحالة</label><select id="purchaseFilterStatus" onchange="purchaseListFilterChanged()"><option value="">كل الحالات</option><option value="posted">مرحلة</option><option value="draft">مسودة</option><option value="cancelled">ملغاة</option></select></div>
+            <div><label>حالة الدفع</label><select id="purchaseFilterPayment" onchange="purchaseListFilterChanged()"><option value="">كل الحالات</option><option value="paid">مدفوعة بالكامل</option><option value="partial">مدفوعة جزئيًا</option><option value="unpaid">غير مدفوعة</option><option value="due">كل الفواتير التي عليها دين للمورد</option></select></div>
+            <div class="row sales-filter-actions"><button class="btn secondary" type="button" onclick="clearPurchaseFilters()">مسح الفلاتر</button><button class="btn secondary" type="button" onclick="showDuePurchasesOnly()">فواتير عليها دين للمورد</button><button class="btn secondary" type="button" onclick="exportPurchasesListCsv()">📊 تصدير Excel</button><button class="btn secondary" type="button" onclick="printPurchasesList()">🖨 طباعة القائمة / PDF</button></div>
           </div>
-          <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>المورد</th><th>المكان</th><th>رقم فاتورة المورد</th><th>الإجمالي</th><th>الحالة</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
+          <div class="row sticky-actions" style="margin:10px 0">
+            <button class="btn secondary" type="button" onclick="purchaseListAction('view')" title="محتويات الفاتورة المحددة — قراءة فقط">👁 مشاهدة</button>
+            <button class="btn secondary" type="button" onclick="purchaseListAction('edit')">✏️ فتح / تعديل</button>
+            <button class="btn secondary" type="button" onclick="printSelectedPurchase()" title="طباعة الفاتورة المحددة">🖨 طباعة</button>
+            <button class="btn secondary" type="button" onclick="purchaseListAction('return')" title="إرجاع بضاعة للفاتورة المحددة إلى المورد">↩ إرجاع</button>
+            <button class="btn danger" type="button" onclick="purchaseListAction('delete')">🗑 حذف</button>
+            <span class="mini" id="purchaseSelHint">حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها</span>
+            <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
+            <button class="btn secondary" type="button" onclick="resetTableColumns('purchasesList')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
+          </div>
+          <div class="table-scroll"><table><thead><tr><th data-min="110">رقم</th><th data-min="90">التاريخ</th><th data-min="140">المورد</th><th data-min="100">المكان</th><th data-min="110">رقم فاتورة المورد</th><th data-min="100">الإجمالي</th><th data-min="100">المدفوع</th><th data-min="90">المتبقي</th><th data-min="90">الحالة</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
+          <div id="purchasesTotalsBar" style="display:none;margin-top:10px"></div>
         </div>
       </section>
 
@@ -1535,6 +1555,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261012-1146"></script>
+<script src="app.js?v=20261012-1319"></script>
 </body>
 </html>

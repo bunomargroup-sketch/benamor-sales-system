@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-1146';
+const APP_BUILD='b20261012-1319';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1308,7 +1308,8 @@ const TAB_RENDERERS={
   priceReview:()=>renderPriceReview(),
   bulkPrice:()=>renderBulkPrice(),
   suppliers:()=>renderSuppliers(),
-  purchases:()=>{fillSupplierSelects(); renderPurchases();},
+  purchases:()=>{fillSupplierSelects();},
+  purchasesList:()=>renderPurchasesList(),
   stock:()=>{renderStock(); renderStockWaste();},
   stockCount:()=>renderStockCount(),
   composites:()=>renderComposites(),
@@ -1616,6 +1617,7 @@ const RESIZABLE_TABLES=[
   ['transferItemsBody','transferItems'],
   ['productsBody','products'],
   ['salesBody','salesList'],
+  ['purchasesBody','purchasesList'],
   ['priceReviewBody','priceReview'],
   ['bpListBody','bulkPrice'],
 ];
@@ -1658,10 +1660,10 @@ const REFRESH_SOURCES={
   stock:            {tabs:['stock','products','stockCount','transfers'],        run:async()=>{ const r=await apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc'); if(r) stock=r; }},
   composites:       {tabs:['composites','products'],                            run:async()=>{ const r=await apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc'); if(r) compositeItems=r; }},
   cost:             {tabs:['reports','products'],                               run:async()=>{ const r=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}); if(r){ costViewRows=r; applyCostReference(); } }},
-  suppliers:        {tabs:['suppliers','purchases','ledger','payments'],        run:async()=>{ const r=await api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}); if(r){ suppliers=r; fillSupplierSelects(); } }},
+  suppliers:        {tabs:['suppliers','purchases','purchasesList','ledger','payments'],        run:async()=>{ const r=await api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}); if(r){ suppliers=r; fillSupplierSelects(); } }},
   supplierLedger:   {tabs:['ledger','suppliers'],                               run:async()=>{ const r=await api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}); if(r) ledger=r; }},
   supplierPayments: {tabs:['payments','ledger'],                                run:async()=>{ const r=await api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}); if(r) payments=r; }},
-  purchases:        {tabs:['purchases','stock','ledger'],                       run:async()=>{ const [a,b]=await Promise.all([apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc,id.asc'),apiAll('pos_purchase_items','?select=*&order=created_at.desc,id.asc')]); if(a) purchases=a; if(b) purchaseItems=b; }},
+  purchases:        {tabs:['purchases','purchasesList','stock','ledger'],                       run:async()=>{ const [a,b]=await Promise.all([apiAll('pos_purchases','?select=*&order=purchase_date.desc,created_at.desc,id.asc'),apiAll('pos_purchase_items','?select=*&order=created_at.desc,id.asc')]); if(a) purchases=a; if(b) purchaseItems=b; }},
   transfers:        {tabs:['transfers','stock'],                                run:async()=>{ const r=await api('pos_stock_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc&limit=50'}); if(r) transfers=r; }},
   proformas:        {tabs:['proformas'],                                        run:async()=>{ const c60=new Date(Date.now()-60*864e5).toISOString().slice(0,10), c60i=new Date(Date.now()-60*864e5).toISOString(); const [a,b]=await Promise.all([apiAll('pos_proformas','?select=*&proforma_date=gte.'+c60+'&order=proforma_date.desc,created_at.desc,id.asc'),apiAll('pos_proforma_items','?select=*&created_at=gte.'+c60i+'&order=created_at.desc,id.asc')]); if(a) proformas=a; if(b) proformaItems=b; }},
   customers:        {tabs:['customers','salesList','payments','sales'],         run:async()=>{ const r=await apiAll('pos_customer_balances','?select=*&order=name.asc,id.asc'); if(r){ customers=r; try{rebuildSaleCustomerOptions(); rebuildCustomerSelects();}catch(_e){} } }},
@@ -1778,11 +1780,11 @@ const ROLE_TABS={
      الكاملة ناقص هذي الثلاثة حتى لا يُترك تبويب مستقبلي خارج التصفية */
   /* (0116) priceReview = قائمة دائمة يفتحها الجميع (البائع قراءة فقط —
      الكتابة مرفوضة على مستوى القاعدة)؛ bulkPrice للمدير/المبرمج فقط */
-  programmer:['dashboard','locations','products','priceReview','bulkPrice','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','stock','stockCount','composites','transfers','expensesQuick','dailyCashClosing','finance','reports','auditLog','users','settings'],
+  programmer:['dashboard','locations','products','priceReview','bulkPrice','suppliers','ledger','payments','sales','salesList','proformas','customers','purchases','purchasesList','stock','stockCount','composites','transfers','expensesQuick','dailyCashClosing','finance','reports','auditLog','users','settings'],
   seller_11:['dashboard','products','priceReview','bulkPrice','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
   seller_sarraj:['dashboard','products','priceReview','bulkPrice','sales','salesList','proformas','stock','transfers','expensesQuick','dailyCashClosing'],
-  sales_purchase:['dashboard','products','priceReview','suppliers','sales','salesList','proformas','customers','purchases','stock','transfers','stockCount','composites','expensesQuick','dailyCashClosing'],
-  warehouse:['dashboard','products','priceReview','stock','stockCount','composites','transfers','purchases'],
+  sales_purchase:['dashboard','products','priceReview','suppliers','sales','salesList','proformas','customers','purchases','purchasesList','stock','transfers','stockCount','composites','expensesQuick','dailyCashClosing'],
+  warehouse:['dashboard','products','priceReview','stock','stockCount','composites','transfers','purchases','purchasesList'],
   accountant:['dashboard','suppliers','ledger','payments','customers','expensesQuick','dailyCashClosing','finance','reports','auditLog'],
   viewer:['dashboard','products','stock','reports'],
   admin:[] /* يُملأ أسفله: كل شيء ما عدا settings */
@@ -1938,7 +1940,7 @@ function applyPermissions(){
 const QUICK_BAR_ITEMS=[
   {tab:'sales',           label:'فاتورة جديدة',         icon:'ti-shopping-cart'},
   {tab:'salesList',       label:'فواتير البيع',         icon:'ti-receipt'},
-  {tab:'purchases',       label:'فواتير الشراء',        icon:'ti-shopping-bag'},
+  {tab:'purchasesList',   label:'فواتير الشراء',        icon:'ti-shopping-bag'},
   {tab:'transfers',       label:'تحويلات المخزون',      icon:'ti-arrows-exchange'},
   {tab:'expensesQuick',   label:'المصاريف',             icon:'ti-wallet'},
   {tab:'dailyCashClosing',label:'إغلاق الخزينة اليومي', icon:'ti-cash-banknote'},
@@ -3880,13 +3882,141 @@ async function deleteSupplierPaymentAdmin(paymentId){
 }
 
 let selectedPurchaseId=null;
-function renderPurchases(){
-  q('purchasesBody').innerHTML = purchases.map(p=>{
-    const s=suppliers.find(x=>x.id===p.supplier_id); const l=locations.find(x=>x.id===p.location_id);
-    return `<tr data-id="${p.id}" class="${p.id===selectedPurchaseId?'selected-row':''}" onclick="selectPurchaseRow(this)"><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${p.purchase_date}</td><td>${s?.name||''}</td><td>${l?.name||''}</td><td>${p.invoice_no||''}</td><td><b>${money(p.total)}</b></td><td><span class="badge green">${typeLabel(p.status)}</span></td></tr>`;
-  }).join('') || '<tr><td colspan="7">لا توجد فواتير شراء بعد.</td></tr>';
+/* ═══ (20261012d) فواتير الشراء تبويب مستقل — القائمة بفلاتر فواتير البيع نفسها.
+   كان renderPurchases يكتب كل فواتير القاعدة في DOM بلا حدّ ولا فلتر؛ الآن:
+   افتراضياً شهر واحد + سقف 150 صفاً وزر «تحميل الأقدم» — كقائمة المبيعات.
+   عمودا المدفوع/المتبقي جديدان (paid_amount موجود في الجدول)، وعمود «سجّله»
+   وفلتر «المستخدم» أُسقطا بقرار المواصفة: pos_purchases بلا created_by. ═══ */
+const PURCHASES_LIST_LIMIT_INITIAL=150;
+let purchasesListLimit=PURCHASES_LIST_LIMIT_INITIAL;
+function purchaseListFilterChanged(){ purchasesListLimit=PURCHASES_LIST_LIMIT_INITIAL; renderPurchasesList(); }
+function loadOlderPurchases(){ purchasesListLimit+=300; renderPurchasesList(); }
+function fillPurchaseListFilterOptions(){
+  const keep=(id,html)=>{const el=q(id); if(!el)return; const v=el.value; el.innerHTML=html; if([...el.options].some(o=>o.value===v)) el.value=v;};
+  keep('purchaseFilterSupplier','<option value="">كل الموردين</option>'+suppliers.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join(''));
+  keep('purchaseFilterLocation','<option value="">كل الأماكن</option>'+locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join(''));
+  const mf=q('purchaseFilterMonth');
+  if(mf && !mf.dataset.once){ mf.dataset.once='1'; if(!mf.value) mf.value=new Date().toISOString().slice(0,7); /* افتراضي: فواتير الشهر الحالي — الأداء ليس تجميلاً */ }
+}
+function purchaseRemaining(p){ return Number(p.total||0)-Number(p.paid_amount||0); }
+function purchasePaymentStatus(p){
+  const rem=purchaseRemaining(p), paid=Number(p.paid_amount||0);
+  if(rem<=0) return 'paid';
+  if(paid>0) return 'partial';
+  return 'unpaid';
+}
+function purchaseSearchText(p){
+  const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
+  const prodText=purchaseItems.filter(it=>it.purchase_id===p.id).map(it=>[it.product_code,it.product_name].filter(Boolean).join(' ')).join(' ');
+  return [p.purchase_no,p.invoice_no,p.id,p.purchase_date,s?.name,l?.name,p.status,p.notes,prodText].filter(Boolean).join(' ');
+}
+function purchaseMatchesFilters(p){
+  const term=(q('purchaseListSearch')?.value||'').trim(); if(term && !smartMatch(term,purchaseSearchText(p))) return false;
+  const d=String(p.purchase_date||'');
+  const from=q('purchaseFilterFrom')?.value||'', to=q('purchaseFilterTo')?.value||'', month=q('purchaseFilterMonth')?.value||'', year=(q('purchaseFilterYear')?.value||'').trim();
+  if(from && d<from) return false; if(to && d>to) return false; if(month && !d.startsWith(month)) return false; if(year && !d.startsWith(year)) return false;
+  const sup=q('purchaseFilterSupplier')?.value||''; if(sup && p.supplier_id!==sup) return false;
+  const loc=q('purchaseFilterLocation')?.value||''; if(loc && p.location_id!==loc) return false;
+  const st=q('purchaseFilterStatus')?.value||''; if(st && p.status!==st) return false;
+  const pay=q('purchaseFilterPayment')?.value||'';
+  if(pay==='due'){ if(purchaseRemaining(p)<=0) return false; }
+  else if(pay && purchasePaymentStatus(p)!==pay) return false;
+  return true;
+}
+function renderPurchasesList(){
+  fillPurchaseListFilterOptions();
+  const rows=purchases.filter(purchaseMatchesFilters);
+  const more=rows.length-purchasesListLimit;
+  const olderRow=more>0?`<tr><td colspan="9" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderPurchases()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'';
+  q('purchasesBody').innerHTML=rows.slice(0,purchasesListLimit).map(p=>{
+    const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
+    const rem=purchaseRemaining(p);
+    return `<tr data-id="${p.id}" class="${p.id===selectedPurchaseId?'selected-row':''}" onclick="selectPurchaseRow(this)" ondblclick="purchaseListAction('view')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${esc(p.purchase_date)}</td><td>${esc(s?.name||'')}</td><td>${esc(l?.name||'')}</td><td class="ltr">${esc(p.invoice_no||'')}</td><td><b>${money(p.total)}</b></td><td>${money(p.paid_amount)}</td><td class="${rem>0?'stock-negative':''}"><b>${money(rem)}</b></td><td><span class="badge ${p.status==='posted'?'green':(p.status==='cancelled'?'red':'')}">${typeLabel(p.status)}</span></td></tr>`;
+  }).join('')||'<tr><td colspan="9">لا توجد فواتير شراء مطابقة للفلاتر.</td></tr>';
+  if(olderRow) q('purchasesBody').innerHTML+=olderRow;
+  /* شريط الإجماليات تحت الجدول — ينعكس مع كل فلتر */
+  const bar=q('purchasesTotalsBar');
+  if(bar){
+    const cur=esc(APP_CONFIG.currency);
+    const tot=rows.reduce((a,p)=>a+Number(p.total||0),0), paid=rows.reduce((a,p)=>a+Number(p.paid_amount||0),0), rem=rows.reduce((a,p)=>a+Math.max(0,purchaseRemaining(p)),0);
+    const chip=(lbl,val,neg)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--card)"><div class="mini">${lbl}</div><b class="${neg?'stock-negative':''}" style="font-size:15px">${val}</b></div>`;
+    bar.style.display='';
+    bar.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+      ${chip('🧾 عدد الفواتير المعروضة',rows.length)}
+      ${chip('💰 الإجمالي',money(tot)+' '+cur)}
+      ${chip('💵 المدفوع',money(paid)+' '+cur)}
+      ${chip('📉 المتبقي للموردين',money(rem)+' '+cur,rem>0)}
+    </div><div class="mini" style="margin-top:4px">القيم تنعكس فورياً مع كل فلتر أعلاه.</div>`;
+  }
   updatePurchaseSelHint();
 }
+/* «مسح الفلاتر» يعيد افتراض الشهر الحالي لا فراغاً — قرار المواصفة (٥) */
+function clearPurchaseFilters(){
+  ['purchaseListSearch','purchaseFilterFrom','purchaseFilterTo','purchaseFilterYear'].forEach(id=>{if(q(id))q(id).value='';});
+  ['purchaseFilterSupplier','purchaseFilterLocation','purchaseFilterStatus','purchaseFilterPayment'].forEach(id=>{if(q(id))q(id).value='';});
+  if(q('purchaseFilterMonth')) q('purchaseFilterMonth').value=new Date().toISOString().slice(0,7);
+  purchaseListFilterChanged();
+}
+function showDuePurchasesOnly(){ if(q('purchaseFilterPayment')) q('purchaseFilterPayment').value='due'; purchaseListFilterChanged(); }
+function purchaseStatusText(st){return {posted:'مرحلة',draft:'مسودة',cancelled:'ملغاة'}[st]||st||'—'}
+function purchasePayStatusText(p){return {paid:'مدفوعة بالكامل',partial:'مدفوعة جزئيًا',unpaid:'غير مدفوعة'}[purchasePaymentStatus(p)]||'—'}
+function purchaseFilterSummaryParts(){
+  const g=id=>(q(id)?.value||'').trim(), parts=[];
+  if(g('purchaseFilterFrom')||g('purchaseFilterTo')) parts.push('الفترة: '+(g('purchaseFilterFrom')||'البداية')+' ← '+(g('purchaseFilterTo')||'اليوم'));
+  if(g('purchaseFilterMonth')) parts.push('شهر '+g('purchaseFilterMonth'));
+  if(g('purchaseFilterYear')) parts.push('سنة '+g('purchaseFilterYear'));
+  if(g('purchaseFilterSupplier')){const s=suppliers.find(x=>x.id===g('purchaseFilterSupplier')); if(s) parts.push('المورد: '+s.name);}
+  if(g('purchaseFilterLocation')){const l=locations.find(x=>x.id===g('purchaseFilterLocation')); if(l) parts.push('المكان: '+l.name);}
+  if(g('purchaseFilterStatus')) parts.push('الحالة: '+purchaseStatusText(g('purchaseFilterStatus')));
+  if(g('purchaseFilterPayment')) parts.push('حالة الدفع: '+({paid:'مدفوعة',partial:'مدفوعة جزئيًا',unpaid:'غير مدفوعة',due:'عليها دين للمورد'}[g('purchaseFilterPayment')]||g('purchaseFilterPayment')));
+  if(g('purchaseListSearch')) parts.push('بحث: «'+g('purchaseListSearch')+'»');
+  return parts;
+}
+function exportPurchasesListCsv(){
+  const rows=purchases.filter(purchaseMatchesFilters);
+  if(!rows.length){toast('لا توجد فواتير شراء مطابقة للفلاتر','warn');return;}
+  const head=['رقم الفاتورة','التاريخ','المورد','المكان','رقم فاتورة المورد','الحالة','حالة الدفع','الإجمالي','المدفوع','المتبقي','ملاحظات'];
+  const lines=rows.map(p=>{
+    const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
+    return [p.purchase_no||String(p.id).slice(0,8), p.purchase_date, s?.name||'', l?.name||'', p.invoice_no||'', purchaseStatusText(p.status), purchasePayStatusText(p), Number(p.total||0), Number(p.paid_amount||0), purchaseRemaining(p), String(p.notes||'').replace(/\s+/g,' ').trim()];
+  });
+  const csv='\ufeff'+[head,...lines].map(row=>row.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='فواتير-الشراء-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),3000);
+  toast('تم تصدير '+rows.length+' فاتورة شراء (Excel/CSV)','success');
+}
+function printPurchasesList(){
+  const rows=purchases.filter(purchaseMatchesFilters);
+  if(!rows.length){toast('لا توجد فواتير شراء مطابقة للفلاتر','warn');return;}
+  const w=window.open('','_blank'); if(!w){toast('المتصفح منع النافذة — اسمح بالنوافذ المنبثقة','warn');return;}
+  const tot=rows.reduce((a,p)=>a+Number(p.total||0),0), paid=rows.reduce((a,p)=>a+Number(p.paid_amount||0),0), rem=rows.reduce((a,p)=>a+Math.max(0,purchaseRemaining(p)),0);
+  const trs=rows.map((p,i)=>{
+    const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
+    return `<tr><td>${i+1}</td><td class="code">${esc(p.purchase_no||String(p.id).slice(0,8))}</td><td>${esc(p.purchase_date)}</td><td>${esc(s?.name||'')}</td><td>${esc(l?.name||'')}</td><td>${purchaseStatusText(p.status)}</td><td class="num">${money(p.total)}</td><td class="num">${money(p.paid_amount)}</td><td class="num ${purchaseRemaining(p)>0?'neg':''}">${money(purchaseRemaining(p))}</td></tr>`;
+  }).join('');
+  const meta=[...purchaseFilterSummaryParts(), rows.length+' فاتورة', new Date().toLocaleDateString('ar-LY'), 'بواسطة '+(appUser?.identifier||'')].map(esc).join(' · ');
+  const html=`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>قائمة فواتير الشراء</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:0;padding:14px;color:#111}h1{font-size:18px;margin:0 0 2px}.meta{color:#555;font-size:11px;margin-bottom:10px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:4px 6px;text-align:right}th{background:#eee}.num{direction:ltr;text-align:center}.neg{color:#b00020;font-weight:900}.code{direction:ltr;text-align:left;font-weight:700}tfoot td{font-weight:800;background:#f6f6f6}@page{size:A4 landscape;margin:8mm}@media print{body{padding:0}}</style></head><body><h1>🛍️ ${esc(APP_CONFIG.businessName||'بنعم')} — قائمة فواتير الشراء</h1><div class="meta">${meta}</div><table><thead><tr><th>#</th><th>رقم</th><th>التاريخ</th><th>المورد</th><th>المكان</th><th>الحالة</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>${trs}</tbody><tfoot><tr><td colspan="6">الإجماليات (${rows.length} فاتورة)</td><td class="num">${money(tot)}</td><td class="num">${money(paid)}</td><td class="num">${money(rem)}</td></tr></tfoot></table></body></html>`;
+  w.document.write(html); w.document.close();
+  w.onload=()=>{try{w.focus();w.print();}catch(e){}};
+  setTimeout(()=>{try{w.focus();w.print();}catch(e){}},600);
+}
+function printSelectedPurchase(){
+  const id=selectedPurchaseId; if(!id){toast('حدّد فاتورة شراء من القائمة أولاً (انقر السطر)','warn');return;}
+  const p=purchases.find(x=>x.id===id); if(!p){toast('لم يتم العثور على الفاتورة','warn');return;}
+  const items=purchaseItems.filter(it=>it.purchase_id===id);
+  const w=window.open('','_blank'); if(!w){toast('المتصفح منع النافذة — اسمح بالنوافذ المنبثقة','warn');return;}
+  const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
+  const trs=items.map((it,i)=>`<tr><td>${i+1}</td><td class="code">${esc(it.product_code||'')}</td><td>${esc(it.product_name||'')}</td><td class="num">${it.qty}</td><td class="num">${money(it.unit_cost)}</td><td class="num">${money(it.line_total)}</td></tr>`).join('');
+  const rem=purchaseRemaining(p);
+  const meta=[p.purchase_no||String(p.id).slice(0,8), p.purchase_date, 'المورد: '+(s?.name||'—'), 'المكان: '+(l?.name||'—'), p.invoice_no?('رقم فاتورة المورد: '+p.invoice_no):'', purchaseStatusText(p.status)].filter(Boolean).map(esc).join(' · ');
+  const html=`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>فاتورة شراء ${esc(p.purchase_no||'')}</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:0;padding:14px;color:#111}h1{font-size:18px;margin:0 0 2px}.meta{color:#555;font-size:11px;margin-bottom:10px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #999;padding:5px 7px;text-align:right}th{background:#eee}.num{direction:ltr;text-align:center}.code{direction:ltr;text-align:left}.totals{margin-top:10px;font-size:14px;display:flex;gap:18px;flex-wrap:wrap}.totals b.neg{color:#b00020}@page{size:A4 portrait;margin:10mm}@media print{body{padding:0}}</style></head><body><h1>🛍️ ${esc(APP_CONFIG.businessName||'بنعم')} — فاتورة شراء</h1><div class="meta">${meta}</div><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody>${trs}</tbody></table><div class="totals"><span>الإجمالي: <b>${money(p.total)}</b></span><span>المدفوع: <b>${money(p.paid_amount)}</b></span><span>المتبقي: <b class="${rem>0?'neg':''}">${money(rem)}</b></span></div></body></html>`;
+  w.document.write(html); w.document.close();
+  w.onload=()=>{try{w.focus();w.print();}catch(e){}};
+  setTimeout(()=>{try{w.focus();w.print();}catch(e){}},600);
+}
+
 /* (1967) إجراءات فواتير الشراء ثابتة فوق الجدول — نقرة على السطر تحدد الفاتورة */
 function selectPurchaseRow(tr){
   const id=tr.dataset.id; if(!id) return;
@@ -3917,7 +4047,7 @@ async function deletePurchase(id){
     toast('حُذفت الفاتورة وعُكست آثارها','success');
     selectedPurchaseId=null;
     await refreshParts(['salesDomain']);
-    renderPurchases();
+    renderPurchasesList();
   }catch(e){console.error(e);
     const m=String(e&&e.message||e||'');
     if(/Could not find the function|PGRST202/i.test(m)) toast('حذف فواتير الشراء غير مُفعَّل في قاعدة البيانات بعد — الدالة (0091) تُنشأ عند الطلب','warn');
