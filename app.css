@@ -1009,10 +1009,18 @@ th.sorted-asc.sortable:after,th.sorted-desc.sortable:after{color:var(--sec,var(-
 /* ══════════════════════ (0090) نظام النوافذ ══════════════════════
    طبقة النوافذ لا تلتقط المؤشّر بنفسها — كل نافذة تلتقطه — فيبقى
    التطبيق خلفها قابلاً للاستعمال. */
-#winLayer{position:fixed;inset:0;pointer-events:none;z-index:200}
+/* (0091) حصر النوافذ داخل منطقة المحتوى — قرار المالك: main هو صندوق
+   الاحتواء (يمين/يسار القائمة، بين شريط الوصول وشريط الحالة) ويقصّ حدودها.
+   overflow:clip لا hidden — hidden يكسر العناصر اللاصقة داخل main
+   (شريط الدفع البرتقالي) لأنه يجعله حاوية تمرير؛ clip يقصّ بلا ذلك. */
+main{position:relative;overflow:hidden;overflow:clip}
+#winLayer{position:absolute;inset:0;pointer-events:none;z-index:200}
 #winLayer .win{pointer-events:auto}
 
-.win{position:fixed;display:flex;flex-direction:column;overflow:hidden;
+/* مطلقة بإحداثيات main (الطبقة داخله) — لا ثابتة للشاشة.
+   الحد الأدنى الفعلي 940×580 (شاشة الدفع كاملة) يفرضه الـJS ،
+   وهذا الأرضية النهائية إحطاطاً بأي عرض حاوية */
+.win{position:absolute;display:flex;flex-direction:column;overflow:hidden;
   background:var(--card);border:1px solid var(--border);border-radius:14px;
   box-shadow:0 18px 50px rgba(15,23,42,.28),0 2px 8px rgba(15,23,42,.12);
   min-width:360px;min-height:220px}
@@ -1054,8 +1062,9 @@ th.sorted-asc.sortable:after,th.sorted-desc.sortable:after{color:var(--sec,var(-
 .win-rz[data-d="sw"]{bottom:0;inset-inline-start:0;width:16px;height:16px;cursor:nesw-resize}
 .win-max .win-rz{display:none}
 
-/* شريط المهام */
-#winBar{position:fixed;inset-inline:0;bottom:0;z-index:260;display:flex;gap:6px;
+/* (0091) شريط مهام النوافذ يرسو أسفل <main> نفسه (يُلحق به في winBar())
+   فوق شريط الحالة وبعيداً عن القائمة الجانبية — لا أسفل شاشة المتصفح كما كان */
+#winBar{position:sticky;bottom:42px;z-index:260;display:flex;gap:6px;
   align-items:center;padding:6px 10px;overflow-x:auto;
   background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(10px);
   border-top:1px solid var(--border);box-shadow:0 -6px 18px rgba(15,23,42,.10)}
@@ -1073,6 +1082,10 @@ body.has-winbar{padding-bottom:52px}
 .winbar-all{flex:0 0 auto;margin-inline-start:auto;padding:6px 10px;border:1px dashed var(--border);
   border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:12.5px;cursor:pointer}
 .winbar-all:hover{color:var(--bad);border-color:var(--bad)}
+
+/* (0091) شاشة الدفع داخل نافذة: مطلقة نسبة للنافذة (أقرب سلف positioned)
+   لا للشاشة كلها — كانت fixed فتظهر أسفل حافة النافذة (عطب البارحة) */
+.in-window .pos-bottom-bar.payment-open{position:absolute}
 
 /* زر «افتح في نافذة» في الشريط الجانبي */
 .nav-win-btn{opacity:0;display:inline-flex;align-items:center;justify-content:center;min-width:18px;padding:2px 5px;border:0;border-radius:6px;

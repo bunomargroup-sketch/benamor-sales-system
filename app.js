@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-1501';
+const APP_BUILD='b20261012-1550';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -6919,6 +6919,33 @@ var __winGeom={};
 try{ __winGeom=JSON.parse(localStorage.getItem(WIN_KEY)||'{}')||{}; }catch(_e){ __winGeom={}; }
 function saveWinGeom(){ try{ localStorage.setItem(WIN_KEY,JSON.stringify(__winGeom)); }catch(_e){} }
 
+/* ═══ (0091) حصر النوافذ في منطقة المحتوى — قرار المالك ═══
+   النواذج كلها إحداثيات main لا إحداثيات الشاشة: الطبقة وشريط المهام
+   عنصران في main، والسحب/التحجيم/الاستعادة مقيدة بحدوده، وشريط العنوان يبقى
+   مكشوفاً، والتكبير يملأ main لا الشاشة. الحد الأدنى 940×580 يتّسع
+   لشاشة الدفع كاملة (أعمدة 280+360+~200 + هوامش). ═══ */
+const WIN_MIN_W=940, WIN_MIN_H=580;
+function winBox(){
+  const m=document.querySelector('main');
+  if(!m || !m.getBoundingClientRect) return {left:0,top:0,width:innerWidth,height:innerHeight,viewH:innerHeight};
+  const r=m.getBoundingClientRect();
+  return {left:r.left, top:r.top, width:r.width, height:r.height,
+          viewH:Math.max(300, Math.min(r.height, innerHeight-Math.max(0,r.top)))};
+}
+function clampWinGeom(g){
+  const b=winBox();
+  const minW=Math.min(WIN_MIN_W,b.width), minH=Math.min(WIN_MIN_H,b.height);
+  const w=Math.max(minW, Math.min(g.w,b.width));
+  const h=Math.max(minH, Math.min(g.h,b.height));
+  return { w, h,
+    x:Math.max(0, Math.min(g.x, b.width -w)),      /* يقف عند الحد */
+    y:Math.max(0, Math.min(g.y, b.height-44)) };   /* 44 = شريط العنوان يبقى مكشوفاً */
+}
+/* انكماش المتصفح: النوافذ المفتوحة تُعاد إلى داخل الحدود فلا تنسكب */
+addEventListener('resize',()=>{ Object.keys(__wins).forEach(sec=>{ const w=__wins[sec]; if(!w||w.max) return;
+  const g=clampWinGeom({x:w.el.offsetLeft,y:w.el.offsetTop,w:w.el.offsetWidth,h:w.el.offsetHeight});
+  Object.assign(w.el.style,{left:g.x+'px',top:g.y+'px',width:g.w+'px',height:g.h+'px'}); }); });
+
 function winTitle(sec){
   const b=document.querySelector(`nav button[data-tab="${sec}"]`);
   const t=b?.querySelector('span')?.textContent?.trim();
@@ -6931,22 +6958,24 @@ function winIcon(sec){
 }
 function winLayer(){
   let l=document.getElementById('winLayer');
-  if(!l){ l=document.createElement('div'); l.id='winLayer'; document.body.appendChild(l); }
+  if(!l){ l=document.createElement('div'); l.id='winLayer'; (document.querySelector('main')||document.body).appendChild(l); }
   return l;
 }
 function winBar(){
   let b=document.getElementById('winBar');
-  if(!b){ b=document.createElement('div'); b.id='winBar'; document.body.appendChild(b); }
+  if(!b){ b=document.createElement('div'); b.id='winBar'; (document.querySelector('main')||document.body).appendChild(b); }
   return b;
 }
 
 /* موضع متدرّج حتى لا تتكدّس النوافذ الجديدة فوق بعضها */
-function nextWinPos(){
-  const n=Object.keys(__wins).length;
-  const w=Math.min(1100, Math.max(560, Math.round(innerWidth*0.62)));
-  const h=Math.min(760,  Math.max(380, Math.round(innerHeight*0.68)));
-  return { x: Math.min(40+n*28, Math.max(10, innerWidth-w-10)),
-           y: Math.min(64+n*26, Math.max(10, innerHeight-h-60)),
+function nextWinPos(){   /* (0091) داخل الجزء المرئي من main لا الشاشة */
+  const b=winBox(), n=Object.keys(__wins).length;
+  const minW=Math.min(WIN_MIN_W,b.width), minH=Math.min(WIN_MIN_H,b.height);
+  const w=Math.max(minW, Math.min(Math.round(b.width*0.62), Math.round(b.width*0.9)));
+  const h=Math.max(minH, Math.min(Math.round(b.viewH*0.72), Math.round(b.viewH*0.9)));
+  const vy=Math.max(0,-b.top);   /* أول ما يظهر من main في التمرير الحالي */
+  return { x: Math.min(24+n*30, Math.max(8, b.width -w-8)),
+           y: Math.min(vy+16+n*26, Math.max(vy+8, vy+b.viewH-h-8)),
            w, h };
 }
 
@@ -6956,7 +6985,7 @@ function openWindow(sec){
   const node=document.getElementById(sec);
   if(!node || !node.classList.contains('section')) return;
 
-  const g=Object.assign(nextWinPos(), __winGeom[sec]||{});
+  const g=clampWinGeom(Object.assign(nextWinPos(), __winGeom[sec]||{}));   /* (0091) الاستعادة مقيدة بحدود main */
   const el=document.createElement('div');
   el.className='win'; el.dataset.sec=sec;
   el.style.cssText=`left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h}px;z-index:${++__winZ}`;
@@ -7043,9 +7072,9 @@ function maximizeWindow(sec,silent){
 
 function rememberGeom(sec){
   const w=__wins[sec]; if(!w || w.max) return;
-  const r=w.el.getBoundingClientRect();
+  const b=winBox(), r=w.el.getBoundingClientRect();   /* (0091) إحداثيات main لا الشاشة */
   __winGeom[sec]=Object.assign(__winGeom[sec]||{},
-    {x:Math.round(r.left), y:Math.round(r.top), w:Math.round(r.width), h:Math.round(r.height)});
+    {x:Math.round(r.left-b.left), y:Math.round(r.top-b.top), w:Math.round(r.width), h:Math.round(r.height)});
   saveWinGeom();
 }
 
@@ -7066,13 +7095,15 @@ function wireWindow(el, sec){
   const head=el.querySelector('.win-head');
   head.addEventListener('pointerdown',e=>{
     if(e.target.closest('.win-btns') || __wins[sec]?.max) return;
+    if(typeof matchMedia==='function' && matchMedia('(max-width:900px)').matches) return; /* (0091) الجوال: بلا سحب */
     const r=el.getBoundingClientRect();
     const dx=e.clientX-r.left, dy=e.clientY-r.top;
     head.setPointerCapture(e.pointerId);
     el.classList.add('win-moving');
     const mv=ev=>{
-      const x=Math.max(-r.width+90, Math.min(innerWidth-60, ev.clientX-dx));
-      const y=Math.max(0,           Math.min(innerHeight-46, ev.clientY-dy));
+      const b=winBox();   /* (0091) إحداثيات main — والحدود سياج */
+      const x=Math.max(0, Math.min(b.width -r.width, ev.clientX-dx-b.left));
+      const y=Math.max(0, Math.min(b.height-44,      ev.clientY-dy-b.top));
       el.style.left=x+'px'; el.style.top=y+'px';
     };
     const up=()=>{ head.removeEventListener('pointermove',mv); head.removeEventListener('pointerup',up);
@@ -7087,13 +7118,16 @@ function wireWindow(el, sec){
       e.preventDefault(); e.stopPropagation();
       const d=h.dataset.d, r=el.getBoundingClientRect();
       const sx=e.clientX, sy=e.clientY;
+      const b0=winBox(); const mx0=r.left-b0.left, my0=r.top-b0.top;   /* (0091) إحداثيات main */
       h.setPointerCapture(e.pointerId);
       const mv=ev=>{
-        let x=r.left, y=r.top, w=r.width, hh=r.height;
-        if(d.includes('e')) w=Math.max(360, r.width+(ev.clientX-sx));
-        if(d.includes('s')) hh=Math.max(220, r.height+(ev.clientY-sy));
-        if(d.includes('w')){ const nw=Math.max(360, r.width-(ev.clientX-sx)); x=r.left+(r.width-nw); w=nw; }
-        if(d.includes('n')){ const nh=Math.max(220, r.height-(ev.clientY-sy)); y=r.top+(r.height-nh); hh=nh; }
+        const b=winBox();
+        const minW=Math.min(WIN_MIN_W,b.width), minH=Math.min(WIN_MIN_H,b.height);
+        let x=mx0, y=my0, w=r.width, hh=r.height;
+        if(d.includes('e')) w=Math.max(minW, Math.min(b.width -mx0, r.width +(ev.clientX-sx)));
+        if(d.includes('s')) hh=Math.max(minH, Math.min(b.height-my0, r.height+(ev.clientY-sy)));
+        if(d.includes('w')){ const nw=Math.max(minW, Math.min(mx0+r.width, r.width-(ev.clientX-sx))); x=mx0+r.width-nw; w=nw; }
+        if(d.includes('n')){ const nh=Math.max(minH, Math.min(my0+r.height, r.height-(ev.clientY-sy))); y=my0+r.height-nh; hh=nh; }
         el.style.left=x+'px'; el.style.top=y+'px'; el.style.width=w+'px'; el.style.height=hh+'px';
       };
       const up=()=>{ h.removeEventListener('pointermove',mv); h.removeEventListener('pointerup',up); rememberGeom(sec); };
