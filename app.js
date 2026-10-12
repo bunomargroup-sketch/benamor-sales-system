@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-1700';
+const APP_BUILD='b20261012-1728';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7350,6 +7350,7 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(k===' '){ if(isActivatable(t)) return; e.preventDefault(); listNavToggle(inst); return; }
+  if(k==='Delete'){ if(isActivatable(t)) return; if(inst.onDelete&&inst.cur!=null){ e.preventDefault(); try{ inst.onDelete(); }catch(_e){} } return; }
   if(k==='/'&&!editable){ e.preventDefault(); const s=q(inst.search); if(s){ try{ s.focus(); if(s.select) s.select(); }catch(_e){} } return; }
 });
 
@@ -7412,6 +7413,10 @@ const SHORTCUTS=[
   {group:'عام', kbd:'F1 / ؟ / ?', desc:'ورقة الاختصارات هذه', match:e=>e.key==='F1'||e.key==='?'||e.key==='؟', when:e=>e.key==='F1'||!isTextEditable(e.target), run:e=>{ e.preventDefault(); renderShortcutsSheet(); const m=q('shortcutsModal'); if(m) m.classList.toggle('show'); }},
   {group:'عام', kbd:'Esc', desc:'إغلاق الطبقة العليا فقط: قائمة سياق ← منتقي ← حوار ← النافذة المحددة ← تحديد الصف', match:e=>e.key==='Escape', run:e=>{ if(dispatchEscape(e)) e.preventDefault(); }},
   {group:'عام', kbd:'F3', desc:'قائمة المنتجات (بيع/شراء/تحويل/جرد)', match:e=>e.key==='F3', run:e=>{ e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else if(q('stockCount')?.classList.contains('active')) openStockCountPicker(); else openSaleProductPicker(); }},
+  {group:'الشريط والنوافذ', kbd:'Alt+1..7', desc:'أزرار شريط الوصول السريع بالترتيب', match:e=>e.altKey&&!e.ctrlKey&&!e.metaKey&&/^[1-7]$/.test(e.key), run:e=>{ e.preventDefault(); quickBarByIndex(Number(e.key)-1); }},
+  {group:'الشريط والنوافذ', kbd:'Ctrl+Tab', desc:'تدوير النوافذ المفتوحة (+Shift للعكس)', match:e=>e.key==='Tab'&&(e.ctrlKey||e.metaKey), run:e=>{ e.preventDefault(); cycleAppWindows(e.shiftKey?-1:1); }},
+  {group:'أسطر الفاتورة', kbd:'↓ / ↑ داخل الخلايا', desc:'التنقل بين الصفوف في العمود نفسه (بيع/شراء/مبدئية/تحويل) — آخر صف + ↓ يضيف صفاً في البيع', match:e=>(e.key==='ArrowDown'||e.key==='ArrowUp')&&!!invoiceItemCell(e.target), run:e=>{ e.preventDefault(); moveInvoiceItemCell(e,e.key==='ArrowDown'); }},
+
   {group:'شاشة البيع', kbd:'Shift+Enter', desc:'تحصيل نقدي فوري (بيع + طباعة)', sale:true, match:e=>(e.shiftKey&&e.key==='Enter')||e.code==='NumpadAdd', run:e=>{ e.preventDefault(); instantCashOut(); }},
   {group:'شاشة البيع', kbd:'/ أو ~', desc:'الانتقال لمربع الباركود', sale:true, match:e=>e.key==='/'||e.key==='~', when:()=>!saleModalOpen(), run:e=>{ e.preventDefault(); focusBarcode(); }},
   {group:'شاشة البيع', kbd:'Delete', desc:'حذف سطر الصنف المحدد', sale:true, match:e=>e.key==='Delete', when:(e,tf)=>!tf&&!saleModalOpen(), run:e=>{ e.preventDefault(); removeSelectedSaleRow(); }},
@@ -7430,7 +7435,8 @@ const SHORTCUTS=[
   {group:'القوائم (الجداول)', kbd:'Ctrl+Enter', desc:'فتح / تعديل', listNav:true},
   {group:'القوائم (الجداول)', kbd:'Space', desc:'تحديد / إلغاء التحديد', listNav:true},
   {group:'القوائم (الجداول)', kbd:'/', desc:'الانتقال لبحث القائمة', listNav:true},
-  {group:'القوائم (الجداول)', kbd:'Ctrl+P', desc:'طباعة المستند المحدد (بيع/شراء)', listNav:true}
+  {group:'القوائم (الجداول)', kbd:'Ctrl+P', desc:'طباعة المستند المحدد (بيع/شراء)', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'Delete', desc:'حذف المستند المحدد (بتأكيده وصلاحيته — بيع/شراء)', listNav:true}
 ];
 function runRegisteredShortcut(e){
   const salesActive=q('sales')?.classList.contains('active');
@@ -7457,6 +7463,57 @@ function renderShortcutsSheet(){
     items.filter(s=>s.group===gn).map(s=>'<div><b class="kbd">'+esc(s.kbd)+'</b> '+esc(s.desc)+'</div>').join('')+
     '</div></div>').join('');
 }
+/* ─── (0092-ج) المرحلة الثانية ─── */
+/* تنقّل جدولي داخل أسطر الفاتورة: الأسهم تتحرك بين الصفوف في العمود نفسه —
+   كل خلية input: البيع (si) والمبدئية (pr) والشراء (pi) والتحويل (ti).
+   الأسهم هنا للتنقل حصراً: لا تغيّر قيمة خانة رقمية ولا تفتح قائمة المنتجات. */
+const ITEM_CELL_CLS=/^(si|pr|pi|ti)-(code|name|qty|price|cost|discount|note)$/;
+function invoiceItemCell(t){
+  try{
+    if(!t||!t.classList) return null;
+    const tag=(t.tagName||'').toLowerCase();
+    if(tag!=='input'&&tag!=='textarea') return null;
+    const cls=[...t.classList].find(c=>ITEM_CELL_CLS.test(c));
+    if(!cls) return null;
+    const tr=t.closest?t.closest('tr'):null;
+    return tr?{cls,tr}:null;
+  }catch(_e){ return null; }
+}
+function moveInvoiceItemCell(e,down){
+  const cell=invoiceItemCell(e.target); if(!cell) return;
+  let tr=down?cell.tr.nextElementSibling:cell.tr.previousElementSibling;
+  if(!tr){
+    /* آخر صف + ↓ في فاتورة البيع: صف جديد كما يفعل Enter في خانة السعر */
+    if(down&&cell.tr.parentElement&&cell.tr.parentElement.id==='saleItemsBody'&&typeof addSaleRowAndFocus==='function'){ try{ addSaleRowAndFocus(); }catch(_e2){} }
+    return;
+  }
+  const next=tr.querySelector('.'+cell.cls);
+  if(next&&next.focus){ try{ next.focus(); if(next.select) next.select(); }catch(_e2){} }
+}
+/* Alt+رقم: زر شريط الوصول السريع — نفس ما تفعله الفأرة (بصلاحياته وبترتيبه الظاهر) */
+function quickBarByIndex(i){
+  try{ const bar=q('quickBar'); if(!bar) return false; const btns=bar.querySelectorAll('button[data-quick-tab]'); const b=btns&&btns[i]; if(b){ b.click(); return true; } }catch(_e){}
+  return false;
+}
+/* Ctrl+Tab: تدوير النوافذ المفتوحة — المرئية بالترتيب، والمصغَّرة تُفتح عند وصول دورها */
+function cycleAppWindows(dir){
+  try{
+    const keys=Object.keys(__wins||{}); const n=keys.length; if(!n) return;
+    let cur=-1;
+    const focused=document.querySelector('.win.win-focus');
+    if(focused){ cur=keys.findIndex(s=>__wins[s]&&__wins[s].el===focused); }
+    if(cur<0){ let bz=-1; keys.forEach((s,i)=>{ const w=__wins[s]; if(!w||w.min) return; const z=Number((w.el&&w.el.style&&w.el.style.zIndex)||0); if(z>bz){bz=z;cur=i;} }); }
+    if(cur<0) cur=0;
+    for(let step=1;step<=n;step++){
+      const idx=((cur+dir*step)%n+n)%n;
+      const s=keys[idx], w=__wins[s];
+      if(!w) continue;
+      if(w.min) unminimizeWindow(s); else focusWindow(s);
+      return;
+    }
+  }catch(_e){}
+}
+
 
 /* ربط القوائم — التحديد نفسه الذي تضعه الفأرة: onSelect يستدعي دوال التحديد القائمة */
 try{
@@ -7464,6 +7521,7 @@ try{
     onSelect:(tr,id)=>selectSaleRow(String(id)),
     onOpen:(tr,id)=>{ const ret=saleReturns.find(r=>r.id===id); if(ret){ if(ret.sale_id) viewSaleDetails(ret.sale_id); else openEditReturnModal(id,true); } else viewSaleDetails(id); },
     onEdit:()=>openSelectedSaleForEdit(),
+    onDelete:()=>{ const ret=selectedSaleReturn(); if(ret) deleteReturnAdmin(ret.id); else deleteSale(selectedSaleId); },
     onPrint:()=>printSelectedSale(),
     onClear:()=>{ selectedSaleId=null; markSaleRowSelectedUi(); refreshSelectedSaleInfo(); },
     loadMore:()=>loadOlderSales()});
@@ -7471,6 +7529,7 @@ try{
     onSelect:tr=>selectPurchaseRow(tr),
     onOpen:()=>purchaseListAction('view'),
     onEdit:()=>purchaseListAction('edit'),
+    onDelete:()=>purchaseListAction('delete'),
     onPrint:()=>printSelectedPurchase(),
     onClear:()=>{ selectedPurchaseId=null; [...q('purchasesBody').querySelectorAll('tr')].forEach(r=>r.classList.remove('selected-row')); updatePurchaseSelHint(); },
     loadMore:()=>loadOlderPurchases()});
