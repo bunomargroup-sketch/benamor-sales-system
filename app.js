@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-1728';
+const APP_BUILD='b20261012-1834';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3932,13 +3932,13 @@ function renderPurchasesList(){
   fillPurchaseListFilterOptions();
   const rows=purchases.filter(purchaseMatchesFilters);
   const more=rows.length-purchasesListLimit;
-  const olderRow=more>0?`<tr><td colspan="9" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderPurchases()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`:'';
+  const olderBtn=more>0?`<button class="btn secondary" onclick="loadOlderPurchases()" title="تحميل فواتير شراء أقدم">تحميل الأقدم (${more} فاتورة)</button>`:'';
   q('purchasesBody').innerHTML=rows.slice(0,purchasesListLimit).map(p=>{
     const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
     const rem=purchaseRemaining(p);
     return `<tr data-id="${p.id}" class="${p.id===selectedPurchaseId?'selected-row':''}" onclick="selectPurchaseRow(this)" ondblclick="purchaseListAction('view')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${esc(p.purchase_date)}</td><td>${esc(s?.name||'')}</td><td>${esc(l?.name||'')}</td><td class="ltr">${esc(p.invoice_no||'')}</td><td><b>${money(p.total)}</b></td><td>${money(p.paid_amount)}</td><td class="${rem>0?'stock-negative':''}"><b>${money(rem)}</b></td><td><span class="badge ${p.status==='posted'?'green':(p.status==='cancelled'?'red':'')}">${typeLabel(p.status)}</span></td></tr>`;
   }).join('')||'<tr><td colspan="9">لا توجد فواتير شراء مطابقة للفلاتر.</td></tr>';
-  if(olderRow) q('purchasesBody').innerHTML+=olderRow;
+  const olderPWrap=q('purchasesOlderWrap'); if(olderPWrap) olderPWrap.innerHTML=olderBtn;
   /* شريط الإجماليات تحت الجدول — ينعكس مع كل فلتر */
   const bar=q('purchasesTotalsBar');
   if(bar){
@@ -4945,13 +4945,16 @@ function renderSales(){
      يختفي عند بلوغ أقدم فاتورة في القاعدة. */
   const hz=__salesHorizon;
   const olderMayExist=hz && __oldestSaleDate!=='' && (__oldestSaleDate===null || __oldestSaleDate<hz);
-  const olderRow=(more>0||olderMayExist)
+  /* (20261012) الزر خارج الجدول: تذييل تحت الصف الأخير — لا يشارك في الفرز
+     ولا يخلق فراغاً بين رأس الجدول وأول صف، وبلا سهم يتيم */
+  const olderBtn=(more>0||olderMayExist)
     ?(more>0
-      ?`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم (${more} فاتورة)</button></td></tr>`
-      :`<tr><td colspan="10" style="text-align:center;padding:10px"><button class="btn secondary" onclick="loadOlderSales()">⬇ تحميل الأقدم</button></td></tr>`)
+      ?`<button class="btn secondary" onclick="loadOlderSales()" title="تحميل فواتير أقدم من النطاق المعروض">تحميل الأقدم (${more} فاتورة)</button>`
+      :`<button class="btn secondary" onclick="loadOlderSales()" title="تحميل فواتير أقدم من النطاق المعروض">تحميل الأقدم</button>`)
     :'';
   const bodyHtml=entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('');
-  q('salesBody').innerHTML=(bodyHtml||'<tr><td colspan="10">لا نتائج ضمن آخر 90 يوماً — حمّل الأقدم</td></tr>')+olderRow;
+  q('salesBody').innerHTML=(bodyHtml||'<tr><td colspan="10">لا نتائج ضمن آخر 90 يوماً — حمّل الأقدم</td></tr>');
+  const olderWrap=q('salesOlderWrap'); if(olderWrap) olderWrap.innerHTML=olderBtn;
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
@@ -6926,11 +6929,48 @@ function saveWinGeom(){ try{ localStorage.setItem(WIN_KEY,JSON.stringify(__winGe
    لشاشة الدفع كاملة (أعمدة 280+360+~200 + هوامش). ═══ */
 const WIN_MIN_W=940, WIN_MIN_H=580;
 function winBox(){
+  /* (20261012) صندوق حدود النوافذ = حزام الطبقة المرئي؛ فإن لم يُقس بعد
+     حسبناه من الشريط المرئي لـ main، ثم يُطرح منه شريط مهام النوافذ */
+  const layer=winLayer();
+  let r=(layer && layer.getBoundingClientRect)? layer.getBoundingClientRect() : null;
+  if(!r || !(r.width>0) || !(r.height>0)) r=visibleMainBand();
+  const bar=winBar();   /* (20261012) مرجع الشريط الواحد الثابت */
+  const barH=(bar && !bar.classList.contains('hidden')
+              && document.body.classList.contains('has-winbar'))? 46 : 0;
+  return {left:r.left, top:r.top, width:r.width, height:Math.max(200, r.height-barH)};
+}
+/* (20261012) الشريط المرئي من main بتقاطعه مع الشاشة بعد الكروم الثابت */
+function visibleMainBand(){
   const m=document.querySelector('main');
-  if(!m || !m.getBoundingClientRect) return {left:0,top:0,width:innerWidth,height:innerHeight,viewH:innerHeight};
+  const vh=(typeof innerHeight==='number'&&innerHeight)?innerHeight:768;
+  if(!m || !m.getBoundingClientRect) return {left:0,top:0,width:Math.min(1280,(typeof innerWidth==='number'&&innerWidth)||1280),height:Math.min(768,vh)};
   const r=m.getBoundingClientRect();
-  return {left:r.left, top:r.top, width:r.width, height:r.height,
-          viewH:Math.max(300, Math.min(r.height, innerHeight-Math.max(0,r.top)))};
+  const bottomOf=x=>{ const b=(x && x.getBoundingClientRect)? x.getBoundingClientRect() : null;
+                      return b? ((b.top||0)+(b.height||0)) : 0; };
+  /* الهيدر وشريط الوصول لاصقان أعلى الشاشة: لا تعلو النوافذ عليهما */
+  const chromeTop=Math.max(0, bottomOf(document.querySelector('header')), bottomOf(document.getElementById('quickBar')));
+  const sb=document.getElementById('statusBar');
+  const chromeBot=(sb && sb.offsetHeight)? sb.offsetHeight : 34;   /* شريط الحالة ثابت أسفل الشاشة */
+  const top=Math.max(r.top, chromeTop);
+  const bottom=Math.min((r.top||0)+(r.height||0), vh-chromeBot);
+  return {left:r.left, top, width:r.width, height:Math.max(0, bottom-top)};
+}
+/* (20261012) الحزام: الطبقة صندوق ثابت يطابق الشريط المرئي من main —
+   يُقاس عند الفتح/الإغلاق/التمرير/الانكماش فلا تعلو النوافذ على الهيدر
+   ولا على شريط الوصول ولا على شريط الحالة */
+function syncWinLayer(){
+  const layer=winLayer(); if(!layer || !layer.style) return;
+  const b=visibleMainBand();
+  layer.style.left=Math.round(b.left)+'px';
+  layer.style.top=Math.round(b.top)+'px';
+  layer.style.width=Math.round(b.width)+'px';
+  layer.style.height=Math.round(b.height)+'px';
+}
+function confineOpenWindows(){
+  Object.keys(__wins).forEach(sec=>{ const w=__wins[sec]; if(!w||w.max) return;
+    const g=clampWinGeom({x:parseFloat(w.el.style.left)||0, y:parseFloat(w.el.style.top)||0,
+                           w:parseFloat(w.el.style.width)||0, h:parseFloat(w.el.style.height)||0});
+    Object.assign(w.el.style,{left:g.x+'px',top:g.y+'px',width:g.w+'px',height:g.h+'px'}); });
 }
 function clampWinGeom(g){
   const b=winBox();
@@ -6939,12 +6979,15 @@ function clampWinGeom(g){
   const h=Math.max(minH, Math.min(g.h,b.height));
   return { w, h,
     x:Math.max(0, Math.min(g.x, b.width -w)),      /* يقف عند الحد */
-    y:Math.max(0, Math.min(g.y, b.height-44)) };   /* 44 = شريط العنوان يبقى مكشوفاً */
+    y:Math.max(0, Math.min(g.y, Math.max(0, b.height-h))) };   /* (20261012) النافذة كلها فوق شريط المهام — والحد الأدنى 220 يضمن بقاء شريط العنوان مكشوفاً */
 }
-/* انكماش المتصفح: النوافذ المفتوحة تُعاد إلى داخل الحدود فلا تنسكب */
-addEventListener('resize',()=>{ Object.keys(__wins).forEach(sec=>{ const w=__wins[sec]; if(!w||w.max) return;
-  const g=clampWinGeom({x:w.el.offsetLeft,y:w.el.offsetTop,w:w.el.offsetWidth,h:w.el.offsetHeight});
-  Object.assign(w.el.style,{left:g.x+'px',top:g.y+'px',width:g.w+'px',height:g.h+'px'}); }); });
+/* (20261012) انكماش المتصفح أو تمرير الصفحة: الحزام يعيد قياس نفسه والنوافذ تعود داخل الحدود */
+addEventListener('resize',()=>{ syncWinLayer(); confineOpenWindows(); });
+if(typeof requestAnimationFrame==='function'){
+  let __winLayerTick=false;
+  addEventListener('scroll',()=>{ if(__winLayerTick) return; __winLayerTick=true;
+    requestAnimationFrame(()=>{ __winLayerTick=false; syncWinLayer(); }); }, true);
+}
 
 function winTitle(sec){
   const b=document.querySelector(`nav button[data-tab="${sec}"]`);
@@ -6961,21 +7004,22 @@ function winLayer(){
   if(!l){ l=document.createElement('div'); l.id='winLayer'; (document.querySelector('main')||document.body).appendChild(l); }
   return l;
 }
+let __winBarEl=null;   /* (20261012) مرجع واحد ثابت — يبدأ مخفياً حتى تُفتح نافذة */
 function winBar(){
-  let b=document.getElementById('winBar');
-  if(!b){ b=document.createElement('div'); b.id='winBar'; (document.querySelector('main')||document.body).appendChild(b); }
+  let b=document.getElementById('winBar') || __winBarEl;
+  if(!b){ b=document.createElement('div'); b.id='winBar'; b.className='hidden'; winLayer().appendChild(b); }
+  __winBarEl=b;
   return b;
 }
 
 /* موضع متدرّج حتى لا تتكدّس النوافذ الجديدة فوق بعضها */
-function nextWinPos(){   /* (0091) داخل الجزء المرئي من main لا الشاشة */
+function nextWinPos(){   /* (20261012) داخل حزام الطبقة المرئي */
   const b=winBox(), n=Object.keys(__wins).length;
   const minW=Math.min(WIN_MIN_W,b.width), minH=Math.min(WIN_MIN_H,b.height);
   const w=Math.max(minW, Math.min(Math.round(b.width*0.62), Math.round(b.width*0.9)));
-  const h=Math.max(minH, Math.min(Math.round(b.viewH*0.72), Math.round(b.viewH*0.9)));
-  const vy=Math.max(0,-b.top);   /* أول ما يظهر من main في التمرير الحالي */
+  const h=Math.max(minH, Math.min(Math.round(b.height*0.72), Math.round(b.height*0.9)));
   return { x: Math.min(24+n*30, Math.max(8, b.width -w-8)),
-           y: Math.min(vy+16+n*26, Math.max(vy+8, vy+b.viewH-h-8)),
+           y: Math.min(16+n*26, Math.max(8, b.height-h-8)),
            w, h };
 }
 
@@ -6985,7 +7029,8 @@ function openWindow(sec){
   const node=document.getElementById(sec);
   if(!node || !node.classList.contains('section')) return;
 
-  const g=clampWinGeom(Object.assign(nextWinPos(), __winGeom[sec]||{}));   /* (0091) الاستعادة مقيدة بحدود main */
+  syncWinLayer();   /* (20261012) الحزام يقيس نفسه قبل أن تُفتح النافذة */
+  const g=clampWinGeom(Object.assign(nextWinPos(), __winGeom[sec]||{}));   /* الاستعادة مقيدة بحدود الحزام */
   const el=document.createElement('div');
   el.className='win'; el.dataset.sec=sec;
   el.style.cssText=`left:${g.x}px;top:${g.y}px;width:${g.w}px;height:${g.h}px;z-index:${++__winZ}`;
@@ -7103,7 +7148,7 @@ function wireWindow(el, sec){
     const mv=ev=>{
       const b=winBox();   /* (0091) إحداثيات main — والحدود سياج */
       const x=Math.max(0, Math.min(b.width -r.width, ev.clientX-dx-b.left));
-      const y=Math.max(0, Math.min(b.height-44,      ev.clientY-dy-b.top));
+      const y=Math.max(0, Math.min(b.height-r.height, ev.clientY-dy-b.top));   /* (20261012) النافذة كاملة داخل الحزام */
       el.style.left=x+'px'; el.style.top=y+'px';
     };
     const up=()=>{ head.removeEventListener('pointermove',mv); head.removeEventListener('pointerup',up);
@@ -7140,7 +7185,7 @@ function wireWindow(el, sec){
 function renderWinBar(){
   const bar=winBar();
   const list=Object.keys(__wins);
-  if(!list.length){ bar.classList.add('hidden'); bar.innerHTML=''; document.body.classList.remove('has-winbar'); return; }
+  if(!list.length){ bar.classList.add('hidden'); bar.innerHTML=''; document.body.classList.remove('has-winbar'); syncWinLayer(); return; }
   bar.classList.remove('hidden');
   document.body.classList.add('has-winbar');
   const top=[...Object.entries(__wins)].sort((a,b)=>Number(b[1].el.style.zIndex||0)-Number(a[1].el.style.zIndex||0))[0]?.[0];
@@ -7151,6 +7196,7 @@ function renderWinBar(){
       <i class="${winIcon(sec)}"></i><span>${esc(winTitle(sec))}</span>
       <span class="winbar-x" onclick="event.stopPropagation();closeWindow('${sec}')" title="إغلاق">&#10005;</span></button>`;
   }).join('') + `<button type="button" class="winbar-all" onclick="closeAllWindows()" title="إغلاق كل النوافذ">&#10005; الكل</button>`;
+  syncWinLayer(); confineOpenWindows();   /* (20261012) ارتفاع شريط المهام يدخل في الحزام فوراً */
 }
 function toggleWindowFromBar(sec){
   const w=__wins[sec]; if(!w) return;
@@ -10994,6 +11040,7 @@ function setupLongPickers(){
 function toggleNav(){
   document.body.classList.toggle('nav-collapsed');
   try{localStorage.setItem('posNavCollapsed',document.body.classList.contains('nav-collapsed')?'1':'0')}catch(e){}
+  syncWinLayer(); confineOpenWindows();   /* (20261012) طيّ القائمة يغيّر عرض الحزام */
 }
 
 /* ===== Status bar + Hijri/Gregorian dates ===== */

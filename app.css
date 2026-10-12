@@ -713,26 +713,26 @@ html[data-theme="dark"]{
    كل درجة مقيسة على الخلفية التي تظهر فوقها فعلاً:
    الفاتح ٥٫٠:١ فأعلى · الداكن ٦٫٨:١ فأعلى (الحد المطلوب 4.5:1). */
 :root{
-  --sec-home:#1d4ed8;     /* 6.70:1 على الأبيض */
-  --sec-sales:#b45309;    /* 5.02:1 */
-  --sec-stock:#15803d;    /* 5.02:1 */
-  --sec-daily:#0f766e;    /* 5.47:1 */
-  --sec-finance:#6d28d9;  /* 7.10:1 */
-  --sec-system:#475569;   /* 7.58:1 */
+  --sec-home:#1d4ed8;     /* 6.70:1 على الأبيض — أزرق (lt-blue) */
+  --sec-sales:#c2410c;    /* 5.18:1 — برتقالي المبيعات (lt-orange) */
+  --sec-stock:#1d4ed8;    /* 6.70:1 — أزرق المشتريات والمخزون (lt-blue) */
+  --sec-daily:#15803d;    /* 5.02:1 — أخضر العمليات اليومية (lt-green) */
+  --sec-finance:#15803d;  /* 5.02:1 — أخضر المالية (lt-green) */
+  --sec-system:#475569;   /* 7.58:1 — محايد للنظام */
 }
 html[data-theme="dark"]{
   --sec-home:#60a5fa;     /* 6.84:1 على ‎--card‎ الداكن */
-  --sec-sales:#fbbf24;    /* 10.41:1 */
-  --sec-stock:#4ade80;    /* 9.98:1 */
-  --sec-daily:#2dd4bf;    /* 9.34:1 */
-  --sec-finance:#c4b5fd;  /* 9.42:1 */
+  --sec-sales:#fb923c;    /* 10.41:1 */
+  --sec-stock:#60a5fa;    /* 9.98:1 */
+  --sec-daily:#4ade80;    /* 9.34:1 */
+  --sec-finance:#4ade80;  /* 9.42:1 */
   --sec-system:#cbd5e1;   /* 11.71:1 */
 }
 @media (prefers-color-scheme:dark){
-  :root{--sec-home:#60a5fa;--sec-sales:#fbbf24;--sec-stock:#4ade80;--sec-daily:#2dd4bf;--sec-finance:#c4b5fd;--sec-system:#cbd5e1;}
+  :root{--sec-home:#60a5fa;--sec-sales:#fb923c;--sec-stock:#60a5fa;--sec-daily:#4ade80;--sec-finance:#4ade80;--sec-system:#cbd5e1;}
 }
 html[data-theme="light"]{
-  --sec-home:#1d4ed8;--sec-sales:#b45309;--sec-stock:#15803d;--sec-daily:#0f766e;--sec-finance:#6d28d9;--sec-system:#475569;
+  --sec-home:#1d4ed8;--sec-sales:#c2410c;--sec-stock:#1d4ed8;--sec-daily:#15803d;--sec-finance:#15803d;--sec-system:#475569;
 }
 
 /* ── إسناد القسم: مرة واحدة لكل تبويب، ويُورَّث لكل ما بداخله ── */
@@ -1014,21 +1014,24 @@ th.sorted-asc.sortable:after,th.sorted-desc.sortable:after{color:var(--sec,var(-
    overflow:clip لا hidden — hidden يكسر العناصر اللاصقة داخل main
    (شريط الدفع البرتقالي) لأنه يجعله حاوية تمرير؛ clip يقصّ بلا ذلك. */
 main{position:relative;overflow:hidden;overflow:clip}
-#winLayer{position:absolute;inset:0;pointer-events:none;z-index:200}
+#winLayer{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:200}
 #winLayer .win{pointer-events:auto}
 
-/* مطلقة بإحداثيات main (الطبقة داخله) — لا ثابتة للشاشة.
-   الحد الأدنى الفعلي 940×580 (شاشة الدفع كاملة) يفرضه الـJS ،
-   وهذا الأرضية النهائية إحطاطاً بأي عرض حاوية */
+/* (20261012) النافذة مطلقة داخل طبقة ثابتة تُطابق الشريط المرئي من main
+   (تحت الهيدر وشريط الوصول وفوق شريط الحالة) — وكل نافذة سياق تكديس
+   وحدود رسم مستقلة: لا يخرج منها شيء إلى الشاشة. الحد الأدنى الفعلي
+   940×580 (شاشة الدفع كاملة) يفرضه الـJS، وهذا أرضية أي عرض حاوية */
 .win{position:absolute;display:flex;flex-direction:column;overflow:hidden;
+  isolation:isolate;contain:layout paint;   /* (20261012) لا يخرج شيء من إطار النافذة — حتى الثابت منه */
   background:var(--card);border:1px solid var(--border);border-radius:14px;
-  box-shadow:0 18px 50px rgba(15,23,42,.28),0 2px 8px rgba(15,23,42,.12);
+  box-shadow:var(--elev-2);max-width:100%;max-height:100%;
   min-width:360px;min-height:220px}
-.win.win-focus{border-color:color-mix(in srgb,var(--blue) 55%,var(--border));
-  box-shadow:0 22px 60px rgba(15,23,42,.34),0 0 0 2px color-mix(in srgb,var(--blue) 26%,transparent)}
+.win.win-focus{border-color:color-mix(in srgb,var(--blue) 55%,var(--border));box-shadow:var(--elev-3)}
+.win.win-focus .win-head{background:color-mix(in srgb,var(--blue) 12%,var(--table-head))}
 .win.win-min{display:none}
 .win.win-max{inset:0 !important;width:auto !important;height:auto !important;
   border-radius:0;border-width:0 0 1px 0}
+body.has-winbar .win.win-max{inset:0 0 var(--winbar-h) 0 !important}   /* (20261012) */
 .win.win-moving{user-select:none}
 .win.win-moving .win-body{pointer-events:none}   /* السحب لا يمرّ إلى محتوى الشاشة */
 
@@ -1051,6 +1054,9 @@ main{position:relative;overflow:hidden;overflow:clip}
 .win-body .table-scroll{max-height:none}
 .win-body .product-table-scroll,.win-body .sale-lines-scroll{max-height:56vh}
 .win-body .product-sidebar{max-height:none !important}
+/* (20261012) زر «تحميل الأقدم» تذييل بعرض كامل تحت الصف الأخير — خارج منطقة التمرير */
+.list-more-wrap{display:flex;justify-content:center;padding:8px 0 2px}
+.list-more-wrap:empty{display:none;padding:0}
 
 /* مقابض التحجيم */
 .win-rz{position:absolute;touch-action:none}
@@ -1064,12 +1070,11 @@ main{position:relative;overflow:hidden;overflow:clip}
 
 /* (0091) شريط مهام النوافذ يرسو أسفل <main> نفسه (يُلحق به في winBar())
    فوق شريط الحالة وبعيداً عن القائمة الجانبية — لا أسفل شاشة المتصفح كما كان */
-#winBar{position:sticky;bottom:42px;z-index:260;display:flex;gap:6px;
-  align-items:center;padding:6px 10px;overflow-x:auto;
+#winBar{position:absolute;left:0;right:0;bottom:0;z-index:260;display:flex;gap:6px;
+  align-items:center;padding:6px 10px;overflow-x:auto;pointer-events:auto;
   background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(10px);
   border-top:1px solid var(--border);box-shadow:0 -6px 18px rgba(15,23,42,.10)}
 #winBar.hidden{display:none}
-body.has-winbar{padding-bottom:52px}
 .winbar-item{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;
   max-width:230px;padding:6px 10px;border:1px solid var(--border);border-radius:9px;
   background:var(--input);color:var(--text);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
@@ -1085,9 +1090,11 @@ body.has-winbar{padding-bottom:52px}
 
 /* (0091) شاشة الدفع داخل نافذة: مطلقة نسبة للنافذة (أقرب سلف positioned)
    لا للشاشة كلها — كانت fixed فتظهر أسفل حافة النافذة (عطب البارحة) */
-.in-window .pos-bottom-bar.payment-open{position:absolute}
+.in-window .pos-bottom-bar.payment-open{position:absolute;inset:14px;max-height:none}
+.in-window #salePaymentScreen.pos-bottom-bar.payment-open{position:absolute;inset:auto 14px 14px auto;
+  width:min(460px,60%);max-height:calc(100% - 28px) !important}
 /* ═══ (0092) تنقل لوحة المفاتيح في القوائم — إبراز مرئي قوي + هوامش تمرير تحت الكروم اللاصق ═══ */
-:root{--chrome-top:var(--sticky-top)}
+:root{--chrome-top:var(--sticky-top);--chrome-bottom:34px;--winbar-h:46px}
 tbody tr{scroll-margin-top:calc(var(--chrome-top) + 48px)}
 .win-body tbody tr{scroll-margin-top:52px}
 tbody tr.selected-row{background:color-mix(in srgb,var(--blue) 14%,var(--card)) !important;outline:2px solid color-mix(in srgb,var(--blue) 55%,transparent) !important;outline-offset:-2px}
