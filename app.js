@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-1550';
+const APP_BUILD='b20261012-1700';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2506,7 +2506,7 @@ function applyProductColVisibility(shown, smartParsed=null){
     const safe=String(p.code||'').replace(/'/g,"\\'");
     const isComp=isCompositeProduct(p.code);
     const vS=isComp?getCompositeVirtualStock(p.code):null;
-    return `<tr class="${selectedProductCode===p.code?'selected-row':''}" onclick="selectProductRow('${safe}')">${cells(p,isComp,vS)}</tr>`;
+    return `<tr data-code="${safe}" class="${selectedProductCode===p.code?'selected-row':''}" onclick="selectProductRow('${safe}')">${cells(p,isComp,vS)}</tr>`;
   }).join('');
   html+='</tbody>';
   const table=document.querySelector('#products .product-table-wrap table');
@@ -3375,7 +3375,7 @@ function cellCtxAction(act){
   else if(act==='copy'){ try{navigator.clipboard.writeText(__ctxCell).then(()=>toast('نُسخ: '+__ctxCell),()=>toast('تعذّر النسخ','warn'));}catch(e){toast('تعذّر النسخ','warn');} }
 }
 document.addEventListener('click',ev=>{const m=q('cellCtxMenu'); if(m&&!ev.target.closest('#cellCtxMenu')) m.style.display='none';});
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){const m=q('cellCtxMenu'); if(m) m.style.display='none';}});
+/* (0092) Esc لقائمة سياق الخلايا: انتقل إلى مُوزِّع Esc الموحَّد dispatchEscape */
 function closeMovementsModal(){q('movementsModal').classList.remove('show')}
 function productStockSummaryText(code,mode='all'){
   const clean=String(code||'').split(/\s+/)[0].trim();
@@ -4160,7 +4160,7 @@ function renderStock(){
   const shownStock=rows.slice(0,100); /* حد العرض — مثل شاشة المنتجات؛ البحث والفلاتر تضيّق النتائج */
   q('stockBody').innerHTML = shownStock.map(r=>{
     const l=locations.find(x=>x.id===r.location_id); const p=productByCode(r.product_code); const qty=Number(r.qty||0); const cost=productCost(r.product_code); const val=qty*cost;
-    return `<tr><td><span class="${branchChip(r.location_id)}">${esc(l?.name)}</span></td><td class="ltr"><span class="code">${esc(r.product_code)}</span></td><td><span class="name">${esc(pLabel(r.product_code,r.product_name||p?.name||''))}</span></td><td>${esc(p?.category||'')}</td><td>${esc(p?.supplier_name||'')}</td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount">${money(cost)}</td><td><span class="amount total">${money(val)}</span></td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`;
+    return `<tr data-code="${esc(r.product_code)}"><td><span class="${branchChip(r.location_id)}">${esc(l?.name)}</span></td><td class="ltr"><span class="code">${esc(r.product_code)}</span></td><td><span class="name">${esc(pLabel(r.product_code,r.product_name||p?.name||''))}</span></td><td>${esc(p?.category||'')}</td><td>${esc(p?.supplier_name||'')}</td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount">${money(cost)}</td><td><span class="amount total">${money(val)}</span></td><td class="mini">${esc((r.updated_at||'').replace('T',' ').slice(0,19))}</td></tr>`;
   }).join('') + (rows.length>100?`<tr><td colspan="9" class="muted">عرض 100 من ${rows.length} صف — استخدم البحث أو الفلاتر لتضييق النتائج.</td></tr>`:'') || '<tr><td colspan="9">لا يوجد مخزون مطابق للفلاتر. أدخل فاتورة شراء أولاً.</td></tr>';
 }
 
@@ -5973,7 +5973,7 @@ q('saleBarcodeInput')?.addEventListener('blur',()=>setTimeout(()=>{ if(quickSear
 function handleBarcodeKey(e){
   if(quickSearchOpen && e.key==='ArrowDown'){e.preventDefault(); quickSearchIndex=Math.min(quickSearchItems.length-1,quickSearchIndex+1); renderQuickSearch(); return;}
   if(quickSearchOpen && e.key==='ArrowUp'){e.preventDefault(); quickSearchIndex=Math.max(0,quickSearchIndex-1); renderQuickSearch(); return;}
-  if(quickSearchOpen && e.key==='Escape'){e.preventDefault(); if(e.stopPropagation)e.stopPropagation(); closeQuickSearch(); return;}
+  /* (0092) Esc: يصعد إلى مُوزِّع Esc الموحَّد (dispatchEscape) — الترتيب: قائمة سياق ← منتقي ← حوار ← نافذة ← تحديد */
   if(e.key==='Enter'){
     e.preventDefault();
     const raw=q('saleBarcodeInput').value.trim();
@@ -7251,32 +7251,241 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
 }));
 window.addEventListener('beforeunload',e=>{ if(saleHasContent()){ e.preventDefault(); e.returnValue=''; } });
 document.addEventListener('keydown',e=>{
+  /* (0092) الاختصارات من جدول SHORTCUTS واحد — نفس ترتيب الفروع القديم حرفياً */
+  if(runRegisteredShortcut(e)) return;
+  if(!q('sales')?.classList.contains('active')) return;
+  const tag=(document.activeElement?.tagName||'').toLowerCase();
+  const textFocused=['input','textarea','select'].includes(tag);
+  if(!textFocused && !saleModalOpen() && e.key.length===1){focusBarcode();}
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   (0092) لوحة المفاتيح للقوائم + مُوزِّع Esc واحد
+   ─ وحدة واحدة attachListKeyNav لجداول القوائم: فواتير البيع (ومرتجعاتها)،
+     فواتير الشراء، المنتجات، المخزون، والسجل المالي — لا نسخة رابعة.
+   ─ Esc: موزِّع واحد يغلق الطبقة العليا فقط، بهذا الترتيب:
+     قائمة سياق → منتقي/بحث سريع → حوار/طبقة بيع → النافذة المحددة → تحديد الصف.
+   ─ جدول SHORTCUTS واحد يسجّل المعالجات ويُبنى منه ورقة «؟» — مصدر واحد لا يشيخ.
+   ═══════════════════════════════════════════════════════════════════ */
+const LIST_NAV_INSTANCES=[];
+function isTextEditable(t){ if(!t) return false; const tag=(t.tagName||'').toLowerCase(); return tag==='input'||tag==='textarea'||tag==='select'||t.isContentEditable===true; }
+function isActivatable(t){ if(!t) return false; const tag=(t.tagName||'').toLowerCase(); return tag==='button'||tag==='a'||tag==='summary'||!!(t.closest&&t.closest('button,a,summary')); }
+function attachListKeyNav(cfg){
+  const inst=Object.assign({pageSize:10,cur:null},cfg);
+  LIST_NAV_INSTANCES.push(inst);
+  try{ const tb=q(inst.body); const table=(tb&&tb.closest)?tb.closest('table'):null; if(table&&table.setAttribute) table.setAttribute('tabindex','0'); }catch(_e){}
+  return inst;
+}
+function listNavRows(inst){ try{ const tb=q(inst.body); return (tb&&tb.querySelectorAll)?[...tb.querySelectorAll(inst.rowSel)]:[]; }catch(_e){ return []; } }
+function listNavRowId(inst,tr){ try{ return String(inst.rowId(tr)); }catch(_e){ return ''; } }
+function listNavPaint(inst,tr){
+  listNavRows(inst).forEach(r=>{ try{ r.setAttribute('aria-selected', r===tr?'true':'false'); }catch(_e){} if(r!==tr&&!inst.onSelect){ try{ r.classList.remove('selected-row'); }catch(_e){} } });
+  if(!tr) return;
+  if(!inst.onSelect){ try{ tr.classList.add('selected-row'); }catch(_e){} }
+  try{ if(tr.scrollIntoView) tr.scrollIntoView({block:'nearest'}); }catch(_e){}
+}
+function listNavMove(inst,delta,edge){
+  const rows=listNavRows(inst); if(!rows.length) return;
+  let idx=rows.findIndex(r=>listNavRowId(inst,r)===inst.cur);
+  if(idx<0) idx=delta>0?-1:0;
+  let ni=edge==='home'?0:(edge==='end'?rows.length-1:idx+delta);
+  if(ni>rows.length-1){ /* آخر صف محمّل وقائمة صفحية: نحمّل الصفحة التالية بدل التوقف الميت */ if(inst.loadMore){ try{ inst.loadMore(); }catch(_e){} } return; }
+  ni=Math.max(0,Math.min(rows.length-1,ni));
+  const tr=rows[ni], id=listNavRowId(inst,tr);
+  if(id===inst.cur){ listNavPaint(inst,tr); return; } /* حدّ القائمة: لا نعيد onSelect — إعادة إطلاقه تفتح المستند (منطق النقر المزدوج) */
+  inst.cur=id;
+  if(inst.onSelect){ try{ inst.onSelect(tr,id); }catch(_e){} }
+  listNavPaint(inst,tr);
+}
+function listNavClear(inst){
+  inst.cur=null;
+  listNavRows(inst).forEach(r=>{ try{ r.setAttribute('aria-selected','false'); }catch(_e){} if(!inst.onSelect){ try{ r.classList.remove('selected-row'); }catch(_e){} } });
+  if(inst.onClear){ try{ inst.onClear(); }catch(_e){} }
+}
+function listNavToggle(inst){ if(inst.cur==null) listNavMove(inst,1); else listNavClear(inst); }
+function listNavInstanceFor(ev){
+  try{
+    if(document.querySelector('.modal.show')) return null; /* حوار مفتوح: لوحة المفاتيح له لا للقائمة */
+    const t=ev&&ev.target;
+    if(t&&t.closest&&t.closest('.msel-panel,.ctx-menu,#saleQuickSearch,#winBar,.win-bar')) return null;
+    const secEl=(t&&t.closest)?t.closest('.section'):null;
+    if(secEl){ const i=LIST_NAV_INSTANCES.find(x=>x.section===secEl.id); if(i&&secEl.classList.contains('active')) return i; }
+    const ae=document.activeElement;
+    const secEl2=(ae&&ae.closest)?ae.closest('.section'):null;
+    if(secEl2){ const i=LIST_NAV_INSTANCES.find(x=>x.section===secEl2.id); if(i&&secEl2.classList.contains('active')) return i; }
+    const fw=document.querySelector('.win.win-focus:not(.win-min)');
+    if(fw&&fw.querySelector){ const s=fw.querySelector('.section.active'); if(s){ const i=LIST_NAV_INSTANCES.find(x=>x.section===s.id); if(i) return i; } }
+    const tab=activeTabId(); const el=q(tab);
+    if(el&&el.classList.contains('active')){ const i=LIST_NAV_INSTANCES.find(x=>x.section===tab); if(i) return i; }
+  }catch(_e){}
+  return null;
+}
+/* موجِّه القوائم: لا يقرض المفاتيح داخل حقول الإدخال — Enter داخل فاتورة جديد
+   يمشي كود→كمية→سعر→صف جديد كما هو؛ الاستثناء الوحيد: مربع بحث القائمة نفسه. */
+document.addEventListener('keydown',e=>{
+  const inst=listNavInstanceFor(e); if(!inst) return;
+  const t=e.target, editable=isTextEditable(t);
+  const inSearch=editable&&t&&t.id===inst.search;
+  const mod=e.ctrlKey||e.metaKey;
+  if(mod&&e.key==='Enter'){
+    if(!inst.onEdit) return;
+    e.preventDefault();
+    if(inst.cur==null){ listNavMove(inst,1); return; }
+    const tr=listNavRows(inst).find(r=>listNavRowId(inst,r)===inst.cur)||null;
+    if(tr){ try{ inst.onEdit(tr,inst.cur); }catch(_e){} }
+    return;
+  }
+  if(mod&&(e.key==='p'||e.key==='P')){ if(inst.onPrint&&inst.cur!=null){ e.preventDefault(); try{ inst.onPrint(); }catch(_e){} } return; }
+  if(editable&&!inSearch) return;
+  const k=e.key;
+  if(k==='ArrowDown'||k==='ArrowUp'){ e.preventDefault(); listNavMove(inst,k==='ArrowDown'?1:-1); return; }
+  if(k==='Home'||k==='End'){ e.preventDefault(); listNavMove(inst,0,k==='Home'?'home':'end'); return; }
+  if(k==='PageDown'||k==='PageUp'){ e.preventDefault(); listNavMove(inst,(k==='PageDown'?1:-1)*(inst.pageSize||10)); return; }
+  if(k==='Enter'){
+    if(isActivatable(t)) return; /* زر مركّز: Enter ينقر الزر نفسه */
+    e.preventDefault();
+    if(inst.cur==null){ listNavMove(inst,1); return; }
+    const tr=listNavRows(inst).find(r=>listNavRowId(inst,r)===inst.cur)||null;
+    if(tr&&inst.onOpen){ try{ inst.onOpen(tr,inst.cur); }catch(_e){} }
+    return;
+  }
+  if(k===' '){ if(isActivatable(t)) return; e.preventDefault(); listNavToggle(inst); return; }
+  if(k==='/'&&!editable){ e.preventDefault(); const s=q(inst.search); if(s){ try{ s.focus(); if(s.select) s.select(); }catch(_e){} } return; }
+});
+
+/* ─── مُوزِّع Esc: يغلق الطبقة العليا فقط — طابور صريح بلا مسابقة ─── */
+const ESC_MODAL_CLOSE={
+  saleProductPickerModal:()=>closeSaleProductPicker(),
+  productViewModal:()=>closeProductViewModal(),
+  movementsModal:()=>closeMovementsModal(),
+  printPreviewModal:()=>closePrintPreview(),
+  quickProductModal:()=>closeQuickProductModal(),
+  saleReturnModal:()=>closeSaleReturnModal()
+};
+const ESC_SALE_LAYERS=new Set(['saleProductPickerModal','productViewModal','movementsModal','printPreviewModal','quickProductModal','saleReturnModal','shortcutsModal','__payment__','__calc__']);
+function escCloseFocusedWindow(){
+  try{
+    const keys=Object.keys(__wins||{}); let best=null,bz=-1;
+    keys.forEach(s=>{ const w=__wins[s]; if(!w||w.min) return; const z=Number((w.el&&w.el.style&&w.el.style.zIndex)||0); if(z>bz){bz=z;best=s;} });
+    if(best){ closeWindow(best); return true; }
+  }catch(_e){}
+  return false;
+}
+function dispatchEscape(e){
+  if(e&&e.defaultPrevented) return false; /* من عالجها قبله (لوحات التحديد المتعدد) نحترمه */
+  /* ١) قائمة سياق مفتوحة */
+  const ccm=q('cellCtxMenu');
+  if(ccm&&ccm.style&&ccm.style.display==='block'){ ccm.style.display='none'; return true; }
+  if(typeof ctxMenu!=='undefined'&&ctxMenu&&ctxMenu.style&&ctxMenu.style.display==='block'){ hideCtxMenu(); return true; }
+  /* ٢) منتقي أو بحث سريع */
+  if(typeof quickSearchOpen!=='undefined'&&quickSearchOpen){ closeQuickSearch(); return true; }
+  const spm=q('saleProductPickerModal'); if(spm&&spm.classList.contains('show')){ closeSaleProductPicker(); return true; }
+  const lpm=q('longPickerModal'); if(lpm&&lpm.classList.contains('show')){ closeLongPicker(); return true; }
+  /* ٣) حوار مفتوح أو طبقة شاشة البيع — الأعلى z-index يُغلق أولاً */
+  const pool=[]; let closedSaleLayer=false;
+  try{
+    document.querySelectorAll('.modal.show').forEach(m=>{
+      pool.push({z:parseInt((m.style&&m.style.zIndex)||'1200',10)||1200,run:()=>{
+        const fn=ESC_MODAL_CLOSE[m.id];
+        if(fn){ try{ fn(); }catch(_e){ m.classList.remove('show'); } } else m.classList.remove('show');
+        if(ESC_SALE_LAYERS.has(m.id)) closedSaleLayer=true;
+      }});
+    });
+  }catch(_e){}
+  const calc=q('calculatorPanel'); if(calc&&calc.classList.contains('show')) pool.push({z:1210,run:()=>{ calc.classList.remove('show'); closedSaleLayer=true; }});
+  const pay=q('salePaymentScreen'); if(pay&&pay.classList.contains('payment-open')) pool.push({z:900,run:()=>{ try{ closeSalePaymentScreen(); }catch(_e){ pay.classList.remove('payment-open'); } closedSaleLayer=true; }});
+  if(pool.length){
+    pool.sort((a,b)=>b.z-a.z); pool[0].run();
+    if(closedSaleLayer){ try{ if(q('sales')?.classList.contains('active')) focusBarcode(); }catch(_e){} }
+    return true;
+  }
+  /* ٤) النافذة المحددة (طلب المالك: Esc يغلقها) */
+  if(escCloseFocusedWindow()) return true;
+  /* ٥) تحديد الصف في القائمة النشطة */
+  const inst=listNavInstanceFor(e);
+  if(inst&&inst.cur!=null){ listNavClear(inst); return true; }
+  return false;
+}
+
+/* ─── جدول الاختصارات الواحد: يسجّل المعالجات وتُبنى منه ورقة «؟» ─── */
+const SHORTCUTS=[
+  {group:'عام', kbd:'F1 / ؟ / ?', desc:'ورقة الاختصارات هذه', match:e=>e.key==='F1'||e.key==='?'||e.key==='؟', when:e=>e.key==='F1'||!isTextEditable(e.target), run:e=>{ e.preventDefault(); renderShortcutsSheet(); const m=q('shortcutsModal'); if(m) m.classList.toggle('show'); }},
+  {group:'عام', kbd:'Esc', desc:'إغلاق الطبقة العليا فقط: قائمة سياق ← منتقي ← حوار ← النافذة المحددة ← تحديد الصف', match:e=>e.key==='Escape', run:e=>{ if(dispatchEscape(e)) e.preventDefault(); }},
+  {group:'عام', kbd:'F3', desc:'قائمة المنتجات (بيع/شراء/تحويل/جرد)', match:e=>e.key==='F3', run:e=>{ e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else if(q('stockCount')?.classList.contains('active')) openStockCountPicker(); else openSaleProductPicker(); }},
+  {group:'شاشة البيع', kbd:'Shift+Enter', desc:'تحصيل نقدي فوري (بيع + طباعة)', sale:true, match:e=>(e.shiftKey&&e.key==='Enter')||e.code==='NumpadAdd', run:e=>{ e.preventDefault(); instantCashOut(); }},
+  {group:'شاشة البيع', kbd:'/ أو ~', desc:'الانتقال لمربع الباركود', sale:true, match:e=>e.key==='/'||e.key==='~', when:()=>!saleModalOpen(), run:e=>{ e.preventDefault(); focusBarcode(); }},
+  {group:'شاشة البيع', kbd:'Delete', desc:'حذف سطر الصنف المحدد', sale:true, match:e=>e.key==='Delete', when:(e,tf)=>!tf&&!saleModalOpen(), run:e=>{ e.preventDefault(); removeSelectedSaleRow(); }},
+  {group:'شاشة البيع', kbd:'F2', desc:'تعديل كمية الصف المحدد', sale:true, match:e=>e.key==='F2', run:e=>{ e.preventDefault(); focusSelectedQty(); }},
+  {group:'شاشة البيع', kbd:'F6', desc:'حفظ بدون طباعة', sale:true, match:e=>e.key==='F6', run:e=>{ e.preventDefault(); saleSaveMode='new'; q('salePrintAfterSave').value='no'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen(); }},
+  {group:'شاشة البيع', kbd:'F7', desc:'حفظ وطباعة', sale:true, match:e=>e.key==='F7', run:e=>{ e.preventDefault(); saleSaveMode='new'; q('salePrintAfterSave').value='yes'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen(); }},
+  {group:'شاشة البيع', kbd:'F8', desc:'دفع كاش كامل', sale:true, match:e=>e.key==='F8', run:e=>{ e.preventDefault(); openSalePaymentScreen(); setFullPayment('cash'); }},
+  {group:'شاشة البيع', kbd:'F9', desc:'دفع تحويل بنكي كامل', sale:true, match:e=>e.key==='F9', run:e=>{ e.preventDefault(); openSalePaymentScreen(); setFullPayment('bank'); }},
+  {group:'شاشة البيع', kbd:'F10', desc:'دفع بطاقة كامل', sale:true, match:e=>e.key==='F10', run:e=>{ e.preventDefault(); openSalePaymentScreen(); setFullPayment('card'); }},
+  {group:'شاشة البيع', kbd:'F11', desc:'بيع آجل', sale:true, match:e=>e.key==='F11', run:e=>{ e.preventDefault(); openSalePaymentScreen(); setCreditSale(); }},
+  {group:'شاشة البيع', kbd:'Tab (من مربع الباركود)', desc:'القفز إلى كمية آخر صف', sale:true, match:e=>e.key==='Tab', when:()=>document.activeElement===q('saleBarcodeInput'), run:e=>{ e.preventDefault(); const target=lastFocusedSaleRow?.querySelector('.si-qty') || firstEditableSaleCell(); if(target){target.focus(); target.select?.();} else addSaleRowAndFocus(); }},
+  {group:'القوائم (الجداول)', kbd:'↓ / ↑', desc:'تحريك تحديد الصف', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'Home / End', desc:'أول / آخر صف', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'PageUp / PageDown', desc:'عشرة صفوف', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'Enter', desc:'مشاهدة الصف المحدد', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'Ctrl+Enter', desc:'فتح / تعديل', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'Space', desc:'تحديد / إلغاء التحديد', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'/', desc:'الانتقال لبحث القائمة', listNav:true},
+  {group:'القوائم (الجداول)', kbd:'Ctrl+P', desc:'طباعة المستند المحدد (بيع/شراء)', listNav:true}
+];
+function runRegisteredShortcut(e){
   const salesActive=q('sales')?.classList.contains('active');
   const tag=(document.activeElement?.tagName||'').toLowerCase();
   const textFocused=['input','textarea','select'].includes(tag);
-  if(e.key==='F1'||e.key==='?'||e.key==='؟'){e.preventDefault();q('shortcutsModal').classList.toggle('show');return;}
-  if(e.key==='Escape'){if(closeTopSaleLayer()){e.preventDefault(); focusBarcode();} return;}
-  if(e.key==='F3'){e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else if(q('stockCount')?.classList.contains('active')) openStockCountPicker(); else openSaleProductPicker();return;}
-  if(!salesActive) return;
-  if((e.shiftKey&&e.key==='Enter') || e.code==='NumpadAdd'){e.preventDefault(); instantCashOut(); return;}
-  if((e.key==='/'||e.key==='~') && !saleModalOpen()){e.preventDefault(); focusBarcode(); return;}
-  if(e.key==='Delete' && !textFocused && !saleModalOpen()){e.preventDefault(); removeSelectedSaleRow(); return;}
-  if(e.key==='F2'){e.preventDefault(); focusSelectedQty(); return;}
-  if(e.key==='F6'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='no'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();return;}
-  if(e.key==='F7'){e.preventDefault();saleSaveMode='new';q('salePrintAfterSave').value='yes'; if(q('salePaymentScreen')?.classList.contains('payment-open')) q('saleForm').requestSubmit(); else openSalePaymentScreen();return;}
-  if(e.key==='F8'){e.preventDefault(); openSalePaymentScreen(); setFullPayment('cash'); return;}
-  if(e.key==='F9'){e.preventDefault(); openSalePaymentScreen(); setFullPayment('bank'); return;}
-  if(e.key==='F10'){e.preventDefault(); openSalePaymentScreen(); setFullPayment('card'); return;}
-  if(e.key==='F11'){e.preventDefault(); openSalePaymentScreen(); setCreditSale(); return;}
-  if(document.activeElement===q('saleBarcodeInput') && e.key==='Tab'){
-    e.preventDefault();
-    const target=lastFocusedSaleRow?.querySelector('.si-qty') || firstEditableSaleCell();
-    if(target){target.focus(); target.select?.();} else addSaleRowAndFocus();
-    return;
+  for(const s of SHORTCUTS){
+    if(!s.match||!s.run) continue; /* صفوف القوائم: عرض في الورقة فقط — يعالجها موجِّه القوائم */
+    if(s.sale&&!salesActive) continue;
+    if(!s.match(e)) continue;
+    if(s.when&&!s.when(e,textFocused)) continue;
+    try{ s.run(e); }catch(_e){ return false; }
+    return true;
   }
-  // Broad-spectrum focus: if the cashier types while no field/modal is active, send input to scanner box.
-  if(!textFocused && !saleModalOpen() && e.key.length===1){focusBarcode();}
-});
+  return false;
+}
+function renderShortcutsSheet(){
+  const modal=q('shortcutsModal'); if(!modal) return;
+  let g=null; try{ g=modal.querySelector('#shortcutsGrid')||modal.querySelector('.grid'); }catch(_e){}
+  if(!g) return;
+  try{ g.id='shortcutsGrid'; }catch(_e){}
+  const items=SHORTCUTS.filter(s=>s.desc);
+  const groups=[]; items.forEach(s=>{ if(!groups.includes(s.group)) groups.push(s.group); });
+  g.innerHTML=groups.map(gn=>'<div class="card" style="padding:10px 12px"><b>'+esc(gn)+'</b><div style="display:grid;gap:6px;margin-top:8px">'+
+    items.filter(s=>s.group===gn).map(s=>'<div><b class="kbd">'+esc(s.kbd)+'</b> '+esc(s.desc)+'</div>').join('')+
+    '</div></div>').join('');
+}
+
+/* ربط القوائم — التحديد نفسه الذي تضعه الفأرة: onSelect يستدعي دوال التحديد القائمة */
+try{
+  attachListKeyNav({body:'salesBody',section:'salesList',rowSel:'tr[data-id]',rowId:tr=>tr.dataset.id,search:'saleListSearch',
+    onSelect:(tr,id)=>selectSaleRow(String(id)),
+    onOpen:(tr,id)=>{ const ret=saleReturns.find(r=>r.id===id); if(ret){ if(ret.sale_id) viewSaleDetails(ret.sale_id); else openEditReturnModal(id,true); } else viewSaleDetails(id); },
+    onEdit:()=>openSelectedSaleForEdit(),
+    onPrint:()=>printSelectedSale(),
+    onClear:()=>{ selectedSaleId=null; markSaleRowSelectedUi(); refreshSelectedSaleInfo(); },
+    loadMore:()=>loadOlderSales()});
+  attachListKeyNav({body:'purchasesBody',section:'purchasesList',rowSel:'tr[data-id]',rowId:tr=>tr.dataset.id,search:'purchaseListSearch',
+    onSelect:tr=>selectPurchaseRow(tr),
+    onOpen:()=>purchaseListAction('view'),
+    onEdit:()=>purchaseListAction('edit'),
+    onPrint:()=>printSelectedPurchase(),
+    onClear:()=>{ selectedPurchaseId=null; [...q('purchasesBody').querySelectorAll('tr')].forEach(r=>r.classList.remove('selected-row')); updatePurchaseSelHint(); },
+    loadMore:()=>loadOlderPurchases()});
+  attachListKeyNav({body:'productsBody',section:'products',rowSel:'tr[data-code]',rowId:tr=>tr.dataset.code,search:'productSearch',
+    onSelect:(tr,id)=>selectProductRow(String(id)),
+    onOpen:()=>viewSelectedProduct(),
+    onEdit:()=>editSelectedProduct(),
+    onClear:()=>{ selectedProductCode=null; renderProducts(); }});
+  attachListKeyNav({body:'stockBody',section:'stock',rowSel:'tr[data-code]',rowId:tr=>tr.dataset.code,search:'stockSearch',
+    onOpen:(tr,id)=>openProductMovements(String(id))});
+  attachListKeyNav({body:'financeRegisterBody',section:'finance',rowSel:'tr[data-ref]',rowId:tr=>tr.dataset.ref+'|'+tr.dataset.rid,search:'regSearch',
+    onOpen:tr=>financeRegisterOpenDoc(String(tr.dataset.ref||''),String(tr.dataset.rid||'')),
+    loadMore:()=>{ const b=q('regMoreBtn'); if(b&&!b.classList.contains('hidden')){ b.click(); return true; } return false; }});
+  renderShortcutsSheet();
+}catch(_e){ console.warn('list keynav init', _e); }
 
 
 
@@ -7903,7 +8112,7 @@ function renderFinanceRegisterRows(){
     const branch=locations.find(l=>l.id===m.branch_id)?.name||'—';
     const ref=String(m.reference_table||''), rid=m.reference_id?String(m.reference_id):'';
     const clickable=!!(ref&&rid&&FINANCE_REGISTER_DOC_OPEN[ref]);
-    return `<tr${clickable?` style="cursor:pointer" onclick="financeRegisterOpenDoc('${esc(ref)}','${esc(rid)}')"`:''}><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(accLoc)}</td><td>${esc(branch)}</td><td><span class="reg-type t-${esc(String(m.movement_type||'').replace(/[^a-z0-9_]/gi,''))}">${esc(registerTypeLabel(m.movement_type))}</span></td><td class="amount reg-amt-in">${m.direction==='in'?money(m.amount):''}</td><td class="amount reg-amt-out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${sellerCell(m.user_identifier)}</td><td>${esc(m.notes||'')}</td></tr>`;
+    return `<tr data-ref="${esc(ref)}" data-rid="${esc(rid)}"${clickable?` style="cursor:pointer" onclick="financeRegisterOpenDoc('${esc(ref)}','${esc(rid)}')"`:''}><td>${esc(m.movement_date)}</td><td>${esc(m.account_name)}</td><td>${esc(accLoc)}</td><td>${esc(branch)}</td><td><span class="reg-type t-${esc(String(m.movement_type||'').replace(/[^a-z0-9_]/gi,''))}">${esc(registerTypeLabel(m.movement_type))}</span></td><td class="amount reg-amt-in">${m.direction==='in'?money(m.amount):''}</td><td class="amount reg-amt-out">${m.direction==='out'?money(m.amount):''}</td><td>${esc(m.doc_no||'—')}</td><td>${esc(m.counterparty||'—')}</td><td>${sellerCell(m.user_identifier)}</td><td>${esc(m.notes||'')}</td></tr>`;
   }).join('')||'<tr><td colspan="11">لا توجد حركات في هذا النطاق.</td></tr>';
   const t=regTotal||{}, total=Number(t.count||0), loaded=regRows.length;
   /* (20261010c) بطاقات كبيرة بدل سطر رمادي صغير — هذه الأرقام هي سبب وجود الشاشة.
@@ -10480,7 +10689,7 @@ function showCtxMenu(x,y,items){
 document.addEventListener('click',hideCtxMenu);
 document.addEventListener('scroll',hideCtxMenu,true);
 window.addEventListener('resize',hideCtxMenu);
-document.addEventListener('keydown',e=>{if(e.key==='Escape')hideCtxMenu();});
+/* (0092) Esc لقائمة سياق الصفوف: انتقل إلى مُوزِّع Esc الموحَّد dispatchEscape */
 
 const CTX_BUILDERS={
   productsBody(tr){const code=(ctxArg(tr,'selectProductRow')||tr.dataset.code||tr.children[0]?.innerText||'').trim(); if(!code) return []; selectProductRow(code); const p=products.find(x=>String(x.code)===String(code));
@@ -10716,7 +10925,7 @@ function handleLongPickerKey(e){
   if(e.key==='ArrowDown'){e.preventDefault();longPickerState.index=Math.min(n-1,longPickerState.index+1);renderLongPicker();}
   if(e.key==='ArrowUp'){e.preventDefault();longPickerState.index=Math.max(0,longPickerState.index-1);renderLongPicker();}
   if(e.key==='Enter'){e.preventDefault();chooseLongPicker(longPickerState.index);}
-  if(e.key==='Escape'){e.preventDefault();closeLongPicker();}
+  /* (0092) Esc: مُوزِّع Esc الموحَّد يغلق المنتقي */
 }
 function setupLongPickers(){
   document.addEventListener('mousedown',e=>{const el=e.target.closest('select,input'); if(!el)return; if(LONG_PICKER_IDS.has(el.id)||LONG_INPUT_IDS.has(el.id)){e.preventDefault(); openLongPicker(el.id);}},true);

@@ -1086,6 +1086,12 @@ body.has-winbar{padding-bottom:52px}
 /* (0091) شاشة الدفع داخل نافذة: مطلقة نسبة للنافذة (أقرب سلف positioned)
    لا للشاشة كلها — كانت fixed فتظهر أسفل حافة النافذة (عطب البارحة) */
 .in-window .pos-bottom-bar.payment-open{position:absolute}
+/* ═══ (0092) تنقل لوحة المفاتيح في القوائم — إبراز مرئي قوي + هوامش تمرير تحت الكروم اللاصق ═══ */
+:root{--chrome-top:var(--sticky-top)}
+tbody tr{scroll-margin-top:calc(var(--chrome-top) + 48px)}
+.win-body tbody tr{scroll-margin-top:52px}
+tbody tr.selected-row{background:color-mix(in srgb,var(--blue) 14%,var(--card)) !important;outline:2px solid color-mix(in srgb,var(--blue) 55%,transparent) !important;outline-offset:-2px}
+table[tabindex="0"]:focus-visible{outline:2px dashed color-mix(in srgb,var(--blue) 45%,transparent);outline-offset:-2px}
 
 /* زر «افتح في نافذة» في الشريط الجانبي */
 .nav-win-btn{opacity:0;display:inline-flex;align-items:center;justify-content:center;min-width:18px;padding:2px 5px;border:0;border-radius:6px;
