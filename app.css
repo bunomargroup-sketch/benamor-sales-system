@@ -1254,15 +1254,23 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
    رؤوس الجداول اللاصقة (4) — والهيدر فوق الجميع (20).
    طباعةً يختفي كما يختفي header/nav. أهداف التمرير تأخذ هامشاً
    بمقدار الهيدر + الشريط حتى لا تهبط تحته. */
-:root{--header-h:86px;--quickbar-h:46px;--sticky-top:var(--header-h)}
+:root{--header-h:86px;--quickbar-h:57px;--sticky-top:var(--header-h)}
 body.quickbar-on{--sticky-top:calc(var(--header-h) + var(--quickbar-h))}
-#quickBar.quick-bar{position:sticky;top:var(--header-h);z-index:19;display:flex;gap:6px;align-items:center;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding:6px 14px;background:var(--card);border-bottom:1px solid var(--border);box-shadow:var(--shadow);scrollbar-width:thin}
-#quickBar.quick-bar button{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:12px;padding:6px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s ease,color .15s ease}
-#quickBar.quick-bar button i{font-size:17px;line-height:1;color:currentColor;opacity:.9}
-#quickBar.quick-bar button:hover{background:var(--hover);color:var(--text)}
-#quickBar.quick-bar button.active{background:var(--accent-soft);color:var(--blue);border-color:color-mix(in srgb,var(--blue) 28%,var(--border));font-weight:700}
+#quickBar.quick-bar{position:sticky;top:var(--header-h);z-index:19;display:flex;align-items:center;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding:6px 14px;background:var(--card);border-bottom:1px solid var(--border);box-shadow:var(--shadow);scrollbar-width:thin}
+/* (20261012d) توسيط آمن: الصف الداخلي margin-inline:auto — حين يضيق الشريط
+   تنكمش الهوامش إلى صفر فيلتصق الصف ببداية الحاوية ويظل الزر الأول قابلاً
+   للوصول. توسيط حاوية التمرير نفسها بـjustify-content يقصّ البداية قصّاً لا رجعة فيه. */
+#quickBar .qb-row{display:flex;gap:8px;align-items:center;margin-inline:auto}
+/* ألوان بالمعنى من لوحة الإطلاق نفسها: lt-orange بيع · lt-blue شراء
+   ومخزون · lt-green عمليات يومية ومالية — قاعدة الزر لا تعرّف background
+   كي لا تطغى على تدرّج lt-* المقيس التباين (5.18/6.70/5.02) */
+#quickBar.quick-bar button{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;min-height:44px;padding:10px 16px;font-family:inherit;font-size:15px;font-weight:700;color:#fff;cursor:pointer;box-shadow:var(--elev-1);transition:filter .15s ease,transform .15s ease,box-shadow .15s ease}
+#quickBar.quick-bar button i{font-size:20px;line-height:1;color:currentColor;opacity:.95}
+#quickBar.quick-bar button:hover{filter:brightness(1.06)}
+#quickBar.quick-bar button.active{outline:3px solid rgba(255,255,255,.9);outline-offset:-3px;transform:translateY(-1px);box-shadow:var(--elev-2)}
+#quickBar.quick-bar button:focus-visible{outline:3px solid rgba(255,255,255,.9);outline-offset:-3px}
 body.auth-locked #quickBar{display:none}
-#financeRegisterWrap,tr{scroll-margin-top:calc(var(--header-h,86px) + var(--quickbar-h,46px) + 12px)}
+#financeRegisterWrap,tr{scroll-margin-top:calc(var(--header-h,86px) + var(--quickbar-h,57px) + 12px)}
 @media print{#quickBar{display:none!important}}
 @media(max-width:900px){#quickBar{top:0}body.quickbar-on{--sticky-top:var(--quickbar-h)}}
 /* تعويض العناصر اللاصقة على مستوى الصفحة — كانت تلتصق عند حافة الهيدر
