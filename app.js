@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-1834';
+const APP_BUILD='b20261012-2008';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -7080,6 +7080,10 @@ function closeWindow(sec){
   w.el.remove();
   delete __wins[sec];
   renderWinBar();
+  /* (20261012) منتقي الزبائن الذي فتح هذه النافذة يعود بعد إغلاقها:
+     نفس الحقل والبحث والصف المميّز — والفاتورة خلفه لم تُمسّ */
+  const __ret=__pendingPickerReturn;
+  if(__ret && __ret.sec===sec){ __pendingPickerReturn=null; reopenLongPickerAfterWindow(__ret); }
 }
 
 function focusWindow(sec){
@@ -7461,6 +7465,8 @@ const SHORTCUTS=[
   {group:'عام', kbd:'F3', desc:'قائمة المنتجات (بيع/شراء/تحويل/جرد)', match:e=>e.key==='F3', run:e=>{ e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else if(q('stockCount')?.classList.contains('active')) openStockCountPicker(); else openSaleProductPicker(); }},
   {group:'الشريط والنوافذ', kbd:'Alt+1..7', desc:'أزرار شريط الوصول السريع بالترتيب', match:e=>e.altKey&&!e.ctrlKey&&!e.metaKey&&/^[1-7]$/.test(e.key), run:e=>{ e.preventDefault(); quickBarByIndex(Number(e.key)-1); }},
   {group:'الشريط والنوافذ', kbd:'Ctrl+Tab', desc:'تدوير النوافذ المفتوحة (+Shift للعكس)', match:e=>e.key==='Tab'&&(e.ctrlKey||e.metaKey), run:e=>{ e.preventDefault(); cycleAppWindows(e.shiftKey?-1:1); }},
+  {group:'منتقي الزبائن', kbd:'Ctrl+L', desc:'فواتير الزبون المميّز (كل التواريخ) في نافذة — دون مغادرة الفاتورة الجارية', match:e=>(e.ctrlKey||e.metaKey)&&!e.altKey&&!e.shiftKey&&(e.key==='l'||e.key==='L'), when:()=>longPickerOpenForCustomer()&&canTab('salesList'), run:e=>{ e.preventDefault(); longPickerCustomerInvoices(longPickerState.index); }},
+  {group:'منتقي الزبائن', kbd:'Ctrl+E', desc:'تعديل بيانات الزبون المميّز في نافذة — يعود المنتقي بعد إغلاقها بنفس البحث', match:e=>(e.ctrlKey||e.metaKey)&&!e.altKey&&!e.shiftKey&&(e.key==='e'||e.key==='E'), when:()=>longPickerOpenForCustomer()&&canTab('customers'), run:e=>{ e.preventDefault(); longPickerCustomerEdit(longPickerState.index); }},
   {group:'أسطر الفاتورة', kbd:'↓ / ↑ داخل الخلايا', desc:'التنقل بين الصفوف في العمود نفسه (بيع/شراء/مبدئية/تحويل) — آخر صف + ↓ يضيف صفاً في البيع', match:e=>(e.key==='ArrowDown'||e.key==='ArrowUp')&&!!invoiceItemCell(e.target), run:e=>{ e.preventDefault(); moveInvoiceItemCell(e,e.key==='ArrowDown'); }},
 
   {group:'شاشة البيع', kbd:'Shift+Enter', desc:'تحصيل نقدي فوري (بيع + طباعة)', sale:true, match:e=>(e.shiftKey&&e.key==='Enter')||e.code==='NumpadAdd', run:e=>{ e.preventDefault(); instantCashOut(); }},
@@ -10949,6 +10955,11 @@ let longPickerState={target:null,type:'select',items:[],filtered:[],index:0,titl
 const CUSTOMER_PICKER_IDS=new Set(['saleCustomer','proformaCustomer','customerPaymentCustomer','customerLedgerCustomer']);
 let __pendingCustomerSelect=null;
 let __lastSavedCustomer=null;
+/* (20261012) امتداد آلية العودة نفسها لأزرار «فواتير/تعديل» من المنتقي:
+   يُغلق المنتقي وتُفتح نافذة فوق الفاتورة الجارية، وعند إغلاق النافذة
+   (closeWindow) يعود المنتقي على الحقل نفسه بنفس البحث وبنفس الزبون
+   المميّز — الفاتورة التي تحته لم تُمسّ */
+let __pendingPickerReturn=null;
 const LONG_PICKER_IDS=new Set(['saleCustomer','purchaseSupplier','paymentSupplier','ledgerSupplier','productSupplier','proformaCustomer','customerPaymentCustomer','customerLedgerCustomer']);
 const LONG_INPUT_IDS=new Set(['productBrand','productModel','productColor']);
 function optionText(o){return (o?.textContent||'').trim()}
@@ -11001,7 +11012,12 @@ function renderLongPicker(){
   if(longPickerState.index>=longPickerState.filtered.length) longPickerState.index=Math.max(0,longPickerState.filtered.length-1);
   /* (20261003) منتقيات الزبائن فقط: صف «إضافة زبون جديد» أعلى القائمة */
   const addRow=CUSTOMER_PICKER_IDS.has(longPickerState.target?.id)?`<tr class="lp-add" onclick="longPickerAddCustomer()"><td colspan="2">➕ إضافة زبون جديد — سيُختار تلقائياً هنا بعد حفظه</td></tr>`:'';
-  q('longPickerBody').innerHTML=addRow+longPickerState.filtered.map((it,i)=>`<tr class="${i===longPickerState.index?'active-row':''}" ondblclick="chooseLongPicker(${i})" onclick="longPickerState.index=${i};renderLongPicker()"><td><b>${esc(it.text)}</b>${it.sub?`<div class="mini">${esc(it.sub)}</div>`:''}</td><td><button class="btn secondary" type="button" onclick="event.stopPropagation();chooseLongPicker(${i})">اختيار</button></td></tr>`).join('')||'<tr><td colspan="2">لا توجد نتائج</td></tr>';
+  /* (20261012) منتقيات الزبائن فقط: زرّا «فواتير» و«تعديل» في خلية
+     الاختيار نفسها (عمودان كما هما) — فواتير لمن يرى قائمة الفواتير،
+     والتعديل لمن يرى تبويب الزبائن. «اختيار» يبقى الزر المهيمن */
+  const isCust=CUSTOMER_PICKER_IDS.has(longPickerState.target?.id);
+  const invBtn=isCust&&canTab('salesList'), editBtn=isCust&&canTab('customers');
+  q('longPickerBody').innerHTML=addRow+longPickerState.filtered.map((it,i)=>`<tr class="${i===longPickerState.index?'active-row':''}" ondblclick="chooseLongPicker(${i})" onclick="longPickerState.index=${i};renderLongPicker()"><td><b>${esc(it.text)}</b>${it.sub?`<div class="mini">${esc(it.sub)}</div>`:''}</td><td class="lp-actions"><button class="btn secondary" type="button" onclick="event.stopPropagation();chooseLongPicker(${i})">اختيار</button>${invBtn?` <button class="btn secondary lp-ico" type="button" title="فواتير هذا الزبون — كل التواريخ (Ctrl+L)" onclick="event.stopPropagation();longPickerCustomerInvoices(${i})">🧾</button>`:''}${editBtn?` <button class="btn secondary lp-ico" type="button" title="تعديل بيانات الزبون (Ctrl+E)" onclick="event.stopPropagation();longPickerCustomerEdit(${i})">✏️</button>`:''}</td></tr>`).join('')||'<tr><td colspan="2">لا توجد نتائج</td></tr>';
   q('longPickerInfo').textContent=`عرض ${longPickerState.filtered.length} من ${longPickerState.items.length}`;
 }
 /* (20261003) من المنتقي إلى نموذج الإضافة — ثم عودة الاختيار تلقائياً عند الحفظ */
@@ -11011,6 +11027,56 @@ function longPickerAddCustomer(){
   closeLongPicker();
   openTab('customers');
   setTimeout(()=>{ q('customerForm')?.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>q('customerName')?.focus(),120); },60);
+}
+
+/* ═══ (20261012) «فواتير/تعديل» من منتقي الزبائن — دون مغادرة الفاتورة ═══
+   المنتقي نافذة حوارية فوق النوافذ: لو فتحنا نافذة من داخله لظلّت خلفه
+   ولا يرى المستخدم شيئاً. لذلك: نغلق المنتقي (بعد تذكّر الحقل والبحث
+   والصف المميّز)، نفتح النافذة، وعند إغلاقها يعود المنتقي كما كان —
+   امتداداً لآلية __pendingCustomerSelect نفسها لا آلية ثانية. عمداً
+   ليس مسار openTab+scrollIntoView القديم: المستخدم في وسط فاتورة. */
+function longPickerOpenForCustomer(){
+  try{ return !!q('longPickerModal')?.classList.contains('show') && CUSTOMER_PICKER_IDS.has(longPickerState?.target?.id); }
+  catch(_e){ return false; }
+}
+function longPickerRememberReturn(){
+  const t=longPickerState?.target;
+  return (t && CUSTOMER_PICKER_IDS.has(t.id))
+    ? {sec:null, fieldId:t.id, term:q('longPickerSearch')?.value||'', customerId:null} : null;
+}
+function longPickerCustomerInvoices(i){
+  const it=longPickerState.filtered[i]; if(!it) return;
+  const ret=longPickerRememberReturn(); if(!ret) return;
+  ret.sec='salesList'; ret.customerId=it.value;
+  __pendingPickerReturn=ret;
+  closeLongPicker();
+  openWindow('salesList');
+  /* مسار الفرز نفسه — لا مسار ترشيح ثانياً: فلتر الزبون + كل التواريخ
+     (إسقاط الشهر) — يريد تاريخ هذا الزبون لا شهره الحالي فقط */
+  const custSel=q('saleFilterCustomer'); if(custSel) custSel.value=String(it.value);
+  const mf=q('saleFilterMonth'); if(mf) mf.value='';
+  salesFilterChanged();
+  const w=__wins['salesList'];
+  if(w && w.el){ const ttl=w.el.querySelector('.win-title');
+    if(ttl){ const c=customers.find(x=>x.id===it.value); ttl.textContent='فواتير الزبون — '+(c?.name||it.text); } }
+}
+function longPickerCustomerEdit(i){
+  const it=longPickerState.filtered[i]; if(!it) return;
+  const ret=longPickerRememberReturn(); if(!ret) return;
+  ret.sec='customers'; ret.customerId=it.value;
+  __pendingPickerReturn=ret;
+  closeLongPicker();
+  openWindow('customers');
+  editCustomer(it.value);   /* الحفظ يحدّث قائمة الزبائن فيظهر الاسم الجديد عند العودة */
+}
+/* عودة المنتقي بعد إغلاق النافذة: نفس الحقل والبحث والصف المميّز */
+function reopenLongPickerAfterWindow(ret){
+  if(!ret || !q(ret.fieldId)) return;
+  openLongPicker(ret.fieldId);            /* يعيد بناء القائمة من customers الحيّة */
+  q('longPickerSearch').value=ret.term||'';
+  renderLongPicker();
+  const idx=longPickerState.filtered.findIndex(it=>String(it.value)===String(ret.customerId));
+  if(idx>=0 && idx!==longPickerState.index){ longPickerState.index=idx; renderLongPicker(); }
 }
 function chooseLongPicker(i){
   const it=longPickerState.filtered[i]; const el=longPickerState.target; if(!it||!el)return;

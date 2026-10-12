@@ -219,6 +219,9 @@
     /* (20261003) صف «إضافة زبون جديد» أعلى منتقي الزبائن */
     #longPickerBody tr.lp-add td{background:var(--accent-soft);color:var(--blue2);font-weight:600;border-bottom:1px solid var(--border)}
     #longPickerBody tr.lp-add:hover td{background:color-mix(in srgb,var(--blue) 22%,var(--accent-soft))}
+    /* (20261012) أزرار «فواتير/تعديل» الصغيرة في خلية اختيار الزبون */
+    #longPickerBody td.lp-actions{white-space:nowrap}
+    #longPickerBody .lp-ico{min-height:0;padding:4px 8px;font-size:15px;line-height:1;vertical-align:middle}
 
 
     /* Weak internet / offline status */
