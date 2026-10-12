@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261012-1124">
+<link rel="stylesheet" href="app.css?v=20261012-1146">
 </head>
 <body class="auth-locked">
   <header>
@@ -29,6 +29,8 @@
       <div class="row"><button class="icon-btn" type="button" aria-label="المساعدة والاختصارات" title="الاختصارات" onclick="q('shortcutsModal').classList.add('show')"><i class="ti ti-help-circle"></i></button><button class="icon-btn" id="navToggle" aria-label="إظهار/إخفاء القائمة" type="button" onclick="toggleNav()" title="إظهار/إخفاء القائمة"><i class="ti ti-menu-2"></i></button><button class="icon-btn" id="themeToggle" type="button" aria-label="تبديل الوضع" onclick="toggleTheme()" title="تبديل الوضع"><i class="ti ti-moon"></i></button><div class="pill" id="syncState">جاهز للمزامنة مع Supabase</div><button class="pill offline-queue-pill hidden" id="offlineQueuePill" type="button" onclick="openOfflineQueueModal()" aria-label="فواتير محفوظة محليًا"></button><div class="pill hidden" id="userPill"><span id="userLabel"></span> <button class="btn secondary" style="padding:6px 10px" onclick="logoutPOS()">خروج</button></div></div>
     </div>
   </header>
+
+  <div id="quickBar" class="quick-bar"></div>
 
   <div class="wrap">
     <nav>
@@ -1533,6 +1535,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261012-1124"></script>
+<script src="app.js?v=20261012-1146"></script>
 </body>
 </html>

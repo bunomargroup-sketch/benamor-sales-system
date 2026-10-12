@@ -1247,3 +1247,27 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
     #financeRegisterWrap .table-scroll thead th{position:sticky;top:0;z-index:5;background:var(--table-head);box-shadow:0 1px 0 var(--border)}
     #financeRegisterWrap .table-scroll tbody tr{position:relative;z-index:0}
     @media(max-width:900px){.reg-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.reg-stat b{font-size:22px}.reg-stat.reg-net b{font-size:27px}}
+
+/* ═══ (20261012c) شريط الوصول السريع الدائم — طلب المالك ═══
+   لاصق أسفل الهيدر مباشرة، بعرض الصفحة، RTL كالمنظومة.
+   الترتيب الطبقي المطلوب: النوافذ والتنبيهات (80+) > الشريط (19) >
+   رؤوس الجداول اللاصقة (4) — والهيدر فوق الجميع (20).
+   طباعةً يختفي كما يختفي header/nav. أهداف التمرير تأخذ هامشاً
+   بمقدار الهيدر + الشريط حتى لا تهبط تحته. */
+:root{--header-h:86px;--quickbar-h:46px;--sticky-top:var(--header-h)}
+body.quickbar-on{--sticky-top:calc(var(--header-h) + var(--quickbar-h))}
+#quickBar.quick-bar{position:sticky;top:var(--header-h);z-index:19;display:flex;gap:6px;align-items:center;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding:6px 14px;background:var(--card);border-bottom:1px solid var(--border);box-shadow:var(--shadow);scrollbar-width:thin}
+#quickBar.quick-bar button{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:12px;padding:6px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s ease,color .15s ease}
+#quickBar.quick-bar button i{font-size:17px;line-height:1;color:currentColor;opacity:.9}
+#quickBar.quick-bar button:hover{background:var(--hover);color:var(--text)}
+#quickBar.quick-bar button.active{background:var(--accent-soft);color:var(--blue);border-color:color-mix(in srgb,var(--blue) 28%,var(--border));font-weight:700}
+body.auth-locked #quickBar{display:none}
+#financeRegisterWrap,tr{scroll-margin-top:calc(var(--header-h,86px) + var(--quickbar-h,46px) + 12px)}
+@media print{#quickBar{display:none!important}}
+@media(max-width:900px){#quickBar{top:0}body.quickbar-on{--sticky-top:var(--quickbar-h)}}
+/* تعويض العناصر اللاصقة على مستوى الصفحة — كانت تلتصق عند حافة الهيدر
+   مباشرة (86px) فتصبح تحت الشريط: nav و.sticky-actions و.cashier-side
+   تتبع --sticky-top الذي يرتفع بارتفاع الشريط حين يظهر ويعود لأصله حين يختفي */
+nav{top:var(--sticky-top)}
+.sticky-actions{top:calc(var(--sticky-top) - 4px)}
+.cashier-side{top:calc(var(--sticky-top) + 2px)}

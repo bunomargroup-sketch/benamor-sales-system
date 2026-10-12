@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-1124';
+const APP_BUILD='b20261012-1146';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1885,6 +1885,7 @@ function logoutPOS(){localStorage.removeItem('posUser'); localStorage.removeItem
 function updateAuthUI(){
   const logged=!!(appUser?.id && appUser?.branch_id && authSession?.access_token);
   document.body.classList.toggle('auth-locked',!logged);
+  if(!logged) document.body.classList.remove('quickbar-on'); /* (20261012c) الخروج يعيد إزاحة العناصر اللاصقة لأصلها */
   q('loginScreen').classList.toggle('show',!logged);
   q('userPill').classList.toggle('hidden',!logged);
   q('userLabel').textContent=logged?`${appUser.identifier} - ${ROLE_LABELS[currentRole?.role]||'بدون صلاحية'}${appUser.branch_name?' - '+appUser.branch_name:''}`:'';
@@ -1909,7 +1910,7 @@ function applyPermissions(){
   if(!appUser?.id){updateAuthUI();return;}
   currentRole=getUserRole()||currentRole||{role:'viewer'}; updateAuthUI();
   document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.style.display=canTab(b.dataset.tab)?'block':'none'});
-  tidyNavGroups(); initNavGroups();
+  tidyNavGroups(); initNavGroups(); renderQuickBar(); /* (20261012c) يعاد بناؤه مع كل تطبيق أذونات: دخول وتغيير دور وrefreshParts */
   const active=document.querySelector('nav button.active');
   if(active && active.style.display==='none'){
     const first=[...document.querySelectorAll('nav button[data-tab]')].find(b=>b.style.display!=='none'); if(first) first.click();
@@ -1928,6 +1929,48 @@ function applyPermissions(){
   /* (0116) عدّاد المراجعات المعلقة يظهر فور الدخول (لا ينتظر أول نبضة) —
      طلب واحد صغير، لا يرسم أي شاشة */
   try{ if(navigator.onLine) loadPriceReviewQueue().catch(()=>{}); }catch(_e){}
+}
+/* ═══ (20261012c) شريط الوصول السريع الدائم — طلب المالك: سبعة اختصارات ثابتة
+   تحت الهيدر في كل الألسنة، لا قائمة منسدلة. يُبنى من مصدر الأذونات نفسه
+   (canTab + canSeeRegister) لا من نسخة ثانية تنحرف: لو تغيّرت ROLE_TABS
+   تبعَ الشريط تلقائياً. البند ٧ ليس لساناً: السجل داخل finance ويُمرَّر
+   إليه بعد رسم اللسان (renderFinance يهيّئه ويحمّله بنفسه). ═══ */
+const QUICK_BAR_ITEMS=[
+  {tab:'sales',           label:'فاتورة جديدة',         icon:'ti-shopping-cart'},
+  {tab:'salesList',       label:'فواتير البيع',         icon:'ti-receipt'},
+  {tab:'purchases',       label:'فواتير الشراء',        icon:'ti-shopping-bag'},
+  {tab:'transfers',       label:'تحويلات المخزون',      icon:'ti-arrows-exchange'},
+  {tab:'expensesQuick',   label:'المصاريف',             icon:'ti-wallet'},
+  {tab:'dailyCashClosing',label:'إغلاق الخزينة اليومي', icon:'ti-cash-banknote'},
+  {tab:'financeRegister', label:'سجل الحركات المالية',  icon:'ti-list-details', register:true}
+];
+function quickBarItemVisible(it){
+  /* البند ٧ ليس لساناً: السجل داخل finance وبحارسه الخاص canSeeRegister */
+  return it.register ? (canTab('finance') && canSeeRegister()) : canTab(it.tab);
+}
+function renderQuickBar(){
+  const bar=q('quickBar'); if(!bar) return;
+  const items=QUICK_BAR_ITEMS.filter(quickBarItemVisible);
+  bar.style.display=items.length?'':'none';   /* لا بنود ظاهرة ⇒ يختفي الشريط كله */
+  document.body.classList.toggle('quickbar-on',items.length>0); /* إزاحة اللاصق تحته حين يظهر */
+  if(!items.length){ bar.innerHTML=''; return; }
+  const cur=activeTabId();
+  bar.innerHTML=items.map(it=>{
+    const on=it.register ? cur==='finance' : cur===it.tab;
+    return `<button type="button" class="${on?'active':''}" data-quick-tab="${esc(it.tab)}" title="${esc(it.label)}" onclick="quickBarGo('${esc(it.tab)}')"><i class="ti ${esc(it.icon)}"></i><span>${esc(it.label)}</span></button>`;
+  }).join('');
+}
+function updateQuickBarActive(){
+  /* مصدر واحد للحالة النشطة: renderQuickBar يحسبها من activeTabId() —
+     إعادة رسم سبعة أزرار أرخص وأسلم من مسارَي رسم يتنافسان */
+  renderQuickBar();
+}
+function quickBarGo(tab){
+  if(tab!=='financeRegister'){ openTab(tab); return; }
+  openTab('finance');
+  /* التمرير بعد رسم اللسان — وإلا فالعنصر بلا موضع بعد */
+  const scrollReg=()=>{ const w=q('financeRegisterWrap'); if(w) w.scrollIntoView({behavior:'smooth',block:'start'}); };
+  requestAnimationFrame(()=>setTimeout(scrollReg,180));
 }
 function syncRoleOptions(){
   /* (0107) خيار المبرجج يظهر فقط للمبرمج — مصدر واحد لقائمة الأدوار */
@@ -7022,6 +7065,7 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
   /* (0090) الشاشة المفتوحة في نافذة عائمة تبقى ظاهرة: نزع active عنها كان يُفرغها */
   document.querySelectorAll('.section').forEach(s=>{ if(!s.classList.contains('in-window')) s.classList.remove('active'); });
   btn.classList.add('active');
+  updateQuickBarActive(); /* (20261012c) الشريط السريع يتابع اللسان النشط */
   /* الشاشة المطلوبة إن كانت في نافذة: نُبرز نافذتها بدل عرضها مرّتين */
   if(__wins[btn.dataset.tab]){ focusWindow(btn.dataset.tab); if(__wins[btn.dataset.tab].min) unminimizeWindow(btn.dataset.tab); }
   else q(btn.dataset.tab).classList.add('active');
