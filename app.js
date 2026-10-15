@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261015-1732';
+const APP_BUILD='b20261015-2121';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3839,11 +3839,13 @@ async function deleteCustomerPaymentAdmin(paymentId){
   finally{showLoading(false);}
 }
 
-/* ═══ (0140) قائمة دفعات الموردين — فلاتر المصاريف نفسها + عمود «في
-   الشيت» بحالاته الثلاث. كانت «آخر 50 دفعة» بلا فلاتر ولا تصفية. الجلب
-   من الخادم بالفلاتر (تاريخ/مورد/بحث) والفرع على خزينة الدفعة. ═══ */
-let spListLimit=200, spListInit=false, spSearchTimer=null, spAccountMap=new Map(),
-    spSheetSentMap=new Map(), spSheetPending=new Set(), spSheetSel=new Set();
+/* ═══ (0142) قائمة دفعات الموردين — قائمة الإرسال صارت حركات دفع المورد
+   في المدى عبر نداء موحِّد: المستقلة والمدفوع المضمَّن في فاتورة الشراء
+   (PUR-S-####) معاً. كان الثاني مستحيلاً في 0140 لأن القائمة تُبنى من
+   pos_supplier_payments ولا صفّ دفعة له أصلاً (PUR-S-0369..0371).
+   المفتاح معرّف الحركة = عمود L في الشيت — هوية واحدة من المنظومة إلى
+   الشيت. الفلاتر (تاريخ/مورد/فرع/بحث) كما كانت. ═══ */
+let spListLimit=200, spListInit=false, spSearchTimer=null, spMovements=[], spSheetSel=new Set();
 function initSupplierPaymentsListTab(){
   if(spListInit) return; spListInit=true;
   const now=new Date(), f=now.toISOString().slice(0,8)+'01', t=now.toISOString().slice(0,10);
@@ -3859,50 +3861,35 @@ function fillSupplierPaymentsFilterOptions(){
 function supplierPaymentsFilterChanged(){spListLimit=200; fetchSupplierPaymentsList();}
 function debouncedSupplierPaymentsSearch(){clearTimeout(spSearchTimer); spSearchTimer=setTimeout(()=>{spListLimit=200; fetchSupplierPaymentsList();},350);}
 function supplierPaymentsLoadMore(){spListLimit+=500; fetchSupplierPaymentsList();}
-function supplierPaymentBranchOf(p){
-  const acc=spAccountMap.get(p.id)||(p.id&&findSupplierPaymentAccount(p))||'';
-  const a=(financeAccounts||[]).find(x=>x.id===acc);
+/* (0142) فرع الحركة من حسابها المالي — الحساب ضمن صفّ النداء الموحِّد */
+function supplierMovementBranchOf(m){
+  const a=(financeAccounts||[]).find(x=>x.id===m.account_id);
   return a?(a.location_id||'__no_branch__'):'__no_branch__';
 }
 async function fetchSupplierPaymentsList(){
   initSupplierPaymentsListTab();
   fillSupplierPaymentsFilterOptions();
-  const qs=['select=*&order=payment_date.desc,created_at.desc,id.asc'];
   const from=q('spListFrom')?.value, to=q('spListTo')?.value, sup=q('spListSupplier')?.value, sr=q('spListSearch')?.value?.trim();
+  /* الدفعات المستقلة كما كانت — بيانات نافذتي الدفع والتعديل (0133/0140) */
+  const qs=['select=*&order=payment_date.desc,created_at.desc,id.asc'];
   if(from) qs.push('payment_date=gte.'+from);
   if(to) qs.push('payment_date=lte.'+to);
   if(sup) qs.push('supplier_id=eq.'+sup);
   if(sr) qs.push('notes=ilike.*'+encodeURIComponent(sr)+'*');
   qs.push('limit='+spListLimit);
+  try{ payments=await api('pos_supplier_payments',{qs:'?'+qs.join('&')})||[]; }
+  catch(err){ console.warn('فشل جلب دفعات الموردين — تُعرض الحركات المتاحة',err); }
+  /* (0142) قائمة الإرسال: حركات دفع المورد في المدى — المساران معاً،
+     بحالة الشيت (sent_at/pending) وجاهزية الإرسال (sendable = بعد الحدّ) */
   try{
-    payments=await api('pos_supplier_payments',{qs:'?'+qs.join('&')})||[];
-    /* خريطة حساب كل دفعة (للفلترة الفرعية) — طلب واحد لصفحة العرض */
-    try{
-      const ids=(payments||[]).map(p=>p.id).filter(Boolean);
-      spAccountMap=new Map();
-      if(ids.length){
-        const mv=await api('pos_finance_movements',{qs:'?select=reference_id,account_id&reference_table=eq.pos_supplier_payments&movement_type=eq.supplier_payment&direction=eq.out&reference_id=in.('+ids.map(encodeURIComponent).join(',')+')&limit=1000'});
-        (mv||[]).forEach(m=>{if(!spAccountMap.has(m.reference_id)) spAccountMap.set(m.reference_id,m.account_id);});
-      }
-    }catch(_e){}
-    await loadSupplierPaymentsSheetStatus();
-    renderPayments();
-  }catch(err){ console.warn('فشل جلب دفعات الموردين — تُعرض آخر قائمة متاحة',err); if(q('spListInfo')) q('spListInfo').textContent='⚠ تعذّر الجلب — تُعرض آخر نتيجة متاحة'; }
+    spMovements=await rpc('pos_supplier_payment_movements',
+      {p_from:from||null,p_to:to||null,p_supplier:sup||null,p_search:sr||null,p_limit:spListLimit})||[];
+  }catch(err){ console.warn('فشل جلب حركات الدفع',err); spMovements=[]; if(q('spListInfo')) q('spListInfo').textContent='⚠ تعذّر الجلب — تُعرض آخر نتيجة متاحة'; }
+  renderPayments();
 }
 function onPaymentsTabOpen(){ initSupplierPaymentsListTab(); renderPayments(); fetchSupplierPaymentsList(); }
-/* (0140) حالة مزامنة الدفعات مع شيت SmartBalance — قراءة خفيفة كالمصاريف */
-async function loadSupplierPaymentsSheetStatus(){
-  try{
-    const rows=await api('pos_sheet_supplier_payment_sent',{qs:'?select=payment_id,sent_at&limit=10000'});
-    spSheetSentMap=new Map((rows||[]).map(r=>[r.payment_id,String(r.sent_at)]));
-  }catch(e){ spSheetSentMap=new Map(); /* الجدول غير موجود بعد (قبل تشغيل 0140) — العمود يعرض — */ }
-  try{
-    const p=await api('pos_sheet_supplier_payment_outbox',{qs:'?select=payment_id&limit=10000'});
-    spSheetPending=new Set((p||[]).map(r=>r.payment_id));
-  }catch(e){ spSheetPending=new Set(); }
-}
 function supplierPaymentSheetToggle(cb){
-  const id=cb?.dataset?.sppid; if(!id) return;
+  const id=cb?.dataset?.sppmid; if(!id) return;
   if(cb.checked) spSheetSel.add(id); else spSheetSel.delete(id);
 }
 async function sendSupplierPaymentsToSheet(){
@@ -3913,7 +3900,8 @@ async function sendSupplierPaymentsToSheet(){
   try{
     const res=await rpc('pos_sheet_supplier_payment_send',{p_ids:ids});
     if(res&&res.ok){
-      ids.forEach(id=>{ spSheetPending.add(id); spSheetSel.delete(id); });
+      spMovements.forEach(m=>{ if(ids.includes(m.movement_id)) m.pending=true; });
+      spSheetSel.clear();
       renderPayments();
       toast(`أُرسل ${res.queued} دفعة — التأكيد النهائي في الدورة الساعية`,'success');
     }else{
@@ -3923,32 +3911,31 @@ async function sendSupplierPaymentsToSheet(){
   finally{ if(btn) btn.disabled=false; }
 }
 function renderPayments(){
-  /* (0133) أزرار تعديل/حذف للمدير — نفس نمط دفعات الزبائن (0066/0064)
-     عبر RPC ذرّية تعكس الدفع + قيد الكشف + الحركة المالية معاً */
+  /* (0133) أزرار تعديل/حذف للمدير للدفعات المستقلة فقط — المدفوع المضمَّن
+     في فاتورة الشراء يُدار من الفاتورة نفسها. (0142) الصفوف من النداء
+     الموحِّد: حركة لكل دفعة/فاتورة، والحالة (✓/🕓/☐) بمفتاح الحركة */
   const isAdmin=isManager();
   const br=q('spListBranch')?.value||'';
-  const rows=(payments||[]).filter(p=>!br||supplierPaymentBranchOf(p)===br)
-    .slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||new Date(b.created_at||0)-new Date(a.created_at||0));
+  const rows=(spMovements||[]).filter(m=>!br||supplierMovementBranchOf(m)===br);
   q('supplierPaymentsSendSheetBtn')?.classList.toggle('hidden',!isAdmin);
-  q('paymentsBody').innerHTML = rows.map(p=>{const s=suppliers.find(x=>x.id===p.supplier_id);
-    const pu=p.purchase_id?(purchases||[]).find(x=>x.id===p.purchase_id):null;
-    /* (0140) عمود «في الشيت»: ✓ تاريخ التأكد · 🕓 قيد التأكيد · ☐ للمدير على غير المُرسَل */
-    const sentAt=spSheetSentMap.get(p.id), pending=spSheetPending.has(p.id);
+  q('paymentsBody').innerHTML = rows.map(m=>{
+    const sentAt=m.sent_at?String(m.sent_at):'', pending=!!m.pending;
     const sheetCell = sentAt
-      ? `<span class="exp-sent-ok" title="في شيت SmartBalance منذ ${esc(sentAt)}">✓ ${esc(String(sentAt).slice(0,10))}</span>`
+      ? `<span class="exp-sent-ok" title="في شيت SmartBalance منذ ${esc(sentAt)}">✓ ${esc(sentAt.slice(0,10))}</span>`
       : pending
       ? `<span class="exp-sent-pend" title="أُرسل — التأكيد النهائي في الدورة الساعية">🕓 قيد التأكيد</span>`
-      : (isAdmin
-        ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-sppid="${p.id}" ${spSheetSel.has(p.id)?'checked':''} onchange="supplierPaymentSheetToggle(this)"></label><span class="muted">—</span>`
-        : '<span class="muted">—</span>');
-    const tools=isAdmin
-      ?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openSupplierPaymentEdit('${p.id}')">✏️</button>
-        <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteSupplierPaymentAdmin('${p.id}')">🗑</button>`:'';
-    return `<tr><td>${esc(p.payment_date)}</td><td>${esc(s?.name||'')}</td><td class="ltr">${esc(pu?(pu.purchase_no||String(pu.id).slice(0,8)):'—')}</td><td><b>${money(p.amount)}</b></td><td>${esc(typeLabel(p.payment_method))}</td><td>${esc(p.notes||'')}</td><td class="exp-sheet">${sheetCell}</td><td style="white-space:nowrap">${tools}</td></tr>`}).join('') || '<tr><td colspan="8">لا توجد دفعات مطابقة للفلاتر.</td></tr>';
+      : (isAdmin && m.sendable
+        ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-sppmid="${m.movement_id}" ${spSheetSel.has(m.movement_id)?'checked':''} onchange="supplierPaymentSheetToggle(this)"></label><span class="muted">—</span>`
+        : `<span class="muted" title="${m.sendable?'':'قبل تاريخ الحدّ — لا يُرسَل'}">—</span>`);
+    const tools=isAdmin&&m.payment_id
+      ?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openSupplierPaymentEdit('${m.payment_id}')">✏️</button>
+        <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteSupplierPaymentAdmin('${m.payment_id}')">🗑</button>`:'';
+    return `<tr><td>${esc(m.payment_date)}</td><td>${esc(m.supplier_name||'')}</td><td class="ltr">${esc(m.doc_no||'—')}</td><td><b>${money(m.amount)}</b></td><td>${esc(m.payment_method?typeLabel(m.payment_method):'—')}</td><td>${esc(m.notes||'')}</td><td class="exp-sheet">${sheetCell}</td><td style="white-space:nowrap">${tools}</td></tr>`}).join('') || '<tr><td colspan="8">لا توجد دفعات مطابقة للفلاتر.</td></tr>';
   if(q('spListInfo')) q('spListInfo').textContent=`${rows.length} دفعة معروضة`;
-  const more=(payments||[]).length>=spListLimit;
+  const more=(spMovements||[]).length>=spListLimit;
   if(q('spListMoreBtn')) q('spListMoreBtn').classList.toggle('hidden',!more);
 }
+
 /* ═══ (0133) تعديل/حذف دفعة مورد — نمط دفعات الزبائن ═══
    الدافع: نافذة عيب supplierLedger خلّفت دفعات مكررة (تُحفظ ثم تظهر
    «خطأ في حفظ الدفعة» فيُعاد الإدخال) وبلا أزرار لا سبيل لتنظيفها.
