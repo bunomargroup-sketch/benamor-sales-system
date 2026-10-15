@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261015-1623">
+<link rel="stylesheet" href="app.css?v=20261015-1732">
 </head>
 <body class="auth-locked">
   <header>
@@ -383,7 +383,21 @@
             <button class="btn" type="submit">حفظ الدفعة</button>
           </form>
         </div>
-        <div class="panel"><h2>آخر الدفعات</h2><p class="muted">آخر 50 دفعة. التعديل والحذف للمدير فقط وتُعكس آثارهما ذرّياً على الخزينة وكشف المورد.</p><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>المورد</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="paymentsBody"></tbody></table></div></div>
+        <div class="panel">
+          <div class="tools"><h2>دفعات الموردين</h2><button class="btn secondary hidden" type="button" id="supplierPaymentsSendSheetBtn" onclick="sendSupplierPaymentsToSheet()" title="يُرسل ما أوّشّرته إلى شيت SmartBalance — يرى الزرّ المدير وحده">📤 إرسال للجدول</button></div>
+          <div class="exp-filters exp-filters-2">
+            <label class="exp-f-label" for="spListFrom">من</label><input id="spListFrom" type="date" onchange="supplierPaymentsFilterChanged()">
+            <label class="exp-f-label" for="spListTo">إلى</label><input id="spListTo" type="date" onchange="supplierPaymentsFilterChanged()">
+            <select id="spListSupplier" onchange="supplierPaymentsFilterChanged()"></select>
+            <select id="spListBranch" onchange="supplierPaymentsFilterChanged()" title="تصفية حسب فرع خزينة الدفعة — «بدون فرع» = دفعة بلا حساب مربوط بفرع"></select>
+            <input id="spListSearch" type="search" placeholder="بحث في الملاحظات…" oninput="debouncedSupplierPaymentsSearch()">
+          </div>
+          <div class="table-scroll"><table class="expenses-table"><thead><tr><th>التاريخ</th><th>المورد</th><th>الفاتورة</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th><th title="حالة الإرسال إلى شيت SmartBalance — ✓ = مؤكد، ☐ = أوّشّر للإرسال (المدير)">في الشيت</th><th>إجراء</th></tr></thead><tbody id="paymentsBody"></tbody></table></div>
+          <div class="row" style="justify-content:space-between;margin-top:8px">
+            <span class="mini" id="spListInfo"></span>
+            <button class="btn secondary hidden" type="button" id="spListMoreBtn" onclick="supplierPaymentsLoadMore()">تحميل المزيد</button>
+          </div>
+        </div>
         <div class="panel">
           <div class="tools"><h2>دفعات الزبائن</h2><input id="custPaymentsSearch" placeholder="🔍 ابحث بالزبون أو رقم الفاتورة…" style="max-width:340px" oninput="renderCustomerPaymentsList()"></div>
           <p class="muted">آخر 300 دفعة على فواتير البيع. التعديل والحذف للمدير فقط وتنعكس تلقائياً على الخزينة بتاريخ الدفعة ورصيد الفاتورة وكشف الزبون.</p>
@@ -647,9 +661,7 @@
               <div><label>مكان دخول البضاعة</label><select id="purchaseLocation" required></select></div>
               <div><label>تاريخ الفاتورة</label><input id="purchaseDate" type="date" required></div>
               <div><label>رقم فاتورة الشراء</label><input id="purchaseAutoNo" class="ltr" readonly tabindex="-1" placeholder="سيولد تلقائيًا"></div><div><label>رقم فاتورة المورد</label><input id="purchaseInvoiceNo" placeholder="اختياري"></div>
-              <div><label>المدفوع للمورد</label><input id="purchasePaidAmount" type="text" inputmode="decimal" value="0"></div>
-              <div><label>طريقة الدفع</label><select id="purchasePaymentMethod" onchange="selectDefaultPurchasePaymentAccount()"><option value="cash">نقدي</option><option value="bank_transfer">تحويل مصرفي</option><option value="card">بطاقة</option></select></div>
-              <div><label>الحساب المالي</label><select id="purchaseFinanceAccount"></select></div>
+              <div class="mini" style="grid-column:1/-1;border:1px dashed var(--border);border-radius:10px;padding:8px 10px">💵 (0140) تُحفظ الفاتورة دَيناً بالكامل على المورد — بعد الحفظ تفتح نافذة «دفعة للمورد» جاهزة، وتستطيع الدفع لاحقاً من قائمة فواتير الشراء.</div>
               <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="purchaseNotes" placeholder="اختياري"></textarea></div>
             </div>
 
@@ -692,6 +704,7 @@
             <button class="btn secondary" type="button" onclick="purchaseListAction('view')" title="محتويات الفاتورة المحددة — قراءة فقط">👁 مشاهدة</button>
             <button class="btn secondary" type="button" onclick="purchaseListAction('edit')">✏️ فتح / تعديل</button>
             <button class="btn secondary" type="button" onclick="printSelectedPurchase()" title="طباعة الفاتورة المحددة">🖨 طباعة</button>
+            <button class="btn secondary" type="button" onclick="purchaseListAction('pay')" title="تسجيل دفعة للمورد على الفاتورة المحددة — المتبقي مقترحاً">💵 دفعة للمورد</button>
             <button class="btn secondary" type="button" onclick="purchaseListAction('return')" title="إرجاع بضاعة للفاتورة المحددة إلى المورد">↩ إرجاع</button>
             <button class="btn danger" type="button" onclick="purchaseListAction('delete')">🗑 حذف</button>
             <span class="mini" id="purchaseSelHint">حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها</span>
@@ -1561,6 +1574,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261015-1623"></script>
+<script src="app.js?v=20261015-1732"></script>
 </body>
 </html>
