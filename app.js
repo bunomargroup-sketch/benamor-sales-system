@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261015-1232';
+const APP_BUILD='b20261015-1402';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3227,7 +3227,7 @@ function openMovementDocument(table,id){
   toast('نوع المستند غير معروف','warn');
 }
 
-let __movCode='',__movRows=[],__movLevels=[],__movCustMap=new Map();
+let __movCode='',__movRows=[],__movLevels=[],__movCustMap=new Map(),__movComposite=false;
 /* الرصيد بمحاذاة كل حركة.
    كان يُستنتج رجوعاً من pos_stock وحده، فإن غاب صفّ الفرع (ترتيب غير مستقر،
    أو صنف بلا صفّ مخزون) ظهرت كل أسطر ذلك الفرع مزاحة أو صفراً بلا أي إشارة
@@ -3302,8 +3302,8 @@ function renderMovementsModalRows(){
     const qty=Number(m.qty_change||0); const info=movementDocInfo(m); const table=String(info.table||'').replace(/'/g,"\'"); const id=String(info.id||'').replace(/'/g,"\'");
     /* (1974) الزبون: يظهر في أسطر الفواتير فقط (reference_table=pos_sales) */
     const cust=info.table==='pos_sales'?(__movCustMap.get(info.id)||''):'';
-    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><span class="code">${esc(info.no)}</span></td><td>${esc(cust)}</td><td>${esc(info.seller)}</td><td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b></td><td class="amount">${(()=>{const v=movementValue(m); return v===null?'—':`<b>${money(v)}</b> <span class="mini">${esc(APP_CONFIG.currency)}</span>`;})()}</td><td class="amount"><b>${money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
-  }).join('') || '<tr><td colspan="10">لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.</td></tr>';
+    return `<tr data-ref-table="${esc(info.table)}" data-ref-id="${esc(info.id)}" ondblclick="openMovementDocument('${table}','${id}')" oncontextmenu="return openMoveCtx(event,'${table}','${id}')"><td>${esc((m.movement_date||m.created_at||'').replace('T',' ').slice(0,10))}</td><td>${esc(typeLabel(m.movement_type))}</td><td class="ltr"><span class="code">${esc(info.no)}</span></td><td>${esc(cust)}</td><td>${esc(info.seller)}</td><td><span class="${branchChipByName(info.branch)}">${esc(info.branch)}</span></td><td class="amount ${qty<0?'neg':''}"><b>${money(qty)}</b>${m.__obh?`<div class="mini">مكوّن <span class="ltr">${esc(m.product_code)}</span></div>`:''}</td><td class="amount">${(()=>{const v=movementValue(m); return v===null?'—':`<b>${money(v)}</b> <span class="mini">${esc(APP_CONFIG.currency)}</span>`;})()}</td><td class="amount"><b>${lvl==null?'—':money(lvl)}</b></td><td>${esc(m.notes)}</td></tr>`;
+  }).join('') || `<tr><td colspan="10">${__movComposite?'لا توجد حركات — هذا منتج مركّب: بيعه يُخصم من مكوّناته، وحركات مكوّناته المخصومة باسمه تظهر هنا كأسطر «مكوّن …»':'لا توجد حركات لهذا الصنف حتى الآن. ملاحظة: المخزون المستورد كبداية لا يظهر كحركة شراء.'}</td></tr>`;
 }
 async function openProductMovements(code){
   try{
@@ -3320,13 +3320,37 @@ async function openProductMovements(code){
     const rows=await api('pos_stock_movements',{qs:`${__mvSel}&order=movement_date.desc,legacy_seq.desc.nullslast,created_at.desc,id.desc&limit=300`})
       .catch(e=>{ console.warn('legacy_seq غير موجود — شغّل SQL 0059', e);
         return api('pos_stock_movements',{qs:`${__mvSel}&order=movement_date.desc,created_at.desc,id.desc&limit=300`}); });
-    __movRows=rows;
-    __movLevels=computeMovementLevels(rows,code);
+    /* (20261015) المنتج المركّب: بيعه يُخصم من مكوّناته فقائمة حركاته باسمه
+       تظهر فارغة رغم بيعه مراراً (بلاغ المالك). نضيف أسطر «ما خُصم من
+       مكوّناته باسمه» — الملاحظة المسجَّلة على الحركة تحمل كود المركّب
+       نفسه ('مكوّن منتج مركّب <الكود>')، وبحدود مطابقة دقيقة: الكود ثم
+       نهاية السطر أو ' |' — تمنع التباس LG1 بـLG11 */
+    let obh=[];
+    let isComp=(compositeItems||[]).some(ci=>String(ci.composite_code)===String(code));
+    if(!isComp){ try{ const cr=await api('pos_composite_items',{qs:`?select=component_code&composite_code=eq.${encodeURIComponent(code)}&limit=1`}); isComp=!!(cr&&cr.length); }catch(_e){} }
+    __movComposite=isComp;
+    if(isComp){
+      const stem='مكوّن منتج مركّب ';
+      const pats=[stem+code, stem+'(مرتجع) '+code];
+      const hit=n=>{ n=String(n||''); return pats.some(pt=>n===pt||n.startsWith(pt+' |')); };
+      for(const pt of pats){
+        try{
+          const rs=await api('pos_stock_movements',{qs:`?select=*&notes=like.*${encodeURIComponent(pt)}*&order=movement_date.desc,legacy_seq.desc.nullslast,created_at.desc,id.desc&limit=300`});
+          (rs||[]).forEach(r=>{ if(hit(r.notes)&&!rows.some(x=>x.id===r.id)&&!obh.some(x=>x.id===r.id)){ r.__obh=true; obh.push(r); } });
+        }catch(__e){ console.warn('حركات المكوّنات المخصومة باسم المركّب',__e); }
+      }
+      if(q('movementsSub')) q('movementsSub').textContent=(p ? pLabel(p.code,p.name||'') : '')+' — منتج مركّب: بيعه يُخصم من مكوّناته، وأسطر «مكوّن …» أدناه هي ما خُصم باسمه';
+    }
+    const merged=obh.length?[...rows,...obh].sort((a,b)=>String(b.movement_date||'').localeCompare(String(a.movement_date||''))||String(b.created_at||'').localeCompare(String(a.created_at||''))||String(b.id||'').localeCompare(String(a.id||''))):rows;
+    __movRows=merged;
+    const ownLvls=computeMovementLevels(rows,code);   /* الرصيد لأسطر الصنف نفسه فقط — أسطر المكوّنات بلا رصيد */
+    const lvlById=new Map(); rows.forEach((r,i)=>{ if(r.id) lvlById.set(r.id,ownLvls[i]); });
+    __movLevels=merged.map(r=>((r.__obh)||!r.id)?null:(lvlById.has(r.id)?lvlById.get(r.id):null));
     /* (1974) اسم الزبون في أسطر الفواتير: الفاتورة (reference_id) → customer_id
        بدفعة واحدة مقسّمة (100/طلب — حد طول URL)، ثم الاسم من customers
        (كامل في الذاكرة بعد تحميل تبويب البيع) مع طلب احتياطي للنقص. */
     __movCustMap=new Map();
-    const __saleIds=[...new Set(rows.filter(m=>m.reference_table==='pos_sales'&&m.reference_id).map(m=>String(m.reference_id)))];
+    const __saleIds=[...new Set(__movRows.filter(m=>m.reference_table==='pos_sales'&&m.reference_id).map(m=>String(m.reference_id)))];
     if(__saleIds.length){
       const __custOfSale=new Map();
       for(let __i=0;__i<__saleIds.length;__i+=100){
@@ -3354,8 +3378,8 @@ async function openProductMovements(code){
       }
     }
     const lb=q('movFilterBranch'), lt=q('movFilterType');
-    if(lb){const branches=[...new Set(rows.map(m=>m.location_id).filter(Boolean))]; lb.innerHTML='<option value="">كل الفروع</option>'+branches.map(lid=>{const l=locations.find(x=>x.id===lid); return `<option value="${lid}">${esc(l?l.name:lid)}</option>`}).join('');}
-    if(lt){const types=[...new Set(rows.map(m=>m.movement_type).filter(Boolean))]; lt.innerHTML='<option value="">كل الأنواع</option>'+types.map(t=>`<option value="${t}">${esc(typeLabel(t))}</option>`).join('');}
+    if(lb){const branches=[...new Set(__movRows.map(m=>m.location_id).filter(Boolean))]; lb.innerHTML='<option value="">كل الفروع</option>'+branches.map(lid=>{const l=locations.find(x=>x.id===lid); return `<option value="${lid}">${esc(l?l.name:lid)}</option>`}).join('');}
+    if(lt){const types=[...new Set(__movRows.map(m=>m.movement_type).filter(Boolean))]; lt.innerHTML='<option value="">كل الأنواع</option>'+types.map(t=>`<option value="${t}">${esc(typeLabel(t))}</option>`).join('');}
     renderMovementsModalRows();
     q('movementsModal').classList.add('show'); modalToTop(q('movementsModal'));
   }catch(err){console.error(err);toast('خطأ في تحميل حركات الصنف: '+err.message)} finally{showLoading(false);window.__busy=false}
