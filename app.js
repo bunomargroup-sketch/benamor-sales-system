@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261015-1507';
+const APP_BUILD='b20261015-1623';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -8587,7 +8587,7 @@ q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();
    واحدة على الخادم — كلاهما أو لا شيء — ومفتاح idempotency بنمط طابور
    الأوفلاين يجعل إعادة المحاولة بعد الانقطاع آمنة (يُرجع المستند نفسه
    بلا تكرار). التعديل والحذف كذلك ذرّيان: يمسّان المستند وفردَيه معاً. */
-let treasuryTransfers=[], treasuryTransfersLoaded=false, editingTreasuryTransferId=null;
+let treasuryTransfers=[], treasuryTransfersLoaded=false, editingTreasuryTransferId=null, treasurySheetSentMap=new Map(), treasurySheetPending=new Set(), treasurySheetSel=new Set();
 function canEditTreasuryTransfer(){ return canSeeRegister(); } /* مدير/مبرمج/محاسب — قرار المالك */
 function fillTreasuryTransferSelects(){
   const opts='<option value="">اختر الحساب</option>'+financeAccounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} - ${money(a.balance)}</option>`).join('');
@@ -8595,13 +8595,65 @@ function fillTreasuryTransferSelects(){
 }
 async function loadTreasuryTransfers(){
   const r=await api('pos_treasury_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc,id.asc&limit=100'});
-  if(r){ treasuryTransfers=r; treasuryTransfersLoaded=true; renderTreasuryTransfers(); }
+  if(r){ treasuryTransfers=r; treasuryTransfersLoaded=true; }
+  await loadTreasurySheetStatus(); /* (0139) حالة «في الشيت» لكل صف — عمودان خفيفان */
+  renderTreasuryTransfers();
+}
+/* (0139) حالة مزامنة التحويلات مع شيت SmartBalance — نمط المصاريف (0103):
+   قراءة خفيفة (عمودان، بلا select=*)، والجدولان قد لا يكونان موجودين قبل
+   تشغيل 0139 فتُبتلع العلّة ويبقى العمود «—» بدل انكسار الشاشة */
+async function loadTreasurySheetStatus(){
+  try{
+    const rows=await api('pos_sheet_transfer_sent',{qs:'?select=transfer_id,sent_at&limit=10000'});
+    treasurySheetSentMap=new Map((rows||[]).map(r=>[r.transfer_id,String(r.sent_at)]));
+  }catch(e){ treasurySheetSentMap=new Map(); /* الجدول غير موجود بعد (قبل تشغيل 0139) — العمود يعرض — */ }
+  try{
+    const p=await api('pos_sheet_transfer_outbox',{qs:'?select=transfer_id&limit=10000'});
+    treasurySheetPending=new Set((p||[]).map(r=>r.transfer_id));
+  }catch(e){ treasurySheetPending=new Set(); }
+}
+function treasurySheetToggle(cb){
+  const id=cb?.dataset?.trid; if(!id) return;
+  if(cb.checked) treasurySheetSel.add(id); else treasurySheetSel.delete(id);
+}
+async function sendTreasuryToSheet(){
+  if(!isManager()){toast('هذه العملية للمدير وحده','warn');return;}
+  const ids=[...treasurySheetSel];
+  if(!ids.length){toast('أوّلاً اوّشّر التحويلات المراد إرسالها (المربّعات في عمود «في الشيت»)','warn');return;}
+  const btn=q('treasurySendSheetBtn'); if(btn) btn.disabled=true;
+  try{
+    /* (0139) التحويل زوج: الـRPC يرسل المستند بفرديه — لا واجهة ترسل فرداً واحداً */
+    const res=await rpc('pos_sheet_transfer_send',{p_ids:ids});
+    if(res&&res.ok){
+      /* تحديث محلي كما في المصاريف — بلا إعادة تحميل: المؤشَّر ينتقل إلى
+         «قيد التأكيد» ويصير ✓ عند تأكيد الشيت في الدورة الساعية */
+      ids.forEach(id=>{ treasurySheetPending.add(id); treasurySheetSel.delete(id); });
+      renderTreasuryTransfers();
+      toast(`أُرسل ${res.queued} تحويل — التأكيد النهائي في الدورة الساعية`,'success');
+    }else{
+      toast((res&&res.error)||'تعذّر الإرسال','error');
+    }
+  }catch(err){ console.error(err); toast('تعذّر الإرسال: '+String(err.message||err).slice(0,120),'error'); }
+  finally{ if(btn) btn.disabled=false; }
 }
 function renderTreasuryTransfers(){
   const tb=q('treasuryTransfersBody'); if(!tb) return;
   if(!treasuryTransfersLoaded && navigator.onLine){ treasuryTransfersLoaded=true; loadTreasuryTransfers().catch(()=>{treasuryTransfersLoaded=false;}); }
   const can=canEditTreasuryTransfer();
-  tb.innerHTML=treasuryTransfers.map(t=>`<tr><td>${esc(t.transfer_date)}</td><td>${esc(financeAccountName(t.from_account_id))}</td><td>${esc(financeAccountName(t.to_account_id))}</td><td><b>${money(t.amount)}</b></td><td>${esc(t.notes||'')}</td><td>${esc(t.created_by||'')}</td><td>${can?`<button class="btn secondary" type="button" onclick="editTreasuryTransfer('${t.id}')">تعديل</button> <button class="btn danger" type="button" onclick="deleteTreasuryTransfer('${t.id}')">حذف</button>`:'—'}</td></tr>`).join('')||'<tr><td colspan="7">لا توجد تحويلات محفوظة.</td></tr>';
+  const mgr=isManager(); /* (0139) المربّعات وزر الإرسال للمدير — والخادم يتحقق من جديد */
+  q('treasurySendSheetBtn')?.classList.toggle('hidden',!mgr);
+  tb.innerHTML=treasuryTransfers.map(t=>{
+    /* (0139) عمود «في الشيت»: ✓ تاريخ التأكد · 🕓 قيد التأكيد · ☐ للمدير على غير المُرسَل */
+    const sentAt=treasurySheetSentMap.get(t.id), pending=treasurySheetPending.has(t.id);
+    const sheetCell = sentAt
+      ? `<span class="exp-sent-ok" title="في شيت SmartBalance منذ ${esc(sentAt)}">✓ ${esc(String(sentAt).slice(0,10))}</span>`
+      : pending
+      ? `<span class="exp-sent-pend" title="أُرسل — التأكيد النهائي في الدورة الساعية">🕓 قيد التأكيد</span>`
+      : (mgr
+        ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-trid="${t.id}" ${treasurySheetSel.has(t.id)?'checked':''} onchange="treasurySheetToggle(this)"></label><span class="muted">—</span>`
+        : '<span class="muted">—</span>');
+    return `<tr><td>${esc(t.transfer_date)}</td><td>${esc(financeAccountName(t.from_account_id))}</td><td>${esc(financeAccountName(t.to_account_id))}</td><td><b>${money(t.amount)}</b></td><td>${esc(t.notes||'')}</td><td>${esc(t.created_by||'')}</td><td class="exp-sheet">${sheetCell}</td><td>${can?`<button class="btn secondary" type="button" onclick="editTreasuryTransfer('${t.id}')">تعديل</button> <button class="btn danger" type="button" onclick="deleteTreasuryTransfer('${t.id}')">حذف</button>`:'—'}</td></tr>`;
+  }).join('')||'<tr><td colspan="8">لا توجد تحويلات محفوظة.</td></tr>';
 }
 async function editTreasuryTransfer(id){
   if(!canEditTreasuryTransfer()){toast('التعديل للمدير والمبرمج والمحاسب فقط','warn');return;}
