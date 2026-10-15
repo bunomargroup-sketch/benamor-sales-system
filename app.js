@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261015-1402';
+const APP_BUILD='b20261015-1507';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1271,6 +1271,8 @@ async function loadHeavy(){
       apiAll('pos_stock_waste_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('stock waste items not setup yet — شغّل SQL 0074',e); return []}),
     ]);
   }
+  /* (0138) مستندات التحويل المالي — آخر 100 (الجدول لا يوجد قبل تشغيل 0138 فنُلطّف الفشل) */
+  api('pos_treasury_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc,id.asc&limit=100'}).then(r=>{if(r){treasuryTransfers=r;treasuryTransfersLoaded=true;}}).catch(e=>{console.warn('treasury transfers not setup yet — شغّل SQL 0138',e);});
   await reapplyOfflineQueueLocally(); /* فواتير الطابور المحلي تبقى ظاهرة ومخصومة من المخزون بعد أي تحديث من الخادم */
   if(!costViewMap) applyCostReference(); /* بلا وجهة نظر الخادم: إعادة بناء متوسط متحرك من التاريخ الكامل */
   markAllTabsDirty();
@@ -1670,6 +1672,7 @@ const REFRESH_SOURCES={
   customerLedger:   {tabs:['customers','payments'],                             run:async()=>{ const c90=new Date(Date.now()-90*864e5).toISOString().slice(0,10); const r=await apiAll('pos_customer_ledger','?select=*&entry_date=gte.'+c90+'&order=entry_date.desc,created_at.desc,id.asc'); if(r) customerLedger=r; }},
   financeAccounts:  {tabs:['finance','dailyCashClosing','expensesQuick'],       run:async()=>{ const r=await apiAll('pos_finance_account_balances','?select=*&order=name.asc'); if(r) financeAccounts=r; }},
   financeMovements: {tabs:['finance','dailyCashClosing'],                       run:async()=>{ const r=await api('pos_finance_movements',{qs:'?select=*&order=movement_date.desc,created_at.desc,id.asc&limit=200'}); if(r) financeMovements=r; }},
+  treasuryTransfers:{tabs:['finance'],                                          run:async()=>{ const r=await api('pos_treasury_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc,id.asc&limit=100'}); if(r){treasuryTransfers=r;treasuryTransfersLoaded=true;} }},
   dailyCash:        {tabs:['dailyCashClosing'],                                 run:async()=>{ const r=await api('pos_daily_cash_closings',{qs:'?select=*&order=closing_date.desc,created_at.desc,id.asc&limit=100'}); if(r) dailyCashClosings=r; }},
   expenses:         {tabs:['expensesQuick','finance'],                          run:async()=>{ const r=await apiAll('pos_expenses','?select=*&order=expense_date.desc,created_at.desc,id.asc'); if(r) expenses=r; }},
   expenseCategories:{tabs:['expensesQuick','settings'],                         run:async()=>{ const r=await apiAll('pos_expense_categories','?select=*&order=name.asc'); if(r) expenseCategories=r; }},
@@ -8282,7 +8285,8 @@ const FINANCE_REGISTER_DOC_OPEN={
   'pos_expenses':id=>editExpense(id),
   'pos_purchases':id=>viewPurchaseDetails(id),
   'pos_purchase_returns':id=>{const pr=purchaseReturns.find(x=>x.id===id); pr?viewPurchaseDetails(pr.purchase_id):toast('افتح فاتورة الشراء الأصلية من قائمة المشتريات','warn');},
-  'pos_customer_ledger':id=>{const l=customerLedger.find(x=>x.id===id); l?openCustomerLedger(l.customer_id):toast('افتح كشف حساب الزبون من تبويب الزبائن','warn');}
+  'pos_customer_ledger':id=>{const l=customerLedger.find(x=>x.id===id); l?openCustomerLedger(l.customer_id):toast('افتح كشف حساب الزبون من تبويب الزبائن','warn');},
+  'pos_treasury_transfers':id=>editTreasuryTransfer(id) /* (0138) التحويل مستند — فتح سطره من السجل يفتح تعديله */
 };
 function financeRegisterOpenDoc(ref,id){ const fn=FINANCE_REGISTER_DOC_OPEN[ref]; if(fn){ try{fn(id);}catch(e){console.error(e);toast('تعذّر فتح المستند','error');} } }
 /* (0127) الصفوف القديمة: عرض الطوارئ دون اتصال ومن لا يملك السجل (دفاعياً) */
@@ -8401,6 +8405,7 @@ async function printFinanceRegister(){
 
 function renderFinance(){
   if(!q('financeAccountsBody')) return;
+  renderTreasuryTransfers(); /* (0138) التحويلات مستندات — قائمة تحت نموذج التحويل */
   /* (20261007c) القوائم تُملأ عند كل عرض للنافذة — لا عند رأس الموردين فقط */
   fillSalarySelects();
   const canWriteSalary=isManager();
@@ -8574,7 +8579,81 @@ q('saleReturnForm').addEventListener('submit', async e=>{
 
 
 q('financeAccountForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={name:q('financeAccountName').value.trim(),account_type:q('financeAccountType').value,location_id:q('financeAccountLocation').value||null,bank_name:q('financeBankName').value.trim()||null,account_no:q('financeAccountNo').value.trim()||null,opening_balance:moneyVal(q('financeOpeningBalance').value),notes:q('financeAccountNotes').value.trim()||null}; if(editingFinanceAccountId){await api('pos_finance_accounts',{method:'PATCH',qs:`?id=eq.${editingFinanceAccountId}`,body:{...body,updated_at:new Date().toISOString()}}); toast('تم تعديل الحساب');}else{await api('pos_finance_accounts',{method:'POST',body}); toast('تم حفظ الحساب');} resetFinanceAccountForm(); await refreshParts(['financeAccounts']);}catch(err){console.error(err);toast('خطأ في حفظ الحساب: '+err.message+' - تأكد من تشغيل SQL طرق الدفع للحسابات')}finally{showLoading(false);window.__busy=false}});
-q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=moneyVal(q('financeTransferAmount').value),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}validateAccountingTransfer(amount);await addFinanceMovement(from,'out','transfer_out',amount,date,'pos_finance_movements',null,notes);await addFinanceMovement(to,'in','transfer_in',amount,date,'pos_finance_movements',null,notes);e.target.reset();setToday();toast('تم حفظ التحويل');await refreshParts(['financeAccounts','financeMovements']);}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
+/* ═══ (0138) التحويل المالي مستندٌ واحد — لا نداءَي REST متتاليين ═══
+   كان النموذج يكتب فردَي التحويل (خروج ثم دخول) بنداءين منفصلين من
+   المتصفح: إن فشل الثاني غادر المالُ الخزينةَ المصدر ولم يصل وجهته،
+   وبلا مفتاح ربط ولا مستند يُرجع إليه عند التسوية. الآن نداء RPC واحد
+   (post_treasury_transfer_transaction) يكتب المستند والفردَين في معاملة
+   واحدة على الخادم — كلاهما أو لا شيء — ومفتاح idempotency بنمط طابور
+   الأوفلاين يجعل إعادة المحاولة بعد الانقطاع آمنة (يُرجع المستند نفسه
+   بلا تكرار). التعديل والحذف كذلك ذرّيان: يمسّان المستند وفردَيه معاً. */
+let treasuryTransfers=[], treasuryTransfersLoaded=false, editingTreasuryTransferId=null;
+function canEditTreasuryTransfer(){ return canSeeRegister(); } /* مدير/مبرمج/محاسب — قرار المالك */
+function fillTreasuryTransferSelects(){
+  const opts='<option value="">اختر الحساب</option>'+financeAccounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} - ${money(a.balance)}</option>`).join('');
+  ['financeTransferFrom','financeTransferTo'].forEach(id=>{const s=q(id); if(s) s.innerHTML=opts;});
+}
+async function loadTreasuryTransfers(){
+  const r=await api('pos_treasury_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc,id.asc&limit=100'});
+  if(r){ treasuryTransfers=r; treasuryTransfersLoaded=true; renderTreasuryTransfers(); }
+}
+function renderTreasuryTransfers(){
+  const tb=q('treasuryTransfersBody'); if(!tb) return;
+  if(!treasuryTransfersLoaded && navigator.onLine){ treasuryTransfersLoaded=true; loadTreasuryTransfers().catch(()=>{treasuryTransfersLoaded=false;}); }
+  const can=canEditTreasuryTransfer();
+  tb.innerHTML=treasuryTransfers.map(t=>`<tr><td>${esc(t.transfer_date)}</td><td>${esc(financeAccountName(t.from_account_id))}</td><td>${esc(financeAccountName(t.to_account_id))}</td><td><b>${money(t.amount)}</b></td><td>${esc(t.notes||'')}</td><td>${esc(t.created_by||'')}</td><td>${can?`<button class="btn secondary" type="button" onclick="editTreasuryTransfer('${t.id}')">تعديل</button> <button class="btn danger" type="button" onclick="deleteTreasuryTransfer('${t.id}')">حذف</button>`:'—'}</td></tr>`).join('')||'<tr><td colspan="7">لا توجد تحويلات محفوظة.</td></tr>';
+}
+async function editTreasuryTransfer(id){
+  if(!canEditTreasuryTransfer()){toast('التعديل للمدير والمبرمج والمحاسب فقط','warn');return;}
+  let t=treasuryTransfers.find(x=>x.id===id);
+  if(!t){ try{ const r=await api('pos_treasury_transfers',{qs:'?select=*&id=eq.'+encodeURIComponent(id)}); t=Array.isArray(r)&&r[0]; }catch(_e){} }
+  if(!t){ toast('لم يتم العثور على التحويل','warn'); return; }
+  fillTreasuryTransferSelects();
+  editingTreasuryTransferId=t.id;
+  if(q('financeTransferFrom')) q('financeTransferFrom').value=t.from_account_id;
+  if(q('financeTransferTo')) q('financeTransferTo').value=t.to_account_id;
+  if(q('financeTransferDate')) q('financeTransferDate').value=t.transfer_date;
+  if(q('financeTransferAmount')) q('financeTransferAmount').value=Number(t.amount||0);
+  if(q('financeTransferNotes')) q('financeTransferNotes').value=t.notes||'';
+  const sb=q('financeTransferSubmitBtn'); if(sb) sb.textContent='حفظ تعديل التحويل';
+  const cb=q('financeTransferCancelBtn'); if(cb) cb.classList.remove('hidden');
+  try{ q('financeTransferForm')?.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_e){}
+  q('financeTransferAmount')?.focus();
+}
+function resetTreasuryTransferForm(){
+  editingTreasuryTransferId=null;
+  const f=q('financeTransferForm'); if(f){ f.reset(); setToday(); }
+  const sb=q('financeTransferSubmitBtn'); if(sb) sb.textContent='حفظ التحويل';
+  const cb=q('financeTransferCancelBtn'); if(cb) cb.classList.add('hidden');
+}
+async function deleteTreasuryTransfer(id){
+  if(!canEditTreasuryTransfer()){toast('الحذف للمدير والمبرمج والمحاسب فقط','warn');return;}
+  const t=treasuryTransfers.find(x=>x.id===id); if(!t){toast('لم يتم العثور على التحويل','warn');return;}
+  if(!confirm(`حذف تحويل ${money(t.amount)} ${APP_CONFIG.currency} من «${financeAccountName(t.from_account_id)}» إلى «${financeAccountName(t.to_account_id)}» بتاريخ ${t.transfer_date}؟\nسيُحذف فرداه (الخروج من المصدر والدخول إلى الوجهة) معه في نفس المعاملة فلا يتأثر صافي أي خزينة.`))return;
+  if(window.__busy) return; window.__busy=true;
+  try{
+    showLoading(true);
+    const res=await rpc('delete_treasury_transfer_transaction',{p_transfer_id:id,p_user_identifier:appUser?.identifier||''});
+    logAction('treasury_transfer_delete','pos_treasury_transfers',id,`حذف تحويل: ${money(t.amount)} ${APP_CONFIG.currency} — ${financeAccountName(t.from_account_id)} ← ${financeAccountName(t.to_account_id)} (أُزيل معه ${res?.legs_removed??2} من أفراد الحركة)`);
+    toast('تم حذف التحويل وفردَيه');
+    if(editingTreasuryTransferId===id) resetTreasuryTransferForm();
+    await refreshParts(['financeAccounts','financeMovements','treasuryTransfers']);
+  }catch(err){ console.error(err); toast('خطأ في حذف التحويل: '+err.message,'error'); }
+  finally{ showLoading(false); window.__busy=false; }
+}
+q('financeTransferForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const from=q('financeTransferFrom').value,to=q('financeTransferTo').value,amount=moneyVal(q('financeTransferAmount').value),date=q('financeTransferDate').value,notes=q('financeTransferNotes').value.trim()||'تحويل مالي';if(from===to){toast('لا يمكن التحويل لنفس الحساب','warn');window.__busy=false;return;}validateAccountingTransfer(amount);
+if(editingTreasuryTransferId){
+  /* التعديل ذرّي على الخادم: يُحذف الفردان القديمان ويُكتبان بالقيم الجديدة مع المستند */
+  await rpc('update_treasury_transfer_transaction',{p_transfer_id:editingTreasuryTransferId,p_from:from,p_to:to,p_amount:amount,p_transfer_date:date,p_notes:notes,p_user_identifier:appUser?.identifier||''});
+  resetTreasuryTransferForm();toast('تم حفظ تعديل التحويل — الفردان معاً');
+}else{
+  const idem=getDraftKey('treasuryTransfer');
+  const res=await rpc('post_treasury_transfer_transaction',{p_from:from,p_to:to,p_amount:amount,p_transfer_date:date,p_notes:notes,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
+  clearDraftKey('treasuryTransfer'); /* يُمحى بعد النجاح فقط — الفشل يعيد المحاولة بالمفتاح نفسه فلا تكرار */
+  e.target.reset();setToday();
+  toast((res&&res.idempotent_replay?'التحويل كان مسجلاً مسبقاً — ':'')+'تم حفظ التحويل');
+}
+await refreshParts(['financeAccounts','financeMovements','treasuryTransfers']);}catch(err){console.error(err);toast('خطأ في التحويل: '+err.message)}finally{showLoading(false);window.__busy=false}});
 /* (0127) سجل الحركة المالية: تطبيق الفلاتر + عرض المزيد + تصدير CSV */
 q('financeRegisterForm')?.addEventListener('submit',e=>{e.preventDefault();loadFinanceRegister(true);});
 q('regMoreBtn')?.addEventListener('click',()=>loadFinanceRegister(false));
@@ -11190,6 +11269,7 @@ const AUDIT_ACTION_LABELS={
   location_category_rules_save:'قواعد تصنيف الموقع',
   customer_debt_repair:'إصلاح ديون زبائن', supplier_debt_repair:'إصلاح ديون مورّدين',
   supplier_payments_apply:'تسوية دفعات مورّدين',
+  treasury_transfer_create:'تحويل مالي', treasury_transfer_update:'تعديل تحويل مالي', treasury_transfer_delete:'حذف تحويل مالي',
 };
 function auditActionLabel(a){ return AUDIT_ACTION_LABELS[a]||a; }
 function renderAuditLog(){

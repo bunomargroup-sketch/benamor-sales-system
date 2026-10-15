@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261015-1402">
+<link rel="stylesheet" href="app.css?v=20261015-1507">
 </head>
 <body class="auth-locked">
   <header>
@@ -919,8 +919,11 @@
             <div><label>التاريخ</label><input id="financeTransferDate" type="date" required></div>
             <div><label>المبلغ</label><input id="financeTransferAmount" type="text" inputmode="decimal" required></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><input id="financeTransferNotes" placeholder="مثال: إيداع مبيعات فرع السراج في المصرف"></div>
-            <button class="btn" type="submit">حفظ التحويل</button>
+            <button class="btn" type="submit" id="financeTransferSubmitBtn">حفظ التحويل</button>
+            <button class="btn secondary hidden" type="button" id="financeTransferCancelBtn" onclick="resetTreasuryTransferForm()">إلغاء التعديل</button>
           </form>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>من حساب</th><th>إلى حساب</th><th>المبلغ</th><th>ملاحظات</th><th>سجّله</th><th>إجراء</th></tr></thead><tbody id="treasuryTransfersBody"></tbody></table></div>
+          <div class="mini">كل تحويل مستند واحد (0138): تعديله أو حذفه يمسّ فردَيه معاً في معاملة واحدة — فلا يغادر مالٌ خزينةً بلا قرين.</div>
         </div>
 
 
@@ -1557,6 +1560,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261015-1402"></script>
+<script src="app.js?v=20261015-1507"></script>
 </body>
 </html>
