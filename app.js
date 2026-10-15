@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261012-2008';
+const APP_BUILD='b20261015-1232';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3147,7 +3147,12 @@ function editProduct(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   productFormMode='edit'; editingProductCode=p.code;
   ['newBrand','newModel','newColor'].forEach(id=>{const e=q(id); if(e) e.value='';});
-  document.querySelector('[data-tab="products"]').click();
+  /* (20261015) نموذج المنتج داخل #productModal — فتح التبويب وحده لم يعد
+     يُظهر النموذج (نفس علة duplicateProduct قبل إصلاحها، وهذا الموضع فاتها):
+     openTab = مُدخل نظام النوافذ (زر الشريط، وتركيز النافذة إن كانت عائمة)،
+     ثم فتح المودال نفسه */
+  openTab('products');
+  openProductModal();
   q('productCode').value=p.code||''; q('productName').value=p.name||''; q('productCategory').value=p.category||'';
   q('productBrand').value=p.brand||''; q('productModel').value=p.model||''; q('productColor').value=p.color||''; q('productBarcode').value=p.barcode||''; q('productReorderPoint').value=Number(p.reorder_point||0); q('productPurchasePrice').value=Number(p.purchase_price||0); q('productRetailPrice').value=Number(p.retail_price||0); q('productWholesalePrice').value=Number(p.wholesale_price||0);
   editingProductComponents=compositeItems.filter(ci=>ci.composite_code===p.code).map(ci=>({code:ci.component_code,name:ci.component_name||ci.component_code,qty:Number(ci.qty||1)}));
@@ -3160,7 +3165,7 @@ function editProduct(code){
   q('productSubmitBtn').textContent='حفظ تعديل المنتج';
   q('productCode').readOnly=true;
   updateProductFormMargin();
-  q('productName').focus();
+  setTimeout(()=>q('productName')?.focus(),90); /* (20261015) بعد تركيز المودال التلقائي على الكود — الكود للقراءة في التعديل */
 }
 
 
@@ -3178,7 +3183,7 @@ function duplicateProduct(code){
   productFormMode='duplicate'; editingProductCode=null;
   /* كان يكتفي بفتح تبويب المنتجات ويملأ النموذج — والنموذج داخل نافذة
      منبثقة، فلا يظهر شيء ويبدو الزر معطّلاً. الآن تُفتح النافذة فعلاً. */
-  document.querySelector('[data-tab="products"]')?.click();
+  openTab('products');
   openProductModal();
   q('productCode').readOnly=false;
   q('productCode').value=nextProductCodeFrom(p.code);
@@ -3439,7 +3444,7 @@ function renderCustomers(){
     if(bc){ bc.textContent=`🟢 لديهم رصيد (${creditN})`; bc.classList.toggle('active',customerBalanceFilter==='credit'); }
   }
 }
-async function openCustomerLedger(id){document.querySelector('[data-tab="customers"]').click(); q('customerLedgerCustomer').value=id;
+async function openCustomerLedger(id){openTab('customers'); q('customerLedgerCustomer').value=id;
   try{ const rows=await api('pos_customer_ledger',{qs:`?select=*&customer_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(customerLedger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) customerLedger.push(r); }); }catch(e){ console.warn('ledger history fetch failed — using loaded rows',e); }
   renderCustomerLedger(); }
 function renderCustomerLedger(){
@@ -3708,7 +3713,7 @@ function fillSupplierSelects(){
   if(q('saleCardAccount')) q('saleCardAccount').innerHTML=financeAccountOptionsFor('card','اختر حساب البطاقة');
   if(q('purchaseFinanceAccount')) q('purchaseFinanceAccount').innerHTML=financeAccountOptionsFor(q('purchasePaymentMethod')?.value||'cash','تلقائي حسب الطريقة');
 }
-async function openLedger(id){document.querySelector('[data-tab="ledger"]').click(); q('ledgerSupplier').value=id;
+async function openLedger(id){openTab('ledger'); q('ledgerSupplier').value=id;
   try{ const rows=await api('pos_supplier_ledger',{qs:`?select=*&supplier_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(ledger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) ledger.push(r); }); }catch(e){ console.warn('supplier ledger history fetch failed — using loaded rows',e); }
   renderLedger(); }
 function renderLedger(){
@@ -6307,7 +6312,7 @@ async function openSaleForEdit(id){
     const sl=sales.find(x=>x.id===id) || (await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
     if(!sl){toast('لم يتم العثور على فاتورة البيع'); return;}
     editingSaleId=id; originalSale={...sl}; originalSaleItems=rows.map(x=>({...x}));
-    document.querySelector('[data-tab="sales"]').click();
+    openTab('sales');
     q('saleLocation').value=sl.location_id||''; q('saleDate').value=sl.sale_date||''; q('salePaymentMethod').value=sl.payment_method||'cash'; q('saleInvoiceNo').value=sl.invoice_no||''; syncSaleInvoiceNoText();
     if(q('saleCustomerSearch')) q('saleCustomerSearch').value=''; rebuildSaleCustomerOptions(); q('saleCustomer').value=sl.customer_id||''; q('saleNewCustomerName').value=''; q('saleNewCustomerPhone').value=''; q('saleNotes').value=sl.notes||''; q('saleDiscount').value=Number(sl.discount||0); q('salePaidAmount').value=Number(sl.paid_amount||0);
     if(q('saleCashAmount')){q('saleCashAmount').value=0;q('saleBankAmount').value=0;q('saleCardAmount').value=0; salePayments.filter(p=>p.sale_id===id).forEach(p=>{if(p.payment_method==='cash')q('saleCashAmount').value=Number(p.amount||0); if(p.payment_method==='bank_transfer')q('saleBankAmount').value=Number(p.amount||0); if(p.payment_method==='card')q('saleCardAmount').value=Number(p.amount||0);});}
@@ -7371,8 +7376,14 @@ function listNavInstanceFor(ev){
   return null;
 }
 /* موجِّه القوائم: لا يقرض المفاتيح داخل حقول الإدخال — Enter داخل فاتورة جديد
-   يمشي كود→كمية→سعر→صف جديد كما هو؛ الاستثناء الوحيد: مربع بحث القائمة نفسه. */
+   يمشي كود→كمية→سعر→صف جديد كما هو. */
 document.addEventListener('keydown',e=>{
+  /* (20261015) القسم ٤ من مواصفة لوحة المفاتيح: مفاتيح الكتابة والمؤشر
+     (مسافة/أسهم/Home/End/PageUp/PageDown/Delete) ملكُ أيّ حقل يؤوي المؤشر،
+     أياً كان الحقل — ومربع بحث القائمة نفسه لم يعد استثناء: الكتابة فيه
+     كتابة. مجموعات المعدِّل (Ctrl+P، Ctrl+Enter) وحدها تمرّ. */
+  const tgt=e.target;
+  if(tgt && !(e.ctrlKey||e.metaKey) && ((tgt.closest&&tgt.closest('input, textarea, select'))||tgt.isContentEditable)) return;
   const inst=listNavInstanceFor(e); if(!inst) return;
   const t=e.target, editable=isTextEditable(t);
   const inSearch=editable&&t&&t.id===inst.search;
@@ -9567,7 +9578,7 @@ async function openPurchaseForEdit(id){
     const p=purchases.find(x=>x.id===id) || (await api('pos_purchases',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
     if(!p){toast('لم يتم العثور على الفاتورة'); return;}
     editingPurchaseId=id; originalPurchase={...p}; originalPurchaseItems=rows.map(x=>({...x}));
-    document.querySelector('[data-tab="purchases"]').click();
+    openTab('purchases');
     q('purchaseSupplier').value=p.supplier_id||''; q('purchaseLocation').value=p.location_id||''; q('purchaseDate').value=p.purchase_date||''; if(q('purchaseAutoNo')) q('purchaseAutoNo').value=p.purchase_no||p.id?.slice(0,8)||'';
     q('purchaseInvoiceNo').value=p.invoice_no||''; q('purchaseNotes').value=p.notes||''; q('purchaseDiscount').value=Number(p.discount||0);
     q('purchaseItemsBody').innerHTML='';
@@ -9644,7 +9655,7 @@ async function openTransferForEdit(id){
     const t=transfers.find(x=>x.id===id) || (await api('pos_stock_transfers',{qs:`?select=*&id=eq.${id}&limit=1`}))[0];
     if(!t){toast('لم يتم العثور على التحويل'); return;}
     editingTransferId=id; originalTransfer={...t}; originalTransferItems=rows.map(x=>({...x}));
-    document.querySelector('[data-tab="transfers"]').click();
+    openTab('transfers');
     q('transferFrom').value=t.from_location_id||''; q('transferTo').value=t.to_location_id||''; q('transferDate').value=t.transfer_date||''; q('transferNotes').value=t.notes||'';
     q('transferItemsBody').innerHTML='';
     rows.forEach(it=>addTransferRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty}));
@@ -11666,11 +11677,13 @@ async function openCompositeEditModal(code){
   if(q('cePurchase')) q('cePurchase').value=pur0;
   if(q('ceNotes')) q('ceNotes').value=String(p.description||'');
   /* الاسم/الموديل/اللون/الوصف لا تُحمَّل ضمن عرض المخزون — تمّلؤ كاملة من جدول المنتجات عند الحفظ */
+  /* (20261015) النافذة تظهر فوراً والملاحظة تُجلب بالخلفية — التحويل إلى
+     مركّب كان ينتظر الجلب قبل أن يظهر أي شيء على الشاشة */
+  ceRender();
+  q('compositeEditModal').classList.add('show');
   if(!p.description){
     try{const r=await api('pos_products',{qs:`?select=description&code=eq.${encodeURIComponent(p.code)}&limit=1`}); if(r&&r[0]&&q('ceNotes')) q('ceNotes').value=r[0].description||'';}catch(e){console.warn('composite note fetch failed',e)}
   }
-  ceRender();
-  q('compositeEditModal').classList.add('show');
 }
 async function ceSave(){
   const sb=staticOpenCountState;
@@ -11750,10 +11763,15 @@ function getCompositeVirtualStock(code){
 function hasCompositeComponents(productCode){return compositeItems.some(ci=>String(ci.composite_code)===String(productCode));}
 function convertToComposite(code){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج','warn');return;}
-  editProduct(code);
-  const sec=q('productComponentsSection'); if(sec)sec.classList.remove('hidden');
+  /* (20261015) المحرّر القياسي نفسه في وضع «لا مكوّنات بعد»: كان المسار يمرّ
+     عبر editProduct فنموذج المنتج — والنموذج صار داخل مودال لا يفتح نفسه،
+     فكان الزر يُظهر الرسالة ولا شيء بعدها (ولا مسار آخر لإضافة مكوّنات لأن
+     قائمة المركّبات لا تعرض إلا من له مكوّنات أصلاً). الآن يفتح محرّر
+     المركّب مباشرة: مسار واحد للتركيب بدل مسارين نصف عاملين، وبلا سباق
+     إظهار/إخفاء على قسم المكوّنات داخل النموذج */
+  openCompositeEditModal(code);
+  setTimeout(()=>q('ceCompCode')?.focus(),90);
   toast('أضف مكوّنات هذا المنتج ثم احفظ ليصبح مركّباً','info');
-  q('componentCodeInput')?.focus();
 }
 let selectedCompositeCode=null;
 function selectCompositeRow(code){selectedCompositeCode=(selectedCompositeCode===String(code))?null:String(code);renderComposites();}
