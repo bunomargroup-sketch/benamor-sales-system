@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261015-2121';
+const APP_BUILD='b20261016-1951';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -32,8 +32,11 @@ let saleSaveMode="new";
 let lastFocusedSaleRow=null;
 let calcExpr="";
 let currentReport="overview";
-let productSortIndex=16, productSortDir='desc';
-let stockSortIndex=3, stockSortDir='desc';
+/* (0143) الافتراضيان لقاعدة المالك «الأحدث أولاً»:
+   المنتجات: -1 = آخر حركة أولاً (بلا عمود خاص — انقر أي عمود للترتيب به).
+   المخزون: 8 = عمود «آخر تحديث» (updated_at = تاريخ آخر حركة على السطر). */
+let productSortIndex=-1, productSortDir='desc';
+let stockSortIndex=8, stockSortDir='desc';
 let pickerSelectedIndex=0;
 let pickerSortIndex=5, pickerSortDir='desc';
 let productPickerTarget='sale';
@@ -2829,6 +2832,20 @@ function updateProductFormMargin(){
 function buildProductSearchIndex(){ for(const p of products){ if(!p) continue; if(p._hay===undefined) p._hay=normText(productSearchFields(p).join(' ')); if(p._cost===undefined){ const c=productCost(p.code); p._cost=c; p._mv=Number(p.retail_price||0)-c; p._mp=marginOf(p.retail_price,c); } } }
 let _renderProductsTimer=null;
 function debounceRenderProducts(){ clearTimeout(_renderProductsTimer); _renderProductsTimer=setTimeout(renderProducts,180); }
+/* (0143) «الأصناف حسب تاريخ الحركات»: كل حركة مخزون تلمس صف pos_stock
+   الخاص بموقعها وتحدّث updated_at (0022–0026 ترفقه مع كل تعديل)، فأقصى
+   updated_at لأصفار الصنف عبر المواقع هو تاريخ آخر حركة عليه. خريطة واحدة
+   لكل نسخة من stock — لا مسح لكل رسم. */
+let _lastMoveCache={arr:null,map:null};
+function lastMoveByProduct(){
+  if(_lastMoveCache.arr!==stock){
+    const m=new Map();
+    (stock||[]).forEach(r=>{const c=String(r.product_code||''); const t=String(r.updated_at||'');
+      if(c&&t&&(!m.has(c)||t>m.get(c))) m.set(c,t);});
+    _lastMoveCache={arr:stock,map:m};
+  }
+  return _lastMoveCache.map;
+}
 function renderProducts(){
   const filterDefs=[['productBrandFilter','brand','كل الماركات'],['productColorFilter','color','كل الألوان'],['productSupplierFilter','supplier_name','كل الموردين']];
   filterDefs.forEach(([id,key,label])=>{const el=q(id); if(el && !el.dataset.ready){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''); el.dataset.ready='1';}});
@@ -2867,8 +2884,19 @@ function renderProducts(){
   const extraLines=extraSearchTerms('productExtraSearch');
   if(extraLines.length) rows=rows.filter(p=>extraLines.every(t=>smartMatch(t,productSearchFields(p))));
   const productCols=['code','name','brand','color','barcode','supplier_name','category','purchase_price','retail_price','margin_value','margin_pct','stock_11_june','stock_sarraj','stock_janzour','total_stock'];
-  const key=productCols[productSortIndex]||'total_stock';
-  rows.sort((a,b)=>{const va=key==='margin_value'?a._mv:(key==='margin_pct'?a._mp:(a[key]??'')), vb=key==='margin_value'?b._mv:(key==='margin_pct'?b._mp:(b[key]??'')); const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va).localeCompare(String(vb),'ar'); return productSortDir==='asc'?c:-c;});
+  /* (0143) -1 = الوضع الافتراضي: آخر حركة أولاً — أول صنف في الجدول هو
+     صاحب آخر حركة. أي نقر على عمود يستبدله كالعادة. */
+  const key=productSortIndex===-1?'_lastmove':(productCols[productSortIndex]||'total_stock');
+  const lm=lastMoveByProduct();
+  rows.sort((a,b)=>{
+    if(key==='_lastmove'){
+      const va=lm.get(String(a.code||''))||'', vb=lm.get(String(b.code||''))||'';
+      const c=vb.localeCompare(va);   /* desc: الأحدث أولاً، ومن لا حركة له في الذيل */
+      if(c) return productSortDir==='asc'?-c:c;
+      return String(a.code||'').localeCompare(String(b.code||''),'ar');
+    }
+    const va=key==='margin_value'?a._mv:(key==='margin_pct'?a._mp:(a[key]??'')), vb=key==='margin_value'?b._mv:(key==='margin_pct'?b._mp:(b[key]??'')); const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va).localeCompare(String(vb),'ar'); return productSortDir==='asc'?c:-c;
+  });
   const shown=rows.slice(0,100);
   applyProductColVisibility(shown, smartParsed);
   try{ initResizableTables(); }catch(e){ console.warn('col-resize init',e); } /* (20261006h) الجدول أُعيد بناؤه بالكامل */
@@ -3431,7 +3459,11 @@ function viewProductFromCode(code){selectedProductCode=code; setTimeout(()=>view
 
 function renderSuppliers(){
   const term=(q('supplierSearch')?.value||'').trim();
-  const rows=suppliers.filter(s=>!term || (s.name||'').includes(term) || (s.phone||'').includes(term));
+  /* (0143) الأحدث أولاً: آخر مورد أُضيف أعلى القائمة. created_at من وجهة
+     0143؛ قبل تطبيقها يبقى الترتيب بالاسم بأمان (كلها ''). */
+  const rows=suppliers.filter(s=>!term || (s.name||'').includes(term) || (s.phone||'').includes(term))
+    .sort((a,b)=> String(b.created_at||'').localeCompare(String(a.created_at||''))
+      || String(a.name||'').localeCompare(String(b.name||''),'ar'));
   q('suppliersBody').innerHTML = rows.map(s=>`<tr><td><b>${esc(s.name)}</b><div class="muted">${esc(s.notes||'')}</div></td><td class="ltr">${esc(s.phone||'')}</td><td><b>${money(s.balance)}</b></td><td>${badgeStatus(s.balance)}</td><td><button class="btn secondary" onclick="openLedger('${String(s.id).replace(/'/g,"\'")}')">كشف الحساب</button></td></tr>`).join('') || '<tr><td colspan="5">لا يوجد موردون بعد.</td></tr>';
 }
 
@@ -3450,7 +3482,12 @@ function renderCustomers(){
   const term=(q('customerSearch')?.value||'').trim();
   const showInactive=q('customerShowInactive')?.checked;
   const isAdmin=isManager();
-  const rows=customers.filter(c=>(!term || (c.name||'').includes(term) || (c.phone||'').includes(term)) && (showInactive || c.active!==false) && (customerBalanceFilter==='' || customerBalanceKind(c.balance)===customerBalanceFilter));
+  /* (0143) الأحدث أولاً: آخر زبون أُضيف أعلى القائمة (created_at من وجهة
+     0143؛ قبل تطبيقها يبقى الترتيب بالاسم بأمان). الفرز قبل «تحميل الأقدم»
+     كي يكون الزر صادقاً مع اسمه. */
+  const rows=customers.filter(c=>(!term || (c.name||'').includes(term) || (c.phone||'').includes(term)) && (showInactive || c.active!==false) && (customerBalanceFilter==='' || customerBalanceKind(c.balance)===customerBalanceFilter))
+    .sort((a,b)=> String(b.created_at||'').localeCompare(String(a.created_at||''))
+      || String(a.name||'').localeCompare(String(b.name||''),'ar'));
   const more=rows.length-customersListLimit;
   q('customersBody').innerHTML = rows.slice(0,customersListLimit).map(c=>{
     const inactive=c.active===false;
@@ -4157,7 +4194,12 @@ function purchaseMatchesFilters(p){
 }
 function renderPurchasesList(){
   fillPurchaseListFilterOptions();
-  const rows=purchases.filter(purchaseMatchesFilters);
+  /* (0143) الأحدث أولاً بقرار صريح — لا اعتماد على ترتيب وصول الصفوف:
+     أحدث تاريخ فاتورة، ثم لحظة الإصدار داخل اليوم، ثم الرقم. */
+  const rows=purchases.filter(purchaseMatchesFilters)
+    .sort((a,b)=> String(b.purchase_date||'').localeCompare(String(a.purchase_date||''))
+      || String(b.created_at||'9999').localeCompare(String(a.created_at||'9999'))
+      || String(b.purchase_no||'').localeCompare(String(a.purchase_no||''),'ar',{numeric:true}));
   const more=rows.length-purchasesListLimit;
   const olderBtn=more>0?`<button class="btn secondary" onclick="loadOlderPurchases()" title="تحميل فواتير شراء أقدم">تحميل الأقدم (${more} فاتورة)</button>`:'';
   q('purchasesBody').innerHTML=rows.slice(0,purchasesListLimit).map(p=>{
@@ -4389,7 +4431,10 @@ function renderStock(){
       key==='value'?Number(r.qty||0)*productCost(r.product_code):
       (r[key]??'');
     const va=val(a,pa), vb=val(b,pb); const na=parseFloat(va), nb=parseFloat(vb);
-    const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va||'').localeCompare(String(vb||''),'ar');
+    /* (0143) updated_at طابع زمني لا رقم: parseFloat يقصّه إلى السنة فيتساوى
+     كل شيء — يقارَن نصاً (ISO يترتب نصياً صحيحاً). */
+    const c=(key==='updated_at')?String(va||'').localeCompare(String(vb||'')):
+      ((!isNaN(na)&&!isNaN(nb))?na-nb:String(va||'').localeCompare(String(vb||''),'ar'));
     return stockSortDir==='asc'?c:-c;
   });
   const qtyTotal=rows.reduce((a,r)=>a+Number(r.qty||0),0);
@@ -5179,7 +5224,18 @@ function renderSales(){
   const rets=showReturns?saleReturns.filter(retListMatchesFilters):[];
   const entries=[...rows.map(sl=>({kind:'sale',date:String(sl.sale_date||''),key:String(sl.invoice_no||String(sl.id).slice(0,8)),sl})),
                  ...rets.map(r=>({kind:'ret',date:String(r.return_date||''),key:String(saleIdx.get(r.sale_id)?.invoice_no||String(r.id).slice(0,8)),r}))];
-  entries.sort((a,b)=>{const d=b.date.localeCompare(a.date);return d||b.key.localeCompare(a.key,'ar',{numeric:true});});
+  /* (0143) «أول فاتورة في الجدول هي آخر فاتورة صدرت»: التاريخ يومٌ فقط،
+     فالفاصل داخل اليوم الواحد هو لحظة الإصدار (created_at) لا رقم الفاتورة —
+     أرقام الفروع سلاسل مستقلة (INV-500 بفرع وINV-300 بآخر لا يعنيان شيئاً
+     ترتيبياً). المحلية المعلّقة بلا طابع (طابور الأوفلاين) الأحدث دائماً. */
+  entries.sort((a,b)=>{
+    const d=b.date.localeCompare(a.date);
+    if(d) return d;
+    const ts=e=>String((e.kind==='sale'?e.sl.created_at:e.r.created_at)||'9999');
+    const c=ts(b).localeCompare(ts(a));
+    if(c) return c;
+    return b.key.localeCompare(a.key,'ar',{numeric:true});
+  });
   const more=entries.length-salesListLimit;
   /* (20261005) الزر يظهر حين تتجاوز الصفوف الحدّ (كما كان)، أو ما دام توجد
      فواتير أقدم من الأفق المحمَّل — بعداد حين تتجاوز الصفوف الحدّ، وبدونه
@@ -11029,8 +11085,18 @@ var __tableSort={};          /* tbodyId -> {idx,dir} */
 var __sortingNow=false;
 
 function sortCellValue(r,idx){
-  const t=(r.children[idx]?.innerText||'').trim().replace(/,/g,'');
-  const n=parseFloat(t);
+  const t=(r.children[idx]?.innerText||'').trim();
+  /* (0143) التاريخ ليس رقماً: parseFloat('2026-10-14')=2026 فتتساوى كل
+     تواريخ السنة نفسها ويبدو أنّ ترتيب عمود التاريخ «لا يعمل» (فواتير
+     البيع والشراء). صيغة ISO — يوماً أو يوماً+وقتاً — تُعاد طابعاً زمنياً
+     قابلاً للمقارنة عددياً. */
+  const dm=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if(dm){
+    const ts=Date.parse(dm[1]+'-'+String(dm[2]).padStart(2,'0')+'-'+String(dm[3]).padStart(2,'0')
+      +'T'+String(dm[4]||0).padStart(2,'0')+':'+(dm[5]||'00')+':'+(dm[6]||'00'));
+    if(!isNaN(ts)) return ts;
+  }
+  const n=parseFloat(t.replace(/,/g,'').replace(/\u2212/g,'-').replace(/\s+/g,''));
   return isNaN(n)?t:n;
 }
 function applyDomSort(tbody,idx,dir){
