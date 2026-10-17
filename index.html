@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261016-1951">
+<link rel="stylesheet" href="app.css?v=20261017-1141">
 </head>
 <body class="auth-locked">
   <header>
@@ -392,6 +392,8 @@
             <select id="spListBranch" onchange="supplierPaymentsFilterChanged()" title="تصفية حسب فرع خزينة الدفعة — «بدون فرع» = دفعة بلا حساب مربوط بفرع"></select>
             <input id="spListSearch" type="search" placeholder="بحث في الملاحظات…" oninput="debouncedSupplierPaymentsSearch()">
           </div>
+          <!-- (0144) فحص انحراف الخزائن — في الواجهة لا في السجلّ: حسابات بلا ربط، وربط بلا حساب، وآخر مزامنة لصفحة الإعدادات -->
+          <div class="treasury-drift-bar mini" style="display:none;margin:6px 0 2px"></div>
           <div class="table-scroll"><table class="expenses-table"><thead><tr><th>التاريخ</th><th>المورد</th><th>الفاتورة</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th><th title="حالة الإرسال إلى شيت SmartBalance — ✓ = مؤكد، ☐ = أوّشّر للإرسال (المدير)">في الشيت</th><th>إجراء</th></tr></thead><tbody id="paymentsBody"></tbody></table></div>
           <div class="row" style="justify-content:space-between;margin-top:8px">
             <span class="mini" id="spListInfo"></span>
@@ -875,6 +877,8 @@
         <div class="panel">
           <h2>الخزائن والمصارف</h2>
           <p class="muted">إدارة خزائن الفروع والحسابات المصرفية والبطاقات، مع تسجيل التحويلات والمصاريف والمرتبات.</p>
+          <!-- (0144) فحص انحراف الخزائن — في الواجهة لا في السجلّ -->
+          <div class="treasury-drift-bar mini" style="display:none;margin:6px 0 2px"></div>
           <div class="grid cards">
             <div class="card"><h3>إجمالي النقدي</h3><div class="num" id="financeCashTotal">0</div></div>
             <div class="card"><h3>إجمالي المصارف</h3><div class="num" id="financeBankTotal">0</div></div>
@@ -1574,6 +1578,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261016-1951"></script>
+<script src="app.js?v=20261017-1141"></script>
 </body>
 </html>

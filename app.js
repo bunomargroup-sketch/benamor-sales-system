@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261016-1951';
+const APP_BUILD='b20261017-1141';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1634,12 +1634,51 @@ function initResizableTables(){
 }
 document.addEventListener('DOMContentLoaded',applySaleDensity);
 
+/* ══════ (0144) فحص انحراف الخزائن — في الواجهة لا في السجلّ ══════
+   مصدر الحقيقة صفحة الإعدادات، والدورة الساعية تمزجها إلى
+   pos_sheet_treasury_map (0144). هذا الشريط يظهر في شاشتي الدفعات
+   والمالية: حسابات المنظومة بلا ربط (الإرسال سيرفضها قبل الطابور)،
+   وصفوف ربط بلا حساب بهذا الاسم، وآخر مزامنة ناجحة — مع الحلّ الواعي
+   بالأسماء البديلة (عمود aliases في «◾ الخزائن»). للأدوار الإدارية
+   فقط، والفشل صامت لأنه تحذيري لا وظيفي. */
+let __treasuryDriftAt=0, __treasuryDriftBusy=false;
+function scheduleTreasuryDrift(){
+  if(!isManager()) return;
+  if(__treasuryDriftBusy) return;
+  if(Date.now()-__treasuryDriftAt < 10*60*1000) return;   /* مرة كل ١٠ دقائق تكفي */
+  __treasuryDriftAt=Date.now();
+  refreshTreasuryDrift().catch(()=>{});
+}
+async function refreshTreasuryDrift(){
+  const els=[...document.querySelectorAll('.treasury-drift-bar')];
+  if(!els.length || !isManager()) return;
+  __treasuryDriftBusy=true;
+  try{
+    const {ok,data}=await rpc('pos_sheet_treasury_drift',{});
+    if(!ok||!data) return;
+    const unres=Array.isArray(data.unresolved)?data.unresolved:[];
+    const dead=Array.isArray(data.dead_map)?data.dead_map:[];
+    const ls=data.last_sync;
+    let html='';
+    if(unres.length)
+      html+=`<div style="border:1px solid #b45309;border-radius:10px;padding:6px 10px;background:#fffbeb;margin-bottom:4px">⚠️ <b>حسابات بلا ربط بخزائن الشيت — الإرسال سيرفضها:</b> ${unres.map(esc).join('، ')} — عدّل «⚙️ الإعدادات ◾ ربط منظومة المبيعات» في الشيت ثم انتظر المزامنة الساعية (أو شغّل pos_sheet_treasury_settings_resync)</div>`;
+    if(dead.length)
+      html+=`<div style="border:1px solid var(--border);border-radius:10px;padding:6px 10px;background:var(--card);margin-bottom:4px">🔁 ربط بلا حساب بهذا الاسم (تحقّق من التهجئة): ${dead.map(d=>esc(d.name)).join('، ')}</div>`;
+    if(ls&&ls.at)
+      html+=`<div>🔄 آخر مزامنة إعدادات: <b>${esc(ls.at)}</b> — ${ls.pairs} زوج ربط · ${ls.treasuries} خزينة</div>`;
+    else
+      html+=`<div>لم تُزامَن إعدادات الخزائن بعد — شغّل: select public.pos_sheet_treasury_settings_send(); ثم بعد دقيقة: select public.pos_sheet_treasury_settings_resync();</div>`;
+    els.forEach(e=>{e.style.display='';e.innerHTML=html;});
+  }catch(e){ /* تحذيري — لا يُزعج أحداً */ }
+  finally{ __treasuryDriftBusy=false; }
+}
 function renderTab(tab, force=false){
   const fn=TAB_RENDERERS[tab]; if(!fn) return;
   if(!force && tabDirty[tab]===false) return; /* رُسِم من بعد آخر تغيير — لا عمل مكرر */
   tabDirty[tab]=true;
   try{ fn(); }catch(e){ console.error('render tab '+tab, e); }
   tabDirty[tab]=false;
+  if(tab==='payments'||tab==='finance') scheduleTreasuryDrift();   /* (0144) شريط الانحراف */
   setTimeout(setupTableSorting,0); /* مرتبّ — آمن عند التكرار (dataset.sortReady) */
   try{ initResizableTables(); }catch(e){ console.warn('col-resize init',e); } /* (20261006h) آمن التكرار — الرؤوس تُعاد */
 }
