@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261017-1406';
+const APP_BUILD='b20261017-1608';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3987,15 +3987,21 @@ async function sendSupplierPaymentsToSheet(){
   finally{ if(btn) btn.disabled=false; }
 }
 function renderPayments(){
-  /* (0133) أزرار تعديل/حذف للمدير للدفعات المستقلة فقط — المدفوع المضمَّن
-     في فاتورة الشراء يُدار من الفاتورة نفسها. (0142) الصفوف من النداء
-     الموحِّد: حركة لكل دفعة/فاتورة، والحالة (✓/🕓/☐) بمفتاح الحركة */
+  /* (0133) أزرار تعديل/حذف للمدير للدفعات المستقلة فقط. (0142) الصفوف من
+     النداء الموحِّد: حركة لكل دفعة/فاتورة، والحالة (✓/🕓/☐) بمفتاح الحركة.
+     (0145) الدفعة المضمَّنة في فاتورة الشراء (لا صفّ دفعة لها): تعديلها
+     بفتح المستند الأصلي حيث يعيش مدفوعها، وحذفها تصفيرٌ مدروس للمدير —
+     ووسمان مختلفان («مستقلة»/«داخل فاتورة») يوضّحان لماذا يختلف السلوك */
   const isAdmin=isManager();
   const br=q('spListBranch')?.value||'';
   const rows=(spMovements||[]).filter(m=>!br||supplierMovementBranchOf(m)===br);
   q('supplierPaymentsSendSheetBtn')?.classList.toggle('hidden',!isAdmin);
   q('paymentsBody').innerHTML = rows.map(m=>{
     const sentAt=m.sent_at?String(m.sent_at):'', pending=!!m.pending;
+    const embedded=!m.payment_id&&m.purchase_id;
+    const kindChip=embedded
+      ?` <span class="chip" style="color:#4f46e5" title="مسجَّلة داخل فاتورة الشراء (شكل تاريخي) — تُدار من المستند الأصلي: تعديلها يفتح الفاتورة، وحذفها يصفّر مدفوعها">داخل فاتورة</span>`
+      :(m.payment_id?` <span class="chip" style="color:#059669" title="دفعة مستقلة من نافذة «دفعة للمورد» — تعديلها وحذفها من هنا">مستقلة</span>`:'');
     const sheetCell = sentAt
       ? `<span class="exp-sent-ok" title="في شيت SmartBalance منذ ${esc(sentAt)}">✓ ${esc(sentAt.slice(0,10))}</span>`
       : pending
@@ -4003,13 +4009,37 @@ function renderPayments(){
       : (isAdmin && m.sendable
         ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-sppmid="${m.movement_id}" ${spSheetSel.has(m.movement_id)?'checked':''} onchange="supplierPaymentSheetToggle(this)"></label><span class="muted">—</span>`
         : `<span class="muted" title="${m.sendable?'':'قبل تاريخ الحدّ — لا يُرسَل'}">—</span>`);
-    const tools=isAdmin&&m.payment_id
-      ?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openSupplierPaymentEdit('${m.payment_id}')">✏️</button>
-        <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteSupplierPaymentAdmin('${m.payment_id}')">🗑</button>`:'';
-    return `<tr><td>${esc(m.payment_date)}</td><td>${esc(m.supplier_name||'')}</td><td class="ltr">${esc(m.doc_no||'—')}</td><td><b>${money(m.amount)}</b></td><td>${esc(m.payment_method?typeLabel(m.payment_method):'—')}</td><td>${esc(m.notes||'')}</td><td class="exp-sheet">${sheetCell}</td><td style="white-space:nowrap">${tools}</td></tr>`}).join('') || '<tr><td colspan="8">لا توجد دفعات مطابقة للفلاتر.</td></tr>';
+    /* (0145) المضمَّنة: ✏️ يفتح فاتورة الشراء (صلاحية التعديل نفسها) —
+       لا نموذج دفعة يوهم أنها مستقلة؛ 🗑 للمدير يصفّرها بعكس أثرها كاملاً */
+    const tools=embedded
+      ?`<button class="btn secondary" type="button" style="padding:2px 8px" title="الدفعة مسجّلة داخل فاتورة الشراء — يُفتح المستند الأصلي" onclick="event.stopPropagation();openPurchaseForEdit('${m.purchase_id}')">✏️ الفاتورة</button>`
+       +(isAdmin?` <button class="btn danger" type="button" style="padding:2px 8px" title="تصفير هذه الدفعة المضمَّنة وعكس كل آثارها — مدير فقط" onclick="event.stopPropagation();revertPurchaseEmbeddedPayment('${m.purchase_id}',${Number(m.amount||0)},'${String(m.doc_no||'').replace(/'/g,"\\'")}')">🗑</button>`:'')
+      :m.payment_id
+      ?(isAdmin?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openSupplierPaymentEdit('${m.payment_id}')">✏️</button>
+        <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteSupplierPaymentAdmin('${m.payment_id}')">🗑</button>`:'')
+      :'';
+    return `<tr><td>${esc(m.payment_date)}</td><td>${esc(m.supplier_name||'')}</td><td class="ltr">${esc(m.doc_no||'—')}${kindChip}</td><td><b>${money(m.amount)}</b></td><td>${esc(m.payment_method?typeLabel(m.payment_method):'—')}</td><td>${esc(m.notes||'')}</td><td class="exp-sheet">${sheetCell}</td><td style="white-space:nowrap">${tools}</td></tr>`}).join('') || '<tr><td colspan="8">لا توجد دفعات مطابقة للفلاتر.</td></tr>';
   if(q('spListInfo')) q('spListInfo').textContent=`${rows.length} دفعة معروضة`;
   const more=(spMovements||[]).length>=spListLimit;
   if(q('spListMoreBtn')) q('spListMoreBtn').classList.toggle('hidden',!more);
+}
+
+/* ═══ (0145) حذف الدفعة المضمَّنة في فاتورة الشراء — تصفير مدروس ═══
+   الخادم يعكس الآثار الأربعة في معاملة واحدة (حركة الخزينة، قيد كشف
+   المورد، paid_amount، الرصيد المشتق)، وسطر الشيت يُمحى ويُسجَّل في
+   «_سجل المحذوفات» تلقائياً ببصمة 0142 في الدورة الساعية. */
+async function revertPurchaseEmbeddedPayment(purchaseId, amount, docNo){
+  if(!isManager()){toast('هذه العملية للمدير وحده','warn');return;}
+  if(!purchaseId) return;
+  if(!confirm(`تصفير الدفعة المضمَّنة: ${money(amount)} ${APP_CONFIG.currency} — ${docNo||''}؟\nيُصفَّر مدفوع الفاتورة وتُمحى حركة الخزينة وقيد كشف المورد، ويُحذف سطرها من الشيت في الدورة الساعية. لا رجوع.`))return;
+  try{
+    showLoading(true);
+    const res=await rpc('pos_purchase_embedded_payment_revert',{p_purchase_id:purchaseId,p_user_identifier:appUser?.identifier||''});
+    toast('صُفّرت الدفعة المضمَّنة وعُكس أثرها — حذفُها من الشيت في الدورة الساعية','success');
+    await refreshParts(['purchases','suppliers','supplierLedger','financeAccounts','financeMovements','supplierPayments']);
+    await fetchSupplierPaymentsList();
+  }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
 }
 
 /* ═══ (0133) تعديل/حذف دفعة مورد — نمط دفعات الزبائن ═══
@@ -9879,6 +9909,7 @@ q('paymentForm').addEventListener('submit', async e=>{
 
 function resetPurchaseForm(){
   editingPurchaseId=null; originalPurchase=null; originalPurchaseItems=[];
+  editingPurchaseEmb=null; if(q('purchaseEmbeddedPayWrap')) q('purchaseEmbeddedPayWrap').style.display='none';   /* (0145) */
   q('purchaseForm').reset(); q('purchaseItemsBody').innerHTML=''; if(q('purchaseAutoNo')) q('purchaseAutoNo').value='سيولد تلقائيًا'; setToday();
   q('purchaseSubmitBtn').textContent='حفظ الفاتورة وزيادة المخزون';
   q('purchaseCancelEditBtn').classList.add('hidden');
@@ -10078,10 +10109,39 @@ async function openPurchaseForEdit(id){
     q('purchaseItemsBody').innerHTML='';
     rows.forEach(it=>addPurchaseRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty, unit_cost:it.unit_cost}));
     updatePurchaseTotal();
+    await loadPurchaseEmbeddedPayment(id);
     q('purchaseSubmitBtn').textContent='حفظ التعديل وتحديث المخزون';
     q('purchaseCancelEditBtn').classList.remove('hidden');
     toast('تم فتح فاتورة الشراء للتعديل');
   }catch(err){console.error(err);toast('خطأ في فتح الفاتورة: '+err.message)} finally{showLoading(false);window.__busy=false}
+}
+/* (0145) الدفعة المضمَّنة التاريخية: تُعرض داخل نموذج الفاتورة عند
+   التعديل فقط إن وُجدت — الدفع خارج الفاتورة (0140) يبقى للجديد */
+let editingPurchaseEmb=null;
+async function loadPurchaseEmbeddedPayment(purchaseId){
+  editingPurchaseEmb=null;
+  const wrap=q('purchaseEmbeddedPayWrap'); if(!wrap) return;
+  try{
+    editingPurchaseEmb=await rpc('pos_purchase_embedded_payment',{p_purchase_id:purchaseId});
+  }catch(err){ console.warn('embedded payment fetch',err); }
+  if(editingPurchaseEmb&&editingPurchaseEmb.movement_id){
+    wrap.style.display='';
+    q('purchaseEmbAmount').value=Number(editingPurchaseEmb.amount||0);
+    q('purchaseEmbDate').value=editingPurchaseEmb.payment_date||'';
+    q('purchaseEmbAccount').innerHTML=(financeAccounts||[]).filter(a=>a.active!==false)
+      .map(a=>`<option value="${a.id}"${a.id===editingPurchaseEmb.account_id?' selected':''}>${esc(a.name)} — ${esc(a.account_type==='cash'?'نقدي':a.account_type==='bank'?'مصرف':'بطاقة')}</option>`).join('');
+    if(!q('purchaseEmbAccount').value&&editingPurchaseEmb.account_id) q('purchaseEmbAccount').value=editingPurchaseEmb.account_id;
+  }else{
+    editingPurchaseEmb=null;
+    wrap.style.display='none';
+  }
+}
+/* (0145) حمولة الدفعة المضمَّنة للنداء — أو null إن لم تكن معروضة/موجودة */
+function purchaseEmbeddedPaymentPayload(){
+  const wrap=q('purchaseEmbeddedPayWrap');
+  if(!editingPurchaseEmb||!wrap||wrap.style.display==='none') return null;
+  const acc=q('purchaseEmbAccount')?.value||'';
+  return {amount:moneyVal(q('purchaseEmbAmount').value), finance_account_id:acc||null, payment_date:q('purchaseEmbDate')?.value||null};
 }
 /* ⚙️ متابعة 1b: reversePurchaseEffects أُزيلت — العكس صار داخل update_purchase_transaction الذرّي */
 
@@ -10130,13 +10190,18 @@ q('purchaseForm').addEventListener('submit', async e=>{
        الإنشاء الذرّي post_purchase_transaction أعلاه. */
     /* (0140) التعديل لا يفتح نافذة الدفع ولا يمس أي دفعة — الوسيط
        p_payment حُذف من النداء، وpaid_amount في الجسم يحمل قيمة الفاتورة
-       الحالية فقط لأمان تشغيل الهجرة 0140 قبل نشرها (بعدها يُشتق خادمياً) */
-    await rpc('update_purchase_transaction',{
+       الحالية فقط لأمان تشغيل الهجرة 0140 قبل نشرها (بعدها يُشتق خادمياً).
+       (0145) استثناء واحد: الدفعة المضمَّنة التاريخية إن عُرضت في النموذج
+       فتُرسَل لتُحدَّث في مكانها بالحركة نفسها — ضمن النداء الذرّي نفسه */
+    const embPayload=purchaseEmbeddedPaymentPayload();
+    const updBody={
       p_purchase_id:editingPurchaseId,
       p_purchase:{...body,paid_amount:Number(originalPurchase?.paid_amount||0)},
       p_items:items,
       p_user_identifier:appUser?.identifier||''
-    });
+    };
+    if(embPayload) updBody.p_embedded_payment=embPayload;
+    await rpc('update_purchase_transaction',updBody);
     purchaseId=editingPurchaseId;
     const msg='تم تعديل فاتورة الشراء وتحديث المخزون';
     resetPurchaseForm(); toast(msg); await refreshParts(['purchases','stock','suppliers','supplierLedger','financeAccounts','financeMovements','cost']);
