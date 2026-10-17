@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261017-1912';
+const APP_BUILD='b20261017-2015';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1757,8 +1757,8 @@ async function refreshParts(names, o={}){
   return failed.length===0;
 }
 function renderDashboard(){
-  q('branchesCount').textContent=locations.filter(x=>x.location_type==='branch').length;
-  q('warehousesCount').textContent=locations.filter(x=>x.location_type==='warehouse').length;
+  /* (20261017) طلب المالك: أُزيلت بطاقتا عدد الفروع والمخازن وبطاقة ولوحة
+     «أصناف تحت حد الطلب» من الصفحة الرئيسية — لا كتابة لعناصر غائبة */
   q('suppliersCount').textContent=suppliers.length;
   q('productsCount').textContent=products.length;
   q('salesCount').textContent=sales.length;
@@ -1772,7 +1772,6 @@ function renderDashboard(){
   const dashNoInv=q('dashNoInvoiceReturns');
   if(dashNoInv){ if(todayNoInvRet.length){dashNoInv.classList.remove('hidden'); dashNoInv.innerHTML=`<h3>⚠️ مرتجعات بلا فاتورة اليوم</h3><div class="num">${todayNoInvRet.length} بقيمة ${money(todayNoInvRet.reduce((a,r)=>a+Number(r.total||0),0))} ${APP_CONFIG.currency}</div>`;} else dashNoInv.classList.add('hidden'); }
   renderDashboardLists();
-  renderReorderAlerts();
 }
 
 
@@ -2086,12 +2085,6 @@ async function changeUserCredentials(oldId){
   finally{showLoading(false);window.__busy=false;}
 }
 
-
-function renderReorderAlerts(){
-  const rows=products.filter(p=>Number(p.reorder_point||0)>0 && liveTotalQty(p.code)<=Number(p.reorder_point||0));
-  if(q('reorderCount')) q('reorderCount').textContent=rows.length;
-  if(q('reorderBody')) q('reorderBody').innerHTML=rows.slice(0,80).map(p=>`<tr><td class="ltr"><b>${esc(p.code)}</b></td><td>${esc(pLabel(p.code,p.name))}</td><td><b>${money(liveTotalQty(p.code))}</b></td><td>${money(p.reorder_point)}</td><td>${esc(p.supplier_name)}</td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف تحت حد الطلب.</td></tr>';
-}
 
 /* (د) إصلاح جذري: إعادة بناء خيارات زبون البيع كانت تُسقط الاختيار الحالي بصمت
    (fillSupplierSelects تعمل ضمن renderAll بعد كل حفظ) — الآن الاختيار محفوظ + تصفية بحث */

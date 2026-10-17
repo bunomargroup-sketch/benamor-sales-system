@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261017-1912">
+<link rel="stylesheet" href="app.css?v=20261017-2015">
 </head>
 <body class="auth-locked">
   <header>
@@ -88,8 +88,6 @@
           <button class="launch-tile lt-dark" type="button" onclick="openTab('reports')"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
         </div>
         <div class="grid cards">
-          <div class="card"><h3>الفروع</h3><div class="num amount" id="branchesCount">0</div></div>
-          <div class="card"><h3>المخازن</h3><div class="num amount" id="warehousesCount">0</div></div>
           <div class="card"><h3>الموردون</h3><div class="num amount" id="suppliersCount">0</div></div>
           <div class="card"><h3>المنتجات</h3><div class="num amount" id="productsCount">0</div></div>
           <div class="card"><h3>فواتير البيع</h3><div class="num amount" id="salesCount">0</div></div>
@@ -97,12 +95,9 @@
           <div class="card"><h3>فواتير اليوم</h3><div class="num amount" id="todaySalesCount">0</div></div>
           <div class="card"><h3>ديون الزبائن</h3><div class="num amount total" id="customersDebtTotal">0</div></div>
           <div class="card"><h3>إجمالي أرصدة الموردين</h3><div class="num amount total" id="suppliersBalance">0</div></div>
-          <div class="card"><h3>أصناف تحت حد الطلب</h3><div class="num" id="reorderCount">0</div></div>
           <div class="card hidden" id="dashNoInvoiceReturns" style="grid-column:1/-1;border-color:rgba(217,119,6,.5)"></div>
         </div>
         <div class="panel">
-          <h2>ملخص سريع</h2>
-          <p class="muted">هذه النسخة تشمل المنتجات، الموردين، فواتير الشراء، التحويلات، إنشاء فاتورة جديدة، وطباعة فاتورة عربية.</p>
           <div class="quick-board">
             <div class="quick-group">
               <h2><i class="ti ti-shopping-cart"></i> البيع</h2>
@@ -140,10 +135,6 @@
         <div class="panel">
           <h2>آخر حركات المخزون</h2>
           <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الصنف</th><th>المكان</th><th>الكمية</th></tr></thead><tbody id="dashMovementsBody"></tbody></table></div>
-        </div>
-        <div class="panel">
-          <h2>أصناف تحت حد الطلب</h2>
-          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المخزون الحالي</th><th>حد الطلب</th><th>المورد</th></tr></thead><tbody id="reorderBody"></tbody></table></div>
         </div>
       </section>
 
@@ -566,7 +557,6 @@
             <button class="btn secondary" type="button" onclick="openNoInvoiceReturn()" title="بضاعة بيعت قبل دخول المنظومة تعود اليوم — رجوع مستقل غير مرتبط بفاتورة">↩ مرتجع بدون فاتورة</button>
             <button class="btn secondary" type="button" onclick="convertSelectedSaleToProforma()">تحويل لمبدئية</button>
             <span class="mini" id="selectedSaleInfo">اختر فاتورة من الجدول أولاً</span>
-            <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
             <button class="btn secondary" type="button" onclick="resetTableColumns('salesList')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
           </div>
           <div class="table-scroll"><table><thead><tr><th data-min="110">رقم</th><th data-min="90">التاريخ</th><th data-min="90">الفرع</th><th data-min="140">الزبون</th><th data-min="100">طريقة الدفع</th><th data-min="100">الإجمالي</th><th data-min="100">المدفوع</th><th data-min="90">الدين</th><th data-min="90">هامش</th><th data-min="95">نسبة الهامش</th><th data-min="90">البائع</th></tr></thead><tbody id="salesBody"></tbody></table></div>
@@ -720,7 +710,6 @@
             <button class="btn secondary" type="button" onclick="purchaseListAction('return')" title="إرجاع بضاعة للفاتورة المحددة إلى المورد">↩ إرجاع</button>
             <button class="btn danger" type="button" onclick="purchaseListAction('delete')">🗑 حذف</button>
             <span class="mini" id="purchaseSelHint">حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها</span>
-            <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
             <button class="btn secondary" type="button" onclick="resetTableColumns('purchasesList')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
           </div>
           <div class="table-scroll"><table><thead><tr><th data-min="110">رقم</th><th data-min="90">التاريخ</th><th data-min="140">المورد</th><th data-min="100">المكان</th><th data-min="110">رقم فاتورة المورد</th><th data-min="100">الإجمالي</th><th data-min="100">المدفوع</th><th data-min="90">المتبقي</th><th data-min="90">الحالة</th></tr></thead><tbody id="purchasesBody"></tbody></table></div>
@@ -1588,6 +1577,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261017-1912"></script>
+<script src="app.js?v=20261017-2015"></script>
 </body>
 </html>
