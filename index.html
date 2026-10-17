@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261017-1141">
+<link rel="stylesheet" href="app.css?v=20261017-1406">
 </head>
 <body class="auth-locked">
   <header>
@@ -569,7 +569,7 @@
             <span class="mini ctx-hint"><i class="ti ti-mouse"></i> اضغط بزر الفأرة الأيمن على أي صف لعرض قائمة الإجراءات</span>
             <button class="btn secondary" type="button" onclick="resetTableColumns('salesList')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
           </div>
-          <div class="table-scroll"><table><thead><tr><th data-min="110">رقم</th><th data-min="90">التاريخ</th><th data-min="90">الفرع</th><th data-min="140">الزبون</th><th data-min="100">طريقة الدفع</th><th data-min="100">الإجمالي</th><th data-min="100">المدفوع</th><th data-min="90">الدين</th><th data-min="90">هامش</th><th data-min="90">البائع</th></tr></thead><tbody id="salesBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th data-min="110">رقم</th><th data-min="90">التاريخ</th><th data-min="90">الفرع</th><th data-min="140">الزبون</th><th data-min="100">طريقة الدفع</th><th data-min="100">الإجمالي</th><th data-min="100">المدفوع</th><th data-min="90">الدين</th><th data-min="90">هامش</th><th data-min="95">نسبة الهامش</th><th data-min="90">البائع</th></tr></thead><tbody id="salesBody"></tbody></table></div>
           <div class="list-more-wrap" id="salesOlderWrap"></div>
           <div id="salesTotalsBar" style="display:none;margin-top:10px"></div>
           </div>
@@ -1578,6 +1578,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261017-1141"></script>
+<script src="app.js?v=20261017-1406"></script>
 </body>
 </html>

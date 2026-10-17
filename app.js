@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261017-1141';
+const APP_BUILD='b20261017-1406';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4738,7 +4738,7 @@ function saleListRowHtml(sl){
   const badge=st==='refund'?'<span class="chip refund">مُستردّة</span>':(st==='paid'?'<span class="chip paid">مدفوعة</span>':(st==='partial'?'<span class="chip partial">مدفوعة جزئيًا</span>':'<span class="chip due">غير مدفوعة</span>'));
   const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
   const sellerTd=sellerCell(sl.created_by);   /* (المهمة ٥) */
-  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(payCellText(sl,ctx))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td><td class="amount total">${(()=>{const c=ctx.costBySale?.get(sl.id);return c===undefined?'—':money(Number(sl.total||0)-c);})()}</td>${sellerTd}</tr>`;
+  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(payCellText(sl,ctx))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td>${(()=>{ /* (20261017) نسبة الهامش للجميع على التكلفة (SPEC 0115)، والقيمة للمدير فقط — لا نخفي العمود: أزرار مرتجع «بلا فاتورة» تسكن الخلية المقابلة، وإخفاء عمود يكسر تخطيط الجدول القابل للسحب (درس 20261007d) */ const c=ctx.costBySale?.get(sl.id); if(c===undefined||c===null) return '<td class="amount total">—</td><td class="amount">—</td>'; const mv=Number(sl.total||0)-c, mp=marginOf(Number(sl.total||0),Number(c)); return `<td class="amount total">${isManager()?money(mv):'—'}</td><td class="amount${mv<0?' neg':''}">${money(mp)}%</td>`;})()}${sellerTd}</tr>`;
 }
 function returnListRowHtml(r){
   /* (المهمة ٥) المرتجعات تُعرض داخل نفس جدول الفواتير — تحتاج خلية بائع
@@ -4759,7 +4759,7 @@ function returnListRowHtml(r){
   const noOrig=r.sale_id?'':' <span class="chip due" title="مرتجع بضاعة بيعت قبل دخول المنظومة">بلا فاتورة</span>';
   /* (1976) السطر قابل للتحديد مثل أي فاتورة (data-id + اختيار بنقرة)،
      والنقر المزدوج يعالجه selectSaleRow حسب النوع — بلا ondblclick مكرر هنا. */
-  return `<tr class="${selectedSaleId===r.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="فاتورة إرجاع${orig?' — انقر مرة للمحدد ومرتين للفاتورة الأصلية':' — انقر مرة للمحدد ومرتين لمشاهدة المرتجع'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>${act}</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}</tr>`;
+  return `<tr class="${selectedSaleId===r.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="فاتورة إرجاع${orig?' — انقر مرة للمحدد ومرتين للفاتورة الأصلية':' — انقر مرة للمحدد ومرتين لمشاهدة المرتجع'}"><td class="ltr"><span class="code">↩ ${esc(orig?.invoice_no||String(r.id).slice(0,8))}</span> <span class="chip due">إرجاع</span>${noOrig}<div class="mini ltr">${esc(String(r.id).slice(0,8))}</div></td><td>${esc(r.return_date)}</td><td><span class="${branchChip(r.location_id)}">${esc(l?.name||'—')}</span></td><td><span class="name">${esc(cust?.name||'زبون نقدي')}</span>${cust?.phone?`<div class="mini ltr">${esc(cust.phone)}</div>`:''}</td><td><span class="chip due">مرتجع</span><div class="mini">${esc(retRefundLabel(r.refund_method))}${rec&&rec!=='—'?` · سجّله: ${esc(rec)}`:''}</div></td><td class="amount neg"><b>− ${money(r.total)}</b></td><td>—</td><td>—</td><td>${act}</td><td class="amount">—</td>${sellerCell(rec&&rec!=='—'?rec:r.created_by)}</tr>`;   /* (20261017) خلية نسبة الهامش فارغة للمرتجع — العمود الجديد للفواتير */
 }
 /**** تحديث خفيف بعد الحفظ/التعديل: يجلب جداول «البيع والمخزون» المتحركة فقط بدل loadAll الكامل الثقيل — ويُعاد رسم القوائم فوراً — ويشتغل أيضاً كل 60 ثانية آلياً فتظهر فواتير وتعديلات الأجهزة الأخرى دون تحديث الصفحة يدوياً ****/
 /* ══════════════════ (0080) المزامنة التفاضلية — خفض استهلاك النقل ══════════════════
@@ -5290,29 +5290,31 @@ function renderSales(){
       :`<button class="btn secondary" onclick="loadOlderSales()" title="تحميل فواتير أقدم من النطاق المعروض">تحميل الأقدم</button>`)
     :'';
   const bodyHtml=entries.slice(0,salesListLimit).map(e=>e.kind==='sale'?saleListRowHtml(e.sl):returnListRowHtml(e.r)).join('');
-  q('salesBody').innerHTML=(bodyHtml||'<tr><td colspan="10">لا نتائج ضمن آخر 90 يوماً — حمّل الأقدم</td></tr>');
+  q('salesBody').innerHTML=(bodyHtml||'<tr><td colspan="11">لا نتائج ضمن آخر 90 يوماً — حمّل الأقدم</td></tr>');
   const olderWrap=q('salesOlderWrap'); if(olderWrap) olderWrap.innerHTML=olderBtn;
   const gross=rows.reduce((a,x)=>a+Number(x.total||0),0);
   const retSum=rets.reduce((a,r)=>a+Number(r.total||0),0);
   const totalDue=rows.reduce((a,x)=>a+Math.max(0,Number(x.balance_due||0)),0);
-  const totalMargin=rows.reduce((a,x)=>a+(Number(x.total||0)-((window.__salesRenderCtx?.costBySale?.get(x.id))||0)),0);
+  const totalMargin=rows.reduce((a,x)=>{ /* (20261017) فاتورة بلا أسطر محمّلة ليست ربحاً كاملاً — تُتخطّى لا تُضاف بكامل قيمتها */ const c=window.__salesRenderCtx?.costBySale?.get(x.id); return a+((c===undefined||c===null)?0:(Number(x.total||0)-c)); },0);
   window.__salesListCount=entries.length; refreshSelectedSaleInfo();
-  /* شريط الإجماليات تحت القائمة — للمدير فقط ويتغير تبعاً للفلاتر */
+  /* (20261017) سياق التنقل داخل نافذة مشاهدة الفاتورة: أرقام الفواتير
+     (لا المرتجعات) بترتيب القائمة المعروضة نفسه — الأحدث أولاً */
+  window.__salesListSaleIds=entries.slice(0,salesListLimit).filter(e=>e.kind==='sale').map(e=>e.sl.id);
+  /* شريط الإجماليات تحت القائمة — (20261017) البائع يرى إجمالي فواتيره
+     المعروضة بلا هامش ولا ديون؛ كل البطاقات وإجمالي الهامش للمدير فقط */
   const bar=q('salesTotalsBar');
   if(bar){
-    if(!isManager()){bar.style.display='none';bar.innerHTML='';}
-    else{
-      bar.style.display='';
-      const cur=esc(APP_CONFIG.currency);
-      const chip=(lbl,val,neg)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--card)"><div class="mini">${lbl}</div><b class="${neg?'stock-negative':''}" style="font-size:15px">${val}</b></div>`;
-      bar.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
-        ${chip(`💰 إجمالي الفواتير (${rows.length})`,money(gross)+' '+cur)}
-        ${chip(`↩️ إجمالي فواتير الإرجاع (${rets.length})`,'− '+money(retSum)+' '+cur,true)}
-        ${chip('📊 الصافي بعد الإرجاع',money(gross-retSum)+' '+cur)}
-        ${chip('🧾 ديون الزبائن (المعروضة)',money(totalDue)+' '+cur,Number(totalDue)>0)}
-        ${chip('💹 إجمالي هامش الفواتير',money(totalMargin)+' '+cur,Number(totalMargin)<0)}
-      </div><div class="mini" style="margin-top:4px">القيم تنعكس فورياً مع كل فلتر أعلاه — وتظهر هذه البطاقة للمدير فقط.</div>`;
-    }
+    const mgr=isManager();
+    bar.style.display='';
+    const cur=esc(APP_CONFIG.currency);
+    const chip=(lbl,val,neg)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--card)"><div class="mini">${lbl}</div><b class="${neg?'stock-negative':''}" style="font-size:15px">${val}</b></div>`;
+    bar.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+      ${chip(`💰 إجمالي الفواتير (${rows.length})`,money(gross)+' '+cur)}
+      ${mgr?chip(`↩️ إجمالي فواتير الإرجاع (${rets.length})`,'− '+money(retSum)+' '+cur,true):''}
+      ${mgr?chip('📊 الصافي بعد الإرجاع',money(gross-retSum)+' '+cur):''}
+      ${mgr?chip('🧾 ديون الزبائن (المعروضة)',money(totalDue)+' '+cur,Number(totalDue)>0):''}
+      ${mgr?chip('💹 إجمالي هامش الفواتير',money(totalMargin)+' '+cur,Number(totalMargin)<0):''}
+    </div><div class="mini" style="margin-top:4px">${mgr?'القيم تنعكس فورياً مع كل فلتر أعلاه — وتظهر تفاصيل الهامش للمدير فقط':'إجمالي فواتيرك المعروضة يتغيّر مع كل فلتر أعلاه — الهامش يظهر للمدير فقط'}</div>`;
   }
 }
 
@@ -6910,6 +6912,11 @@ function ensureSaleViewDetailsModal(){
         <button class="btn secondary" type="button" id="svdEditBtn" style="display:none" onclick="svdEdit()" title="فتح الفاتورة للتعديل حسب صلاحيتك">✏️ تعديل</button>
         <button class="btn secondary" type="button" onclick="q('saleViewDetailsModal').classList.remove('show')">إغلاق</button>
       </div></div>
+    <div class="row" id="svdPager" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;padding:0 0 8px">
+      <button class="btn secondary" type="button" id="svdPrevBtn" onclick="svdGo(-1)" title="الفاتورة السابقة في القائمة (الأحدث أولاً)">➡ السابقة</button>
+      <span class="mini" id="svdPos" style="flex:1;text-align:center">—</span>
+      <button class="btn secondary" type="button" id="svdNextBtn" onclick="svdGo(1)" title="الفاتورة اللاحقة في القائمة (الأقدم)">اللاحقة ⬅</button>
+    </div>
     <div id="svdBody" style="max-height:72vh;overflow:auto"></div>
   </div>`;
   document.body.appendChild(d);
@@ -6922,6 +6929,25 @@ function svdOpenSub(fn){
 function svdPrint(){const id=viewDetailsCtxId; if(!id)return; printSale(id);}
 function svdPrintStyle(){const id=viewDetailsCtxId; if(!id)return; viewSaleInvoice(id);}
 function svdEdit(){const id=viewDetailsCtxId; if(!id)return; q('saleViewDetailsModal').classList.remove('show'); openSaleForEdit(id);}
+/* (20261017) التنقل بين الفواتير من داخل نافذة المشاهدة — بترتيب قائمة
+   الفواتير المعروضة نفسه (الأحدث أولاً): «السابقة» = الصف الأعلى،
+   «اللاحقة» = الصف الأدنى. فاتورة فُتحت من خارج القائمة (تقرير/زبون)
+   بلا سياق قائمة فتُخفى الأزرار بدل تعطيلها بلا معنى */
+function svdGo(dir){
+  const ids=window.__salesListSaleIds||[], i=ids.indexOf(viewDetailsCtxId);
+  if(i<0) return;
+  const nid=ids[i+dir];
+  if(nid) viewSaleDetails(nid);
+}
+function svdUpdatePager(id){
+  const pg=q('svdPager'); if(!pg) return;
+  const ids=window.__salesListSaleIds||[], i=ids.indexOf(id);
+  if(i<0){ pg.style.display='none'; return; }
+  pg.style.display='';
+  q('svdPos').textContent='فاتورة '+(i+1)+' من '+ids.length+' — بترتيب القائمة';
+  q('svdPrevBtn').disabled=(i<=0);
+  q('svdNextBtn').disabled=(i>=ids.length-1);
+}
 async function viewSaleDetails(id){
   ensureSaleViewDetailsModal();
   try{
@@ -6934,6 +6960,7 @@ async function viewSaleDetails(id){
     viewDetailsCtxId=id;
     const linkedReturns=saleReturns.filter(r=>String(r.sale_id)===String(id));
     renderSaleViewDetailsData(sl,items,linkedReturns);
+    svdUpdatePager(id);
     q('saleViewDetailsModal').classList.add('show'); modalToTop(q('saleViewDetailsModal'));
     /* (طلب المالك) سجل التعديلات داخل الفاتورة نفسها — من الخادم */
     if(!offline) fillSaleEditLog(id).catch(e=>console.warn('edit log',e));
@@ -6972,13 +6999,19 @@ function renderSaleViewDetailsData(sl,items,linkedReturns){
   const paid=Number(sl.paid_amount||0), balance=Number(sl.balance_due||0);
   const cur=esc(APP_CONFIG.currency);
   const retT=linkedReturns.reduce((a,r)=>a+Number(r.total||0),0);
+  /* (20261017) نفس تعريف نموذج الإدخال تماماً (SPEC 0115/0116): التكلفة
+     لحظة البيع (unit_cost_at_sale وإلا الحالية)، قيمة الهامش للسطر كاملاً
+     (×الكمية)، والنسبة على التكلفة لا على سعر البيع — كانت القديمة
+     (÷سعر البيع) فتظهر أقل من هامش الإنشاء دائماً */
+  const costSum=items.reduce((a,it)=>a+Number(it.qty||0)*saleLineCost(it),0);
+  const mTot=Number(sl.total||0)-costSum, mPctTot=marginOf(Number(sl.total||0),costSum);
   const rows=items.map((it,i)=>{
     const codeSafe=String(it.product_code||'').replace(/'/g,"\\'");
-    const cost=Number(productCost(it.product_code)||0), price=Number(it.unit_price||0);
-    const margin=price-cost, mPct=price>0?margin/price*100:0;
+    const cost=saleLineCost(it), price=Number(it.unit_price||0);
+    const margin=(price-cost)*Number(it.qty||0), mPct=marginOf(price,cost);
     const avail=stock.filter(st=>String(st.location_id)===String(sl.location_id)&&String(st.product_code)===String(it.product_code)).reduce((a,st)=>a+Number(st.qty||0),0);
     const discTxt=it.discount_text?String(it.discount_text):it.line_discount?money(it.line_discount):'—';
-    return `<tr><td class="ltr"><b>${i+1}. ${esc(it.product_code)}</b></td><td>${esc(pLabel(it.product_code,it.product_name))}</td><td style="text-align:center">${money(it.qty)}</td><td style="text-align:center" class="ltr">${money(price)}</td><td style="text-align:center" class="ltr">${money(margin)}</td><td style="text-align:center" class="ltr">${mPct.toFixed(1)}%</td><td class="mini" style="text-align:center">${esc(discTxt)}</td><td class="mini" style="text-align:center">${money(avail)}</td><td style="text-align:center"><b>${money(it.line_total)}</b></td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:3px 6px" title="حركات المنتج على فروعه ومخازنه" onclick="svdOpenSub(()=>openProductMovements('${codeSafe}'))">📜</button> <button class="btn secondary" type="button" style="padding:3px 6px" title="أرصدة المنتج الآن" onclick="svdOpenSub(()=>showProductStockSummary('${codeSafe}','all'))">🏬</button></td></tr>`;
+    return `<tr><td class="ltr"><b>${i+1}. ${esc(it.product_code)}</b></td><td>${esc(pLabel(it.product_code,it.product_name))}</td><td style="text-align:center">${money(it.qty)}</td><td style="text-align:center" class="ltr">${money(price)}</td><td style="text-align:center" class="ltr"><b class="${margin>=0?'stock-positive':'stock-negative'}">${money(margin)}</b></td><td style="text-align:center" class="ltr">${money(mPct)}%</td><td class="mini" style="text-align:center">${esc(discTxt)}</td><td class="mini" style="text-align:center">${money(avail)}</td><td style="text-align:center"><b>${money(it.line_total)}</b></td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:3px 6px" title="حركات المنتج على فروعه ومخازنه" onclick="svdOpenSub(()=>openProductMovements('${codeSafe}'))">📜</button> <button class="btn secondary" type="button" style="padding:3px 6px" title="أرصدة المنتج الآن" onclick="svdOpenSub(()=>showProductStockSummary('${codeSafe}','all'))">🏬</button></td></tr>`;
   }).join('')||'<tr><td colspan="10">لا توجد أسطر</td></tr>';
   q('svdBody').innerHTML=`
     <div class="sale-topbar" style="border-radius:10px;margin-bottom:10px">
@@ -6999,6 +7032,8 @@ function renderSaleViewDetailsData(sl,items,linkedReturns){
       ${svdLine('المجموع قبل الخصم العام',money(subtotal)+' '+cur)}
       ${svdLine('خصم الفاتورة العام',money(sl.discount)+' '+cur)}
       ${svdLine('الإجمالي',money(sl.total)+' '+cur)}
+      ${svdLine('الهامش الإجمالي للفاتورة',money(mTot)+' '+cur,Number(mTot)<0?'stock-negative':'')}
+      ${svdLine('نسبة الهامش الإجمالي',money(mPctTot)+'% على التكلفة')}
       ${svdLine('المدفوع',money(paid)+' '+cur)}
       ${svdLine('المتبقي',money(balance)+' '+cur,Number(balance)>0?'stock-negative':'')}
       ${payRows.length?svdLine('تفصيل الدفعات',`<span class="mini">${esc(paymentBreakdownText(payRows))}</span>`):''}
