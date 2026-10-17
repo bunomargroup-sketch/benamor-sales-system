@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261017-1608';
+const APP_BUILD='b20261017-1912';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -11242,14 +11242,25 @@ function applyDomSort(tbody,idx,dir){
   if(!tbody) return;
   const rows=[...tbody.children].filter(r=>r.tagName==='TR' && r.children.length>1);
   if(rows.length<2) return;
-  rows.sort((a,b)=>{
+  const sorted=[...rows].sort((a,b)=>{
     const va=sortCellValue(a,idx), vb=sortCellValue(b,idx);
     const c=(typeof va==='number'&&typeof vb==='number') ? va-vb : String(va).localeCompare(String(vb),'ar');
     return dir==='asc'?c:-c;
   });
+  /* (20261017) تقرير المالك: «ترتيب الفواتير يضطرب الجدول ولا تُشاهد
+     الفاتورة بالضغط مرتين». السبب الجذري: appendChild يولّد سجلات childList
+     حتى حين لا يتغيّر الترتيب، فيستيقظ مراقب watchTbodySort على فرزه هو
+     نفسه ويُعيد جدولة applyDomSort — حلقة لا تنتهي (~400 دورة/ثانية،
+     وعلى صفحة الإنتاج أثقل: الجدول يرتجف والخيط الرئيسي مشغول فيتجاوز
+     فرق النقرتين نافذة الـ600مللي فتُهمل مشاهدة الفاتورة). العلاج: إن
+     كان الترتيب المطلوب هو الواقع فلا يُمسّ الـDOM أصلاً — تنطفئ الحلقة
+     من نفسها، وثبات الترتيب عبر إعادة الرسم يبقى كما صُمّم. */
+  let already=true;
+  for(let i=0;i<sorted.length;i++){ if(sorted[i]!==rows[i]){ already=false; break; } }
+  if(already) return;
   __sortingNow=true;
   const frag=document.createDocumentFragment();
-  rows.forEach(r=>frag.appendChild(r));
+  sorted.forEach(r=>frag.appendChild(r));
   tbody.appendChild(frag);
   __sortingNow=false;
 }
