@@ -7,14 +7,15 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261017-2015';
+const APP_BUILD='b20261018-1223';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
 function authBearer(){return (authSession&&authSession.access_token)||SUPABASE_KEY} const H = { apikey: SUPABASE_KEY, get Authorization(){return `Bearer ${authBearer()}`}, 'Content-Type':'application/json', Prefer:'return=representation' };
-let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], transferItems=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], stockCounts=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costViewRows=[];
-let costViewMap=null; /* (0076) تكلفة مرجعية من الخادم — أولوية على الحساب المحلي */
+let locations=[], suppliers=[], ledger=[], payments=[], stock=[], purchases=[], purchaseItems=[], products=[], transfers=[], transferItems=[], sales=[], saleItems=[], salePayments=[], proformas=[], proformaItems=[], saleReturns=[], saleReturnItems=[], purchaseReturns=[], purchaseReturnItems=[], stockWaste=[], stockWasteItems=[], stockMovements=[], stockCounts=[], customers=[], customerLedger=[], userRoles=[], financeAccounts=[], financeMovements=[], dailyCashClosings=[], expenseCategories=[], expenses=[], employees=[], salaryPayments=[], compositeItems=[], costMovements=[];
+/* (20261018) costMovements: حركات التكلفة كاملة التاريخ (تسويات/جرد/تالف/مرتجعات)
+   لمحرك المتوسط المتحرك — مقابل stockMovements المخصصة للعرض (آخر 50 فقط). */
 /* (0060) قاعدة التكلفة: متوسط مرجّح محسوب من فواتير الشراء في المنظومة القديمة
    حتى تاريخ القطع. المنظومة الجديدة تكمل المتوسط من هذه القاعدة بما اشتُري بعدها. */
 var legacyCostRows=[], legacyCostMap=null, LEGACY_COST_AS_OF='';
@@ -441,7 +442,7 @@ function persistEssentialCache(data){
 }
 function saveEssentialCacheNow(){
   try{
-    const data={saved_at:new Date().toISOString(),locations,suppliers,stock,purchases,purchaseItems,products,transfers,sales,saleItems,salePayments,customers,customerLedger,userRoles,financeAccounts,financeMovements,expenseCategories,expenses,dailyCashClosings};
+    const data={saved_at:new Date().toISOString(),locations,suppliers,stock,purchases,purchaseItems,products,transfers,sales,saleItems,salePayments,customers,customerLedger,userRoles,financeAccounts,financeMovements,expenseCategories,expenses,dailyCashClosings,costMovements};
     persistEssentialCache(data);
   }catch(e){console.warn('essential cache save failed',e)}
 }
@@ -466,7 +467,7 @@ function loadEssentialCache(){
 }
 function applyEssentialCache(c){
   if(!c) return false;
-  locations=c.locations||[]; suppliers=c.suppliers||[]; stock=c.stock||[]; purchases=c.purchases||[]; purchaseItems=c.purchaseItems||[]; products=c.products||[]; transfers=c.transfers||[]; sales=c.sales||[]; saleItems=c.saleItems||[]; salePayments=c.salePayments||[]; customers=c.customers||[]; customerLedger=c.customerLedger||[]; userRoles=c.userRoles||[]; financeAccounts=c.financeAccounts||[]; financeMovements=c.financeMovements||[]; expenseCategories=c.expenseCategories||[]; expenses=c.expenses||[]; dailyCashClosings=c.dailyCashClosings||[];
+  locations=c.locations||[]; suppliers=c.suppliers||[]; stock=c.stock||[]; purchases=c.purchases||[]; purchaseItems=c.purchaseItems||[]; products=c.products||[]; transfers=c.transfers||[]; sales=c.sales||[]; saleItems=c.saleItems||[]; salePayments=c.salePayments||[]; customers=c.customers||[]; customerLedger=c.customerLedger||[]; userRoles=c.userRoles||[]; financeAccounts=c.financeAccounts||[]; financeMovements=c.financeMovements||[]; expenseCategories=c.expenseCategories||[]; expenses=c.expenses||[]; dailyCashClosings=c.dailyCashClosings||[]; costMovements=c.costMovements||[];
   ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter','stockCategoryFilter','stockBrandFilter','stockSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
   buildProductCostIndex(); buildProductSearchIndex();
   renderAll();
@@ -1140,7 +1141,10 @@ function initOfflineQueue(){
    وإلا يعود النمط الكلاسيكي تلقائياً (لا كسر قبل تشغيل SQL 0076). */
 /* (0077) pos_finance_account_balances خارج هذه القائمة: الخادم يرفضه (TABLE_NOT_ALLOWED)
    ووجوده هنا كان يُسقط الجلب الجماعي للنواة كلها. يُجلب وحده بطلب كلاسيكي واحد. */
-const CORE_TABLES=['pos_locations','pos_supplier_balances','pos_user_roles','pos_product_stock_summary','pos_stock','pos_expense_categories','pos_composite_items','pos_product_avg_cost','pos_product_legacy_cost'];
+const CORE_TABLES=['pos_locations','pos_supplier_balances','pos_user_roles','pos_product_stock_summary','pos_stock','pos_expense_categories','pos_composite_items','pos_product_legacy_cost'];
+/* (20261018) سُحبت pos_product_avg_cost من النواة: وجهة النظر كانت متوسط عمر
+   كامل يتجاهل الجرد والتسويات (تقرير ARSB80298)، والمحرك المحلي صار المرجعية
+   الوحيدة — وأصلحت هجرة 0146 تعريفها في الخادم لمن يحتاجها إدارياً (0117). */
 const HEAVY_SALES=['pos_sales','pos_sale_items','pos_sale_payments'];
 const HEAVY_REST=['pos_supplier_ledger','pos_supplier_payments','pos_purchases','pos_purchase_items','pos_stock_transfers','pos_proformas','pos_proforma_items','pos_sale_returns','pos_sale_return_items','pos_stock_counts','pos_stock_movements','pos_customer_balances','pos_customer_ledger','pos_finance_movements','pos_daily_cash_closings','pos_expenses','pos_employees','pos_salary_payments','pos_purchase_returns','pos_purchase_return_items','pos_stock_waste','pos_stock_waste_items'];
 
@@ -1165,23 +1169,30 @@ async function tryBulk(tables, depth=0){
   }
 }
 
-/* (0076) المرجعية الواحدة للتكلفة: وجهة نظر الخادم إن وُجدت، وإلا المحاكاة المحلية (متوسط متحرك) */
+/* (20261018) المرجعية الواحدة للتكلفة هي المحاكاة المحلية لكل الأصناف.
+   وجهة نظر الخادم لم تعد تُجلب إلى التطبيق: كانت متوسط عمر كامل يتجاهل
+   الجرد والتسويات ويطغى على الحساب المحلي للأصناف غير المهاجَرة (ARSB80298). */
 function applyCostReference(){
   /* (0060) قاعدة التكلفة القديمة أولاً: هي المحسوبة من فواتير الشراء الفعلية */
   legacyCostMap=(legacyCostRows||[]).length
     ? new Map(legacyCostRows.map(r=>[String(r.code||'').trim().toLowerCase(), r]))
     : null;
   LEGACY_COST_AS_OF=String((legacyCostRows||[])[0]?.as_of||'').slice(0,10);
-  if((costViewRows||[]).length){
-    costViewMap=new Map(costViewRows.map(r=>[String(r.code||'').trim().toLowerCase(), Number(r.avg_cost||0)]));
-    productCostCache=new Map();
-  } else {
-    costViewMap=null;
-  }
-  /* مع قاعدة قديمة: نبني دائماً لأن المحاكاة تنطلق منها وتكمل ما بعد تاريخ القطع */
-  if(legacyCostMap || !costViewMap){
-    try{ buildProductCostIndex(); }catch(e){ console.warn('build product cost index', e); }
-  }
+  try{ buildProductCostIndex(); }catch(e){ console.warn('build product cost index', e); }
+}
+
+/* (20261018) حركات التكلفة للتشغيل الكامل: تسويات وجرد وتالف ومرتجعات موردين
+   ومرتجعات زبائن مستقلة — كامل التاريخ، لأن stockMovements للعرض فقط (آخر 50).
+   البيع والشراء والتحويلات لا تُجلب هنا: الأولان يُحسبان من بنود الفواتير،
+   والتحويلات محايدة على مستوى المنظومة (طرد مقابل وارد لكل صنف). */
+async function loadCostMovements(){
+  const r=await apiAll('pos_stock_movements',
+    '?select=product_code,movement_type,qty_change,movement_date,reference_table'+
+    '&movement_type=in.(adjustment,waste,return_supplier,return_customer)'+
+    '&order=movement_date.asc,created_at.asc,id.asc');
+  /* فراغٌ بعد نجاح سابق = فشل مؤقت في الشبكة: نُبقي آخر بيانات سليمة */
+  if(r && r.length) costMovements=r;
+  return costMovements;
 }
 
 async function loadCore(){
@@ -1189,13 +1200,14 @@ async function loadCore(){
   try{ const _c=loadEssentialCache(); if(_c) applyEssentialCache(_c); }catch(cacheErr){ console.warn('فشل عرض البيانات المحفوظة محليًا — سيتم التحديث من الخادم',cacheErr); }
   const [bulk,finAcc]=await Promise.all([
     tryBulk(CORE_TABLES),
-    apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return null})
+    apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return null}),
+    loadCostMovements()
   ]);
   if(bulk){
     locations=bulk.pos_locations||[]; suppliers=bulk.pos_supplier_balances||[]; userRoles=bulk.pos_user_roles||[];
     products=bulk.pos_product_stock_summary||[]; stock=bulk.pos_stock||[];
     financeAccounts=finAcc||financeAccounts; expenseCategories=bulk.pos_expense_categories||[];
-    compositeItems=bulk.pos_composite_items||[]; costViewRows=bulk.pos_product_avg_cost||[];
+    compositeItems=bulk.pos_composite_items||[];
     legacyCostRows=bulk.pos_product_legacy_cost||legacyCostRows;
   } else {
     [locations,suppliers,userRoles,products,stock,financeAccounts,expenseCategories,compositeItems]=await Promise.all([
@@ -1208,7 +1220,6 @@ async function loadCore(){
       apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
       apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc').catch(e=>{return []}),
     ]);
-    costViewRows=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}).catch(()=>[]);
     legacyCostRows=await apiAll('pos_product_legacy_cost','?select=code,cost,cost_source,purchases,qty_as_of,last_price,last_purchase,as_of&order=code.asc')
       .catch(e=>{console.warn('قاعدة التكلفة غير مُنصَّبة — شغّل SQL 0060',e); return legacyCostRows;});
   }
@@ -1276,7 +1287,7 @@ async function loadHeavy(){
   /* (0138) مستندات التحويل المالي — آخر 100 (الجدول لا يوجد قبل تشغيل 0138 فنُلطّف الفشل) */
   api('pos_treasury_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc,id.asc&limit=100'}).then(r=>{if(r){treasuryTransfers=r;treasuryTransfersLoaded=true;}}).catch(e=>{console.warn('treasury transfers not setup yet — شغّل SQL 0138',e);});
   await reapplyOfflineQueueLocally(); /* فواتير الطابور المحلي تبقى ظاهرة ومخصومة من المخزون بعد أي تحديث من الخادم */
-  if(!costViewMap) applyCostReference(); /* بلا وجهة نظر الخادم: إعادة بناء متوسط متحرك من التاريخ الكامل */
+  applyCostReference(); /* (20261018) إعادة البناء دائماً بعد اكتمال التاريخ — التكلفة محلية بالكامل */
   markAllTabsDirty();
   renderTab(activeTabId(), true);
   saveEssentialCache();
@@ -1702,7 +1713,7 @@ const REFRESH_SOURCES={
   priceReviewQueue: {tabs:['priceReview'],                                      run:async()=>{ await loadPriceReviewQueue(); }},
   stock:            {tabs:['stock','products','stockCount','transfers'],        run:async()=>{ const r=await apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc'); if(r) stock=r; }},
   composites:       {tabs:['composites','products'],                            run:async()=>{ const r=await apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc'); if(r) compositeItems=r; }},
-  cost:             {tabs:['reports','products'],                               run:async()=>{ const r=await api('pos_product_avg_cost',{qs:'?select=*&order=code.asc'}); if(r){ costViewRows=r; applyCostReference(); } }},
+  cost:             {tabs:['reports','products'],                               run:async()=>{ await loadCostMovements(); applyCostReference(); }}, /* (20261018) حركات التكلفة بدل وجهة النظر القديمة */
   suppliers:        {tabs:['suppliers','purchases','purchasesList','ledger','payments'],        run:async()=>{ const r=await api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}); if(r){ suppliers=r; fillSupplierSelects(); } }},
   supplierLedger:   {tabs:['ledger','suppliers'],                               run:async()=>{ const r=await api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}); if(r) ledger=r; }},
   supplierPayments: {tabs:['payments','ledger'],                                run:async()=>{ await fetchSupplierPaymentsList(); }},
@@ -4950,7 +4961,7 @@ async function ensureSalesHistory(fromDate){
     }
     __salesHorizon = from;
     if(older && older.length) __oldestSaleDate=String(older[older.length-1].sale_date||'').slice(0,10)||__oldestSaleDate; /* (20261005) الدفعة مرتبة desc ⇒ الأخير هو الأقدم */
-    if(legacyCostMap||!costViewMap){ try{buildProductCostIndex();}catch(_e){} }
+    try{buildProductCostIndex();}catch(_e){}
     saveEssentialCache?.();
     setSyncState?.('online','متصل - تم تنزيل المبيعات الأقدم');
     return true;
@@ -5141,7 +5152,7 @@ async function refreshSalesDomain(o={}){
       if(st) __deltaSince=st;
 
       const touched=(chSales||[]).length+(chStock||[]).length+(chLedger||[]).length+(chReturns||[]).length;
-      if(touched && !costViewMap){ try{buildProductCostIndex();}catch(_e){} }
+      if(touched){ try{buildProductCostIndex();}catch(_e){} }
       if(touched && !o.skipRender) refreshSalesDomainRender();
       saveEssentialCache?.();
       markSynced();
@@ -5184,7 +5195,7 @@ async function refreshSalesDomain(o={}){
   const st=[maxStamp(sales,'updated_at'), maxStamp(stock,'updated_at')].filter(Boolean).sort().slice(-1)[0];
   __deltaSince = st || new Date().toISOString();
 
-  if(legacyCostMap||!costViewMap){try{buildProductCostIndex();}catch(_e){}} /* (0076) وجهة نظر الخادم أولوية — لا محاكاة محلية بلا داعي */
+  try{buildProductCostIndex();}catch(_e){} /* (20261018) دائماً — لا وجهة نظر خادم تسبق المحاكاة */
   if(!o.skipRender) refreshSalesDomainRender();
   saveEssentialCache?.();
   markSynced();   /* (العمل دون اتصال) */
@@ -10342,13 +10353,39 @@ function inDateRange(date, from, to){
 }
 let productCostCache=new Map();
 function buildProductCostIndex(){
-  // المتوسط المرجّح المتحرك: محاكاة زمنية لكل حركات الشراء والبيع
+  // المتوسط المرجّح المتحرك: محاكاة زمنية لكل ما يمسّ الكمية والتكلفة
   // الشراء يضيف الكمية بقيمته الفعلية — البيع يخصم بالمتوسط الجاري —
-  // المرتجعات تُرجع بالمتوسط الجاري. التكلفة الناتجة تعكس المخزون المتبقي فعلياً.
+  // المرتجعات تُرجع بالمتوسط الجاري — والجرد والتسويات والتالف ومرتجعات
+  // الموردين تدخل المحاكاة بالأساس الموثّق أدناه (20261018).
+  // التكلفة الناتجة تعكس المخزون المتبقي فعلياً — لا متوسط عمر كامل.
   productCostCache=new Map();
   const st=new Map(); const events=[];
   const purchaseDate=new Map((purchases||[]).map(p=>[p.id,String(p.purchase_date||p.created_at||'')]));
   const saleDate=new Map((sales||[]).map(x=>[x.id,String(x.sale_date||x.created_at||'')]));
+  /* (20261018) حركات المخزون تدخل المحاكاة — الأساس الموثّق لكل نوع:
+     • تسوية زائدة / فائض جرد (adjustment بكمية موجبة): وارد بالمتوسط الجاري — كالمرتجع،
+       لأن التسوية تُثبت وجود وحدات مخزنية أصلية لا تكلفة شراء جديدة.
+     • تسوية ناقصة / عجز جرد / بضاعة تالفة / مرتجع مورد: صادر بالمتوسط الجاري — كالبيع.
+     • مرتجع زبون مستقل (return_customer بمرجع pos_sale_returns): وارد بالمتوسط الجاري.
+     • مرتجع زبون داخل فاتورة (return_customer بمرجع pos_sales): مغطى أصلاً ببنود
+       البيع السالبة في saleItems — يُتجاهل هنا وإلا ازدوج العدّ.
+     • بيع / شراء: يُحسبان من بنود الفواتير بالقيمة الفعلية — لا من جدول الحركات.
+     • تحويلات (transfer_in/out): محايدة على مستوى المنظومة كلها — وارد هنا صادر
+       هناك بنفس الكمية، فتُتجاهل (0146 يتحقق من توازنها لكل صنف في الخادم).
+     التاريخ يُقتطع إلى اليوم (10 خانات) مثل بقية الأحداث، وعند تساوي اليوم
+     تُطبَّق الحركات أولاً ثم المشتريات ثم المبيعات — التسوية تصحيح لحالة ما
+     قبل حركة اليوم (ARSB80298: تسوية 10-06 تعود بالمتوسط القديم 140 لا بسعر
+     فاتورة اليوم 275). */
+  (costMovements||[]).forEach(m=>{
+    const q=Number(m.qty_change||0); if(!q) return;
+    const typ=String(m.movement_type||''), ref=String(m.reference_table||'');
+    let k=null;
+    if(typ==='adjustment') k=q>0?'ret':'out';
+    else if(typ==='waste'||typ==='return_supplier') k='out';
+    else if(typ==='return_customer'&&ref==='pos_sale_returns') k='ret';
+    if(!k) return;
+    events.push({t:String(m.movement_date||m.created_at||'').slice(0,10),k,code:String(m.product_code||'').trim().toLowerCase(),q:Math.abs(q)});
+  });
   (purchaseItems||[]).forEach(it=>{
     const q=Number(it.qty||0); if(!q)return;
     events.push({t:purchaseDate.get(it.purchase_id)||'',k:q>0?'in':'out',code:String(it.product_code||'').trim().toLowerCase(),q:Math.abs(q),c:Number(it.line_total||0)/Math.abs(q)});
@@ -10377,7 +10414,14 @@ function buildProductCostIndex(){
     if(e.k==='in'){ o.q+=e.q; o.v+=e.q*(e.c||0); }
     else{
       const avg=o.q>0.0000001?o.v/o.q:(o.avg||0);
-      if(e.k==='out'){ o.v-=e.q*avg; o.q-=e.q; }
+      if(e.k==='out'){
+        /* (20261018) الصادر لا ينزل بالرصيد تحت الصفر: ما لا يغطيه الرصيد يُتجاهل.
+           بذرة المهاجَرة قد تكون ناقصة (تقرير ARSB80298: 6 مسجّلة و7 مبيعة فعلياً)
+           فلا يجوز أن «يستدين» المحاكي وحدات وهمية تُخصم لاحقاً من قيمة الشراء
+           الجديد وتضخّم التكلفة — الحقيقة المادية أن البيع لم يكن ممكناً بلا رصيد. */
+        const take=Math.min(e.q,Math.max(o.q,0));
+        o.v-=take*avg; o.q-=take;
+      }
       else { o.v+=e.q*avg; o.q+=e.q; }
       if(avg>0)o.avg=avg;
       if(Math.abs(o.q)<0.0000001){o.q=0;o.v=0;}
@@ -10395,7 +10439,7 @@ function buildProductCostIndex(){
 function costTip(code){
   const key=String(code||'').split('|')[0].trim().toLowerCase();
   const lg=legacyCostMap&&legacyCostMap.get(key);
-  if(!lg) return costViewMap&&costViewMap.has(key)?'متوسط مرجّح من مشتريات المنظومة':'سعر الشراء المسجَّل في بطاقة الصنف';
+  if(!lg) return 'متوسط متحرك من مشتريات وحركات المنظومة — أو سعر البطاقة عند غيابها';
   const n=Number(lg.purchases||0);
   if(lg.cost_source!=='wac'||!n) return 'آخر سعر شراء — لا توجد فواتير شراء لهذا الصنف';
   const d=String(lg.last_purchase||'').slice(0,10);
@@ -10411,7 +10455,7 @@ function productCost(code){
     if(productCostCache.has(key)) return productCostCache.get(key);
     const c=Number(legacyCostMap.get(key).cost||0); if(c>0){ productCostCache.set(key,c); return c; }
   }
-  if(costViewMap){ const v=costViewMap.get(key); if(v!==undefined) return v; } /* (0076) وجهة نظر الخادم مرجعية أولى */
+  /* (20261018) بلا وجهة نظر خادم: المحاكاة المحلية (مع حركات الجرد والتسويات) هي المرجع */
   if(productCostCache.has(key)) return productCostCache.get(key);
   const hist=(saleItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===key && Number(x.unit_cost_at_sale||0)>0);
   let result=0;
