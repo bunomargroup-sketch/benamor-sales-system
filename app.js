@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261019-1631';
+const APP_BUILD='b20261019-1721';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10621,10 +10621,22 @@ function getDailyCashData(opts={}){
   const inR = d => !!d && d>=from && d<=to;
   const daySalesArr=sales.filter(s=>inR(s.sale_date) && (!branch||s.location_id===branch));
   const salesById={}; daySalesArr.forEach(s=>salesById[s.id]=s);
+  /* (قاعدة المالك 2026-10-19) التحصيل يُعدّ يوم قبضه لا يوم فاتورته:
+     حوض «المبيعات» لا يأخذ إلا دفعةً تاريخها = تاريخ فاتورتها، وكل
+     دفعة أخرى تحصيل دين يدخل «دفعات الزبائن» بحركته المالية يوم قبضه.
+     وجود صفوف دفع أصلاً (ولو كلها خارج يوم الفاتورة) يلغي بديل
+     paid_amount — وإلا رجع المبلغ كله ليوم الفاتورة من الباب الخلفي. */
+  const d10=d=>String(d||'').slice(0,10);
+  const isSaleCollectionMove=m=>{
+    if(m.movement_type!=='sale_payment'||m.direction!=='in'||m.reference_table!=='pos_sales'||!m.reference_id) return false;
+    const inv=salesById[m.reference_id];
+    return !inv || d10(inv.sale_date)!==d10(m.movement_date);
+  };
   const salesPay=dailyCashEmpty(), expensesPay=dailyCashEmpty(), customerPay=dailyCashEmpty(), supplierPay=dailyCashEmpty(), refundsPay=dailyCashEmpty();
   Object.values(salesById).forEach(sl=>{
-    const rows=salePayments.filter(p=>p.sale_id===sl.id);
-    if(rows.length) rows.forEach(p=>dailyCashAdd(salesPay,p.payment_method,p.amount));
+    const allRows=salePayments.filter(p=>p.sale_id===sl.id);
+    const rows=allRows.filter(p=>d10(p.payment_date)===d10(sl.sale_date));
+    if(allRows.length) rows.forEach(p=>dailyCashAdd(salesPay,p.payment_method,p.amount));
     else if(Number(sl.paid_amount||0)>0) dailyCashAdd(salesPay,sl.payment_method,Math.abs(Number(sl.paid_amount||0)));
   });
   const dayExpenses=expenses.filter(e=>{
@@ -10639,14 +10651,12 @@ function getDailyCashData(opts={}){
     const a=financeAccounts.find(x=>x.id===m.account_id); if(branch && a?.location_id!==branch) return;
     const method=dailyCashMethodFromAccount(m.account_id);
     if(m.movement_type==='customer_payment' && m.direction==='in'){ dailyCashAdd(customerPay,method,m.amount); dayCustomerPayMoves.push({m,method}); }
-    /* (إغلاق 20261001 — مستعجل) تحصيل على فاتورة قائمة عليها دين (post_invoice_payment ⇒
-       حركة sale_payment بتاريخ الدفع على فاتورة ليست من هذا اليوم): كان يدخل الصندوق
-       ولا يدخل أي حوض في التقرير — المبيعات تُعدّ فواتير اليوم فقط (sale_date)،
-       ودفعات الزبائن تُعدّ customer_payment فقط ⇒ فرق (عجز) يساوي مبلغ التحصيل.
-       تُحسب هنا «دفعات زبائن» لأن كاش اليوم دخل فعلاً بسبب زبون. استثناء !salesById:
-       تحصيل فواتير اليوم عدّده قسم المبيعات عبر salePayments فلا يُكرر. */
-    if(m.movement_type==='sale_payment' && m.direction==='in' && m.reference_table==='pos_sales'
-       && m.reference_id && !salesById[m.reference_id]){ dailyCashAdd(customerPay,method,m.amount); dayCustomerPayMoves.push({m,method}); }
+    /* تحصيل دين على فاتورة (post_invoice_payment ⇒ حركة sale_payment
+       بتاريخ القبض): يدخل «دفعات الزبائن» في إغلاق يوم قبضه متى اختلف
+       يوم الحركة عن يوم فاتورته — حتى لو صدرت الفاتورة داخل نفس فترة
+       الإغلاق. أما حركة فاتورة مدفوعة في يومها فقد عدّها قسم المبيعات
+       عبر salePayments، فيستثنيها isSaleCollectionMove ولا تتكرر. */
+    if(isSaleCollectionMove(m)){ dailyCashAdd(customerPay,method,m.amount); dayCustomerPayMoves.push({m,method}); }
     if(m.movement_type==='supplier_payment' && m.direction==='out'){ dailyCashAdd(supplierPay,method,m.amount); daySupplierPayMoves.push({m,method}); }
     if(m.movement_type==='customer_refund' && m.direction==='out') dailyCashAdd(refundsPay,method,m.amount);
     if(m.movement_type==='cash_shortage' && m.direction==='out') settlementShortage+=Number(m.amount||0);
@@ -10664,9 +10674,9 @@ function getDailyCashData(opts={}){
   if(isRange){
     const dm={};
     const ed=dt=>{ if(!dt) return null; const dd=String(dt).slice(0,10); if(!inR(dd)) return null; if(!dm[dd]) dm[dd]={date:dd,invoiceCount:0,salesTotal:0,cashIn:0,cashOut:0}; return dm[dd]; };
-    daySalesArr.forEach(s=>{ const D=ed(s.sale_date); if(!D)return; D.invoiceCount++; D.salesTotal+=Number(s.total||0); const rows=salePayments.filter(p=>p.sale_id===s.id); let cin=0; if(rows.length) rows.forEach(p=>{if(p.payment_method==='cash')cin+=Number(p.amount||0);}); else if(Number(s.paid_amount||0)>0&&s.payment_method==='cash') cin+=Math.abs(Number(s.paid_amount||0)); D.cashIn+=cin; });
+    daySalesArr.forEach(s=>{ const D=ed(s.sale_date); if(!D)return; D.invoiceCount++; D.salesTotal+=Number(s.total||0); const allRows=salePayments.filter(p=>p.sale_id===s.id); let cin=0; if(allRows.length) allRows.forEach(p=>{if(p.payment_method==='cash'&&d10(p.payment_date)===d10(s.sale_date))cin+=Number(p.amount||0);}); else if(Number(s.paid_amount||0)>0&&s.payment_method==='cash') cin+=Math.abs(Number(s.paid_amount||0)); D.cashIn+=cin; });
     dayExpenses.forEach(e=>{ const D=ed(e.expense_date); if(!D)return; if(dailyCashMethodFromAccount(e.account_id)==='cash') D.cashOut+=Number(e.amount||0); });
-    financeMovements.filter(m=>inR(m.movement_date)).forEach(m=>{ const a=financeAccounts.find(x=>x.id===m.account_id); if(branch&&a?.location_id!==branch)return; if(dailyCashMethodFromAccount(m.account_id)!=='cash')return; const D=ed(m.movement_date); if(!D)return; if(m.movement_type==='customer_payment'&&m.direction==='in')D.cashIn+=Number(m.amount||0); /* (إغلاق 20261001) تحصيل فاتورة صدرت خارج الفترة — يُعدّ يوم دفعه (فواتير داخل الفترة عدّدها سطر الفواتير أعلاه) */ if(m.movement_type==='sale_payment'&&m.direction==='in'&&m.reference_table==='pos_sales'&&m.reference_id&&!salesById[m.reference_id])D.cashIn+=Number(m.amount||0); if((m.movement_type==='supplier_payment'&&m.direction==='out')||(m.movement_type==='customer_refund'&&m.direction==='out')||(m.movement_type==='cash_shortage'&&m.direction==='out'))D.cashOut+=Number(m.amount||0); if(m.movement_type==='cash_surplus'&&m.direction==='in')D.cashIn+=Number(m.amount||0); });
+    financeMovements.filter(m=>inR(m.movement_date)).forEach(m=>{ const a=financeAccounts.find(x=>x.id===m.account_id); if(branch&&a?.location_id!==branch)return; if(dailyCashMethodFromAccount(m.account_id)!=='cash')return; const D=ed(m.movement_date); if(!D)return; if(m.movement_type==='customer_payment'&&m.direction==='in')D.cashIn+=Number(m.amount||0); /* تحصيل فاتورة بيوم غير يومها — يُعدّ في صف يوم قبضه حتى لو كانت فاتورته داخل الفترة */ if(isSaleCollectionMove(m))D.cashIn+=Number(m.amount||0); if((m.movement_type==='supplier_payment'&&m.direction==='out')||(m.movement_type==='customer_refund'&&m.direction==='out')||(m.movement_type==='cash_shortage'&&m.direction==='out'))D.cashOut+=Number(m.amount||0); if(m.movement_type==='cash_surplus'&&m.direction==='in')D.cashIn+=Number(m.amount||0); });
     days=Object.values(dm).sort((a,b)=>a.date<b.date?-1:1);
     days.forEach(D=>D.cashRemaining=D.cashIn-D.cashOut);
   }
