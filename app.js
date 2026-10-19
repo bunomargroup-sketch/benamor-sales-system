@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261019-1947';
+const APP_BUILD='b20261019-2041';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4418,7 +4418,7 @@ async function deletePurchase(id){
     await rpc('pos_delete_purchase',{p_id:id,p_user_identifier:appUser?.identifier||''});
     toast('حُذفت الفاتورة وعُكست آثارها','success');
     selectedPurchaseId=null;
-    await refreshParts(['salesDomain']);
+    await refreshParts(['salesDomain','products']); /* (0152) حذف الفاتورة يعيد بطاقة الشراء لسابقتها خادمياً */
     renderPurchasesList();
   }catch(e){console.error(e);
     const m=String(e&&e.message||e||'');
@@ -10200,6 +10200,8 @@ q('purchaseForm').addEventListener('submit', async e=>{
       resetPurchaseForm(); toast('تم حفظ فاتورة الشراء وزيادة المخزون'+(saved.purchase_no?' رقم '+saved.purchase_no:''),'success'); applyPurchaseLocally(saved, body, items, null); refreshAfterLocalUpdate();
       /* (0116) فاتورة شراء قد تغيّرت تكاليف ⇒ طابور المراجعة والعداد يُحدَّثان */
       refreshParts(['priceReviewQueue'],{silent:true}).catch(()=>{});
+      /* (0152) سعر شراء البطاقة صار يُزامَن خادمياً مع آخر فاتورة ⇒ ذاكرة المنتجات تُحدَّث */
+      refreshParts(['products'],{silent:true}).catch(()=>{});
       /* (0140) الفاتورة دَيناً بالكامل — نافذة الدفع تفتح جاهزة: المورد
          والفاتورة واليوم والإجمالي. إغلاقها قرار مشروع: الدفع متاح دائماً
          من زر «دفعة للمورد» في هذه القائمة وفي مشاهدة الفاتورة. */
@@ -10227,7 +10229,7 @@ q('purchaseForm').addEventListener('submit', async e=>{
     await rpc('update_purchase_transaction',updBody);
     purchaseId=editingPurchaseId;
     const msg='تم تعديل فاتورة الشراء وتحديث المخزون';
-    resetPurchaseForm(); toast(msg); await refreshParts(['purchases','stock','suppliers','supplierLedger','financeAccounts','financeMovements','cost']);
+    resetPurchaseForm(); toast(msg); await refreshParts(['purchases','stock','suppliers','supplierLedger','financeAccounts','financeMovements','cost','products']); /* (0152) products: بطاقة الشراء تزامنت خادمياً */
   }catch(err){console.error(err);toast('خطأ في حفظ فاتورة الشراء: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
 
