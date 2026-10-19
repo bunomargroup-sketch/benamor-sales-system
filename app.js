@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261019-1721';
+const APP_BUILD='b20261019-1947';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3953,8 +3953,15 @@ function fillSupplierPaymentsFilterOptions(){
 function supplierPaymentsFilterChanged(){spListLimit=200; fetchSupplierPaymentsList();}
 function debouncedSupplierPaymentsSearch(){clearTimeout(spSearchTimer); spSearchTimer=setTimeout(()=>{spListLimit=200; fetchSupplierPaymentsList();},350);}
 function supplierPaymentsLoadMore(){spListLimit+=500; fetchSupplierPaymentsList();}
-/* (0142) فرع الحركة من حسابها المالي — الحساب ضمن صفّ النداء الموحِّد */
+/* (0142) فرع الحركة — (تصحيح 2026-10-19 على قاعدة 0129) فرع المستند
+   أولاً: فاتورة الشراء المرتبطة بالدفعة (0140) إن وُجدت، وفرع الخزينة
+   احتياطاً فقط. كان يُطابق فرع الخزينة وحده فدفعات المصارف «عام»
+   لا تظهر إلا تحت «بدون فرع» ولو كانت فواتيرها لفروع معروفة. */
 function supplierMovementBranchOf(m){
+  if(m.purchase_id){
+    const pu=(purchases||[]).find(p=>p.id===m.purchase_id);
+    if(pu?.location_id) return pu.location_id;
+  }
   const a=(financeAccounts||[]).find(x=>x.id===m.account_id);
   return a?(a.location_id||'__no_branch__'):'__no_branch__';
 }
@@ -10571,6 +10578,32 @@ function dailyCashMethodFromAccount(accountId){
   if(a.account_type==='card') return 'card';
   return 'bank_transfer';
 }
+/* (بلاغ 2026-10-19 — INV-S-1256) فرع الحركة المالية = فرع **مستندها**
+   أولاً، وفرع خزينتها احتياطاً فقط — نفس قاعدة branch_id في عرض
+   pos_finance_register (0129: coalesce(doc, account))، لا قاعدة ثالثة.
+   كان إغلاق الخزينة يطابق فرع الخزينة وحده، فحركات الحسابات «عام»
+   (location_id فارغ — المصارف المشتركة) تسقط من إغلاق كل فرع ولو
+   كانت مستنداتها لفروع معروفة (قياس الإنتاج منذ 2026-09-01:
+   243 حركة بـ390,607 على خزينتين عامّتين). */
+function financeMovementBranchId(m){
+  let doc=null;
+  const rt=m.reference_table, rid=m.reference_id;
+  if(rid){
+    if(rt==='pos_sales') doc=sales.find(s=>s.id===rid)?.location_id;
+    else if(rt==='pos_sale_returns') doc=saleReturns.find(r=>r.id===rid)?.location_id;
+    else if(rt==='pos_purchases') doc=purchases.find(p=>p.id===rid)?.location_id;
+    else if(rt==='pos_purchase_returns') doc=purchaseReturns.find(r=>r.id===rid)?.location_id;
+    else if(rt==='pos_expenses') doc=expenses.find(e=>e.id===rid)?.location_id;
+    /* دفعة مورد مستقلة مربوطة بفاتورة شراء (0140): مستندها فاتورتها —
+       نفس سلسلة 0142 ‏coalesce(purchase, payment.purchase) */
+    else if(rt==='pos_supplier_payments'){
+      const pay=payments.find(p=>p.id===rid);
+      if(pay?.purchase_id) doc=purchases.find(p=>p.id===pay.purchase_id)?.location_id;
+    }
+  }
+  if(doc) return doc;
+  return financeAccounts.find(a=>a.id===m.account_id)?.location_id||null;
+}
 function dailyCashEmpty(){return {cash:0,card:0,bank_transfer:0,total:0}}
 function dailyCashAdd(bucket,method,amount){method=method==='bank'?'bank_transfer':method; if(!bucket[method] && bucket[method]!==0) bucket[method]=0; bucket[method]+=Number(amount||0); bucket.total+=Number(amount||0)}
 function fillDailyCashBranches(){
@@ -10648,7 +10681,7 @@ function getDailyCashData(opts={}){
   const dayCustomerPayMoves=[], daySupplierPayMoves=[];
   let settlementShortage=0, settlementSurplus=0;
   financeMovements.filter(m=>inR(m.movement_date)).forEach(m=>{
-    const a=financeAccounts.find(x=>x.id===m.account_id); if(branch && a?.location_id!==branch) return;
+    if(branch && financeMovementBranchId(m)!==branch) return; /* فرع المستند لا فرع الخزينة (INV-S-1256) */
     const method=dailyCashMethodFromAccount(m.account_id);
     if(m.movement_type==='customer_payment' && m.direction==='in'){ dailyCashAdd(customerPay,method,m.amount); dayCustomerPayMoves.push({m,method}); }
     /* تحصيل دين على فاتورة (post_invoice_payment ⇒ حركة sale_payment
@@ -10676,7 +10709,7 @@ function getDailyCashData(opts={}){
     const ed=dt=>{ if(!dt) return null; const dd=String(dt).slice(0,10); if(!inR(dd)) return null; if(!dm[dd]) dm[dd]={date:dd,invoiceCount:0,salesTotal:0,cashIn:0,cashOut:0}; return dm[dd]; };
     daySalesArr.forEach(s=>{ const D=ed(s.sale_date); if(!D)return; D.invoiceCount++; D.salesTotal+=Number(s.total||0); const allRows=salePayments.filter(p=>p.sale_id===s.id); let cin=0; if(allRows.length) allRows.forEach(p=>{if(p.payment_method==='cash'&&d10(p.payment_date)===d10(s.sale_date))cin+=Number(p.amount||0);}); else if(Number(s.paid_amount||0)>0&&s.payment_method==='cash') cin+=Math.abs(Number(s.paid_amount||0)); D.cashIn+=cin; });
     dayExpenses.forEach(e=>{ const D=ed(e.expense_date); if(!D)return; if(dailyCashMethodFromAccount(e.account_id)==='cash') D.cashOut+=Number(e.amount||0); });
-    financeMovements.filter(m=>inR(m.movement_date)).forEach(m=>{ const a=financeAccounts.find(x=>x.id===m.account_id); if(branch&&a?.location_id!==branch)return; if(dailyCashMethodFromAccount(m.account_id)!=='cash')return; const D=ed(m.movement_date); if(!D)return; if(m.movement_type==='customer_payment'&&m.direction==='in')D.cashIn+=Number(m.amount||0); /* تحصيل فاتورة بيوم غير يومها — يُعدّ في صف يوم قبضه حتى لو كانت فاتورته داخل الفترة */ if(isSaleCollectionMove(m))D.cashIn+=Number(m.amount||0); if((m.movement_type==='supplier_payment'&&m.direction==='out')||(m.movement_type==='customer_refund'&&m.direction==='out')||(m.movement_type==='cash_shortage'&&m.direction==='out'))D.cashOut+=Number(m.amount||0); if(m.movement_type==='cash_surplus'&&m.direction==='in')D.cashIn+=Number(m.amount||0); });
+    financeMovements.filter(m=>inR(m.movement_date)).forEach(m=>{ if(branch&&financeMovementBranchId(m)!==branch)return; if(dailyCashMethodFromAccount(m.account_id)!=='cash')return; const D=ed(m.movement_date); if(!D)return; if(m.movement_type==='customer_payment'&&m.direction==='in')D.cashIn+=Number(m.amount||0); /* تحصيل فاتورة بيوم غير يومها — يُعدّ في صف يوم قبضه حتى لو كانت فاتورته داخل الفترة */ if(isSaleCollectionMove(m))D.cashIn+=Number(m.amount||0); if((m.movement_type==='supplier_payment'&&m.direction==='out')||(m.movement_type==='customer_refund'&&m.direction==='out')||(m.movement_type==='cash_shortage'&&m.direction==='out'))D.cashOut+=Number(m.amount||0); if(m.movement_type==='cash_surplus'&&m.direction==='in')D.cashIn+=Number(m.amount||0); });
     days=Object.values(dm).sort((a,b)=>a.date<b.date?-1:1);
     days.forEach(D=>D.cashRemaining=D.cashIn-D.cashOut);
   }
