@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261018-1223';
+const APP_BUILD='b20261019-1631';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1184,12 +1184,14 @@ function applyCostReference(){
 /* (20261018) حركات التكلفة للتشغيل الكامل: تسويات وجرد وتالف ومرتجعات موردين
    ومرتجعات زبائن مستقلة — كامل التاريخ، لأن stockMovements للعرض فقط (آخر 50).
    البيع والشراء والتحويلات لا تُجلب هنا: الأولان يُحسبان من بنود الفواتير،
-   والتحويلات محايدة على مستوى المنظومة (طرد مقابل وارد لكل صنف). */
+   والتحويلات محايدة على مستوى المنظومة (طرد مقابل وارد لكل صنف).
+   (0150) التاريخ هو movement_date فقط — لا created_at (حركات مهاجَرة
+   خُتمت بلحظة الترحيل)، والترتيب داخل اليوم بـlegacy_seq. */
 async function loadCostMovements(){
   const r=await apiAll('pos_stock_movements',
-    '?select=product_code,movement_type,qty_change,movement_date,reference_table'+
+    '?select=product_code,movement_type,qty_change,movement_date,reference_table,legacy_seq'+
     '&movement_type=in.(adjustment,waste,return_supplier,return_customer)'+
-    '&order=movement_date.asc,created_at.asc,id.asc');
+    '&order=movement_date.asc,legacy_seq.asc.nullslast,id.asc');
   /* فراغٌ بعد نجاح سابق = فشل مؤقت في الشبكة: نُبقي آخر بيانات سليمة */
   if(r && r.length) costMovements=r;
   return costMovements;
@@ -3287,7 +3289,16 @@ function movementDocInfo(m){
     doc=transfers.find(x=>x.id===id); no=doc?.id?.slice(0,8)||id?.slice(0,8)||''; const from=locations.find(l=>l.id===doc?.from_location_id)?.name||''; const to=locations.find(l=>l.id===doc?.to_location_id)?.name||''; branch=from&&to?`${from} ← ${to}`:'';
   }else if(table==='pos_sale_returns'){
     doc=saleReturns.find(x=>x.id===id); no=doc?.id?.slice(0,8)||id?.slice(0,8)||''; branch=locations.find(l=>l.id===doc?.location_id)?.name||'';
+  }else if(table==='pos_stock_counts'){
+    /* (0149) حركة جرد مرتبطة بمستندها: الرقم من المستند إن كان محمّلاً،
+       وإلا من ملاحظة الحركة نفسها (تحمل CNT-… منذ 0149). */
+    doc=(stockCounts||[]).find(x=>String(x.id)===String(id));
+    no=doc?.count_no||(String(m.notes||'').match(/CNT-[A-Z]+-\d+/)?.[0])||id?.slice(0,8)||'';
+    if(doc?.user_identifier) seller=doc.user_identifier;
+    branch=locations.find(l=>l.id===doc?.location_id)?.name||'';
   }
+  /* (0149) تسوية قديمة بلا مرجع إطلاقاً: تُسمّى باسمها بدل خلية فارغة صامتة */
+  if(!table && !id && m.movement_type==='adjustment') no='حركة بلا مستند';
   if(!branch) branch=locations.find(l=>l.id===m.location_id)?.name||'';
   return {no,seller,branch,table,id};
 }
@@ -3297,6 +3308,7 @@ function openMovementDocument(table,id){
   if(table==='pos_purchases') return openPurchaseForEdit(id);
   if(table==='pos_stock_transfers') return openTransferForEdit(id);
   if(table==='pos_sale_returns') return toast('هذه الحركة مرتبطة بفاتورة مرتجع. افتح فاتورة البيع الأصلية من فواتير البيع.','info');
+  if(table==='pos_stock_counts') return viewStockCount(id);
   toast('نوع المستند غير معروف','warn');
 }
 
@@ -10372,6 +10384,9 @@ function buildProductCostIndex(){
      • بيع / شراء: يُحسبان من بنود الفواتير بالقيمة الفعلية — لا من جدول الحركات.
      • تحويلات (transfer_in/out): محايدة على مستوى المنظومة كلها — وارد هنا صادر
        هناك بنفس الكمية، فتُتجاهل (0146 يتحقق من توازنها لكل صنف في الخادم).
+     • علامتا الترحيل (legacy:INVENTAIRE / reconcile): مستبعدتان صراحة
+       (0150) — الأولى داخل بذرة القطع، والثانية قيود مواءمة دفترية لا
+       أحداث تكلفة؛ إدخالهما يضخّم/يفرغ حوض الكمية بقيم صفرية.
      التاريخ يُقتطع إلى اليوم (10 خانات) مثل بقية الأحداث، وعند تساوي اليوم
      تُطبَّق الحركات أولاً ثم المشتريات ثم المبيعات — التسوية تصحيح لحالة ما
      قبل حركة اليوم (ARSB80298: تسوية 10-06 تعود بالمتوسط القديم 140 لا بسعر
@@ -10379,12 +10394,17 @@ function buildProductCostIndex(){
   (costMovements||[]).forEach(m=>{
     const q=Number(m.qty_change||0); if(!q) return;
     const typ=String(m.movement_type||''), ref=String(m.reference_table||'');
+    /* (0150) علامتا الترحيل خارجتان بالاسم — قرار صريح لا أثر جانبي للقطع */
+    if(ref==='legacy:INVENTAIRE'||ref==='reconcile') return;
     let k=null;
     if(typ==='adjustment') k=q>0?'ret':'out';
     else if(typ==='waste'||typ==='return_supplier') k='out';
     else if(typ==='return_customer'&&ref==='pos_sale_returns') k='ret';
     if(!k) return;
-    events.push({t:String(m.movement_date||m.created_at||'').slice(0,10),k,code:String(m.product_code||'').trim().toLowerCase(),q:Math.abs(q)});
+    /* (0150) تاريخ العمل movement_date فقط — created_at لحظة الإدراج/الترحيل
+       ولا يصلح تاريخاً لحدث مخزني مهاجَر أبداً. */
+    const t=String(m.movement_date||'').slice(0,10); if(!t) return;
+    events.push({t,k,code:String(m.product_code||'').trim().toLowerCase(),q:Math.abs(q)});
   });
   (purchaseItems||[]).forEach(it=>{
     const q=Number(it.qty||0); if(!q)return;
@@ -11960,6 +11980,7 @@ function renderScEditBanner(){
 async function editStockCount(id){
   const r=mergedStockCounts().find(x=>String(x.id)===String(id));
   if(!r){toast('لم توجد قائمة الجرد (ربما حُذفت أو غابت عن التحميل — اضغط تحديث)','warn');return;}
+  if(r.status==='cancelled'){toast('قائمة ملغاة — للعرض فقط، لا تُعدَّل ولا تُعاد تسويتها','warn');return;}
   if(window.__busy)return;window.__busy=true;
   try{
     let items=r._items||null;
@@ -11993,21 +12014,39 @@ function cancelStockCountEdit(){
   if(!confirm('إلغاء تحرير القائمة؟ (تُفرَّغ أسطر المحرر — القائمة المحفوظة لا تتأثر)'))return;
   __scEditing=null; stockCountData={}; renderStockCount(); toast('أُلغي التحرير','info');
 }
+/* (0149) حفظ الجرد عبر معاملة الخادم الواحدة: الرأس والأسطر والحركات
+   المرتبطة بالمستند تُكتب ذرّياً — لا نداءات REST متتالية بعد اليوم،
+   فلا حركة مخزون بلا مستند ولا مستند بلا أثر. */
+async function saveStockCountViaRpc(doc,status,existingId=null){
+  /* مفتاح إنشاء ثابت عبر إعادة المحاولة في نفس جلسة التحرير: إن التزم
+     الخادم وضاع الرد في الشبكة أعادت المحاولة المستند نفسه لا نسخة. */
+  if(!existingId && !window.__scPendingCreateKey)
+    window.__scPendingCreateKey='count-'+Date.now()+'-'+Math.random().toString(36).slice(2,10);
+  const idem=existingId?null:window.__scPendingCreateKey;
+  const res=await rpc('post_stock_count_transaction',{
+    p_count:doc.header, p_items:doc.rows, p_status:status,
+    p_existing_id:existingId, p_idempotency_key:idem,
+    p_user_identifier:appUser?.identifier||''
+  });
+  if(!res?.id) throw new Error('COUNT_RPC_EMPTY_RESPONSE');
+  if(!existingId) window.__scPendingCreateKey=null;
+  const rec={...(res.count||{}),_items:res.items||doc.rows};
+  const i=(stockCounts||[]).findIndex(x=>String(x.id)===String(res.id));
+  if(i>=0) stockCounts[i]={...stockCounts[i],...rec}; else stockCounts.unshift(rec);
+  if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
+  return res;
+}
 /* تحديث قائمة جرد محفوظة (رأس + استبدال الأسطر) بدلاً من إنشاء قائمة جديدة */
 async function updateStockCountRecord(id, doc, status){
-  const settledAt=status==='settled'?new Date().toISOString():null;
   if(String(id).startsWith('loc_')){
+    /* قوائم محلية قديمة (من عهد ما قبل 0149): تبقى محلية كما هي —
+       تسويتها من هنا قد تعيد تطبيق فروقات سبق أن ضربت المخزون. */
+    const settledAt=status==='settled'?new Date().toISOString():null;
     const ls=stockCountLocalList().map(x=>x.id===id?{...x,...doc.header,status,settled_at:settledAt,_items:doc.rows}:x);
     localStorage.setItem('posStockCountLocal',JSON.stringify(ls.slice(0,50)));
-    return;
+    return {id,local:true};
   }
-  const hdr={...doc.header,status,settled_at:settledAt};
-  await api('pos_stock_counts',{method:'PATCH',qs:`?id=eq.${id}`,body:hdr});
-  await api('pos_stock_count_items',{method:'DELETE',qs:`?count_id=eq.${id}`});
-  if(doc.rows.length) await api('pos_stock_count_items',{method:'POST',body:doc.rows.map(x=>({...x,count_id:id}))});
-  const i=(stockCounts||[]).findIndex(x=>String(x.id)===String(id));
-  if(i>=0) stockCounts[i]={...stockCounts[i],...hdr,_items:doc.rows};
-  if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
+  return saveStockCountViaRpc(doc,status,id);
 }
 /* ─── (1960) نافذة F3 للجرد: نفس قائمة المنتجات في البيع (بحث متعدد الأسطر + فلاتر التصنيف/الماركة/اللون/المورد) —
      الاختيار يضيف الصنف إلى قائمة الجرد ولا يغلق النافذة (لإضافة عدة أصناف متتالية). ─── */
@@ -12074,22 +12113,20 @@ function mergedStockCounts(){
   return [...localOnly,...web];
 }
 async function postStockCountDoc(doc,status){
-  const hdr={...doc.header,status,settled_at:status==='settled'?new Date().toISOString():null};
   try{
-    const r=await api('pos_stock_counts',{method:'POST',body:hdr});
-    const saved=r[0];
-    const id=saved.id;
-    await api('pos_stock_count_items',{method:'POST',body:doc.rows.map(x=>({...x,count_id:id}))});
-    stockCounts.unshift({...saved,_items:doc.rows});
-    if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
-    return id;
+    return await saveStockCountViaRpc(doc,status,null);
   }catch(e){
-    console.warn('pos_stock_counts غير جاهز — حفظ محلي مؤقت',e);
+    /* (0149) التسوية لا تسقط محلياً أبداً: فشل المعاملة يعني أن لا شيء
+       كُتب (لا مستند ولا حركات) — الخطأ يصعد للمستخدم والقائمة تبقى
+       في المحرر. السقوط المحلي للمسودة فقط (بلا أثر مخزني إطلاقاً). */
+    if(status==='settled') throw e;
+    console.warn('حفظ قائمة الجرد على الخادم تعذّر — مسودة محلية مؤقتة',e);
+    const hdr={...doc.header,status:'draft',settled_at:null};
     const rec={...hdr,id:'loc_'+Date.now(),_local:true,_items:doc.rows};
     const ls=stockCountLocalList(); ls.unshift(rec); localStorage.setItem('posStockCountLocal',JSON.stringify(ls.slice(0,50)));
-    toast('جدول قوائم الجرد غير جاهز بعد — شغّل SQL 0061 في سوبابيس. حُفظت القائمة مؤقتاً على هذا الجهاز وتظهر في قوائم الجرد','warn');
+    toast('تعذّر الحفظ على الخادم — حُفظت القائمة مسودةً محلية على هذا الجهاز فقط (بلا أي أثر على المخزون) وتظهر في قوائم الجرد','warn');
     if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
-    return rec.id;
+    return {id:rec.id,count:rec,items:doc.rows,local:true};
   }
 }
 async function saveStockCountList(){
@@ -12113,6 +12150,13 @@ async function saveStockCountList(){
 async function saveStockCount(){
   const doc=buildStockCountDoc(); if(!doc)return;
   const editing=__scEditing;
+  /* (0149) قائمة محلية قديمة لا تُسوّى تلقائياً: فروقاتها قد تكون ضربت
+     المخزون أصلاً يوم تعذّر حفظ مستندها — استعادتها قرار يدوي منفصل،
+     وإعادة التسوية من هنا ازدواج صامت. */
+  if(editing && String(editing.id).startsWith('loc_')){
+    toast('هذه قائمة محلية قديمة (قبل معاملة الجرد 0149) — لا تُسوّى من هنا حتى تُراجَع حركاتها يدوياً، حتى لا تُطبَّق فروقاتها مرتين','warn');
+    return;
+  }
   /* (1945) قائمة مسوّاة مفتوحة للتحرير: يُطبَّق الفرق بين المعدود الجديد والأصلي فقط —
      لا إعادة تسوية للكمية الأصلية (تجنّب التسوية المزدوجة). */
   let adj;
@@ -12124,6 +12168,15 @@ async function saveStockCount(){
       const base=o?Number(o.counted_qty):Number(r.system_qty);
       return {product_code:r.product_code,product_name:r.product_name,delta:Number(r.counted_qty)-base};
     }).filter(a=>Math.abs(a.delta)>0.001);
+    /* (0149) صنف كان في القائمة المسوّاة وحُذف أثناء التحرير: عكس أثره
+       الأصلي جزء من الفرق (الخادم يعيد حسابه من الأسطر المخزّنة أيضاً). */
+    const presentCodes=new Set(doc.rows.map(r=>String(r.product_code)));
+    editing.orig.forEach((o,code)=>{
+      if(!presentCodes.has(String(code))){
+        const delta=-Number(o.diff_qty||0);
+        if(Math.abs(delta)>0.001) adj.push({product_code:o.product_code,product_name:o.product_name,delta});
+      }
+    });
   } else {
     adj=doc.rows.filter(r=>Math.abs(r.diff_qty)>0.001).map(r=>({product_code:r.product_code,product_name:r.product_name,delta:Number(r.diff_qty)}));
   }
@@ -12141,39 +12194,63 @@ async function saveStockCount(){
   try{
     showLoading(true);
     const isResettle=!!(editing&&editing.status==='settled');
-    for(const a of adj){await adjustStockDoc(doc.loc,{product_code:a.product_code,product_name:a.product_name},a.delta,'adjustment',null,null,`${isResettle?'جرد فعلي (تسوية معدّلة)':'جرد فعلي'} - ${appUser?.identifier||''}`);}
+    /* (0149) نداء خادم واحد ذرّي: المستند وأسطرها وحركاتها المرتبطة به
+       (reference=pos_stock_counts ورقم الجرد في الملاحظة) — الخادم يعيد
+       حساب فروق إعادة التسوية من الأسطر المخزّنة لا من ذاكرة المتصفح. */
     if(isResettle){
-      /* المستند بعد التعديل: كمية المنظومة الأصلية محفوظة، والمعدود الجديد والفرق الإجمالي الحالي */
-      const rows=doc.rows.map(r=>{
-        const o=editing.orig.get(String(r.product_code));
-        const sys=Number(o?.system_qty??r.system_qty), cnt=Number(r.counted_qty), d=cnt-sys, cost=Number(r.unit_cost||0);
-        return {...r,system_qty:sys,diff_qty:d,diff_value:d*cost};
-      });
-      doc.rows=rows;
-      doc.header.counted_items=rows.length;
-      doc.header.diff_qty=rows.reduce((a,x)=>a+x.diff_qty,0);
-      doc.header.diff_value=rows.reduce((a,x)=>a+x.diff_value,0);
       doc.header.notes=`تسوية معدّلة بواسطة ${appUser?.identifier||'—'} بتاريخ ${new Date().toISOString().slice(0,16).replace('T',' ')}`;
     }
-    if(editing){ await updateStockCountRecord(editing.id,doc,'settled'); }
-    else{ await postStockCountDoc(doc,'settled'); }
-    await logAction(isResettle?'stock_count_resettle':'stock_count',null,null,`${isResettle?'تعديل جرد مسوّى وتطبيق فرق':'جرد وتسوية'} ${adj.length} صنف — ${locName} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
+    const result=editing
+      ? await updateStockCountRecord(editing.id,doc,'settled')
+      : await postStockCountDoc(doc,'settled');
+    const applied=Number(result?.movements_applied??adj.length);
+    const finalDiffValue=Number(result?.count?.diff_value??doc.header.diff_value);
+    await logAction(isResettle?'stock_count_resettle':'stock_count','pos_stock_counts',result?.id||'',`${isResettle?'تعديل جرد مسوّى وتطبيق فرق':'جرد وتسوية'} ${applied} صنف — ${locName} — صافي قيمة الفرق ${money(finalDiffValue)}`);
     __scEditing=null; stockCountData={}; clearStockCountFilters();
     await refreshSalesDomain();
     renderStockCount();
-    toast(isResettle?`تم تطبيق فرق التعديل (${adj.length} صنف) وتحديث القائمة`:`تم تسوية ${adj.length} صنف وحفظ قائمة الجرد`,'success');
+    toast(isResettle?`تم تطبيق فرق التعديل (${applied} صنف) وتحديث القائمة`:`تم تسوية ${applied} صنف وحفظ قائمة الجرد`,'success');
   }catch(e){console.error(e);toast('تعذّر حفظ الجرد: '+friendlyError(e),'error')}finally{showLoading(false);window.__busy=false}
 }
-/* ─── قوائم الجرد السابقة: عرض وتحرير (قرار المالك: بلا زر حذف — الإلغاء يتم بتعديل القائمة وتطبيق فرق معاكس) ─── */
+/* ─── قوائم الجرد السابقة: عرض وتحرير — والإلغاء/الحذف للمدير عبر معاملة
+   0149 (المسوّى يُعكس أثره المخزني ذرّياً ويبقى «ملغى»، والمسودة تُحذف) ─── */
 function renderStockCountLists(){
   const el=q('stockCountListsBody'); if(!el)return;
   const rows=mergedStockCounts();
   el.innerHTML=rows.map(r=>{
     const l=locations.find(x=>x.id===r.location_id);
-    const st=r.status==='settled'?'<span class="badge green">مسوّى</span>':'<span class="badge yellow">مسودة</span>';
+    const st=r.status==='settled'?'<span class="badge green">مسوّى</span>':(r.status==='cancelled'?'<span class="badge red">ملغى</span>':'<span class="badge yellow">مسودة</span>');
     const safe=String(r.id).replace(/'/g,"\\\\'");
-    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap"><button class="btn secondary" type="button" style="padding:4px 8px" title="فتح القائمة في المحرر لتعديل الكميات وإعادة الحفظ/التسوية" onclick="editStockCount('${safe}')">✎ تعديل</button> <button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button></td></tr>`;
+    const editBtn=r.status==='cancelled'?'':`<button class="btn secondary" type="button" style="padding:4px 8px" title="فتح القائمة في المحرر لتعديل الكميات وإعادة الحفظ/التسوية" onclick="editStockCount('${safe}')">✎ تعديل</button> `;
+    const cancelBtn=(!r._local&&r.status!=='cancelled'&&isManager())?` <button class="btn danger" type="button" style="padding:4px 8px" title="${r.status==='settled'?'إلغاء القائمة وعكس صافي أثرها على المخزون بمعاملة واحدة':'حذف المسودة نهائياً'}" onclick="cancelStockCount('${safe}')">${r.status==='settled'?'↩ إلغاء وعكس':'🗑 حذف'}</button>`:'';
+    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap">${editBtn}<button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${cancelBtn}</td></tr>`;
   }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من تبويب «جرد جديد».</td></tr>';
+}
+async function cancelStockCount(id){
+  const r=mergedStockCounts().find(x=>String(x.id)===String(id));
+  if(!r){toast('لم توجد قائمة الجرد','warn');return;}
+  if(r._local||String(r.id).startsWith('loc_')){toast('القوائم المحلية القديمة لا تُلغى من هنا — تُراجَع يدوياً أولاً','warn');return;}
+  const settled=r.status==='settled';
+  if(!confirm(settled
+    ? `إلغاء قائمة الجرد «${r.count_no||r.id}» وعكس صافي أثرها (${money(r.diff_qty||0)} وحدة) على المخزون؟ القائمة تبقى ظاهرة بحالة «ملغى» للتدقيق.`
+    : `حذف مسودة الجرد «${r.count_no||r.id}» نهائياً؟ (لا أثر مخزنياً لها)`))return;
+  if(window.__busy)return;window.__busy=true;
+  try{
+    showLoading(true);
+    const res=await rpc('cancel_stock_count_transaction',{p_count_id:id,p_user_identifier:appUser?.identifier||''});
+    if(res?.deleted){
+      stockCounts=(stockCounts||[]).filter(x=>String(x.id)!==String(id));
+    }else if(res?.count){
+      const i=(stockCounts||[]).findIndex(x=>String(x.id)===String(id));
+      const rec={...res.count,_items:res.items||[]};
+      if(i>=0) stockCounts[i]={...stockCounts[i],...rec}; else stockCounts.unshift(rec);
+    }
+    await logAction(settled?'stock_count_cancel':'stock_count_delete','pos_stock_counts',id,`${settled?'إلغاء جرد وعكس أثره':'حذف مسودة جرد'} ${r.count_no||id}`);
+    if(settled) await refreshSalesDomain();
+    renderStockCountLists();
+    toast(settled?'أُلغيت القائمة وعُكس أثرها على المخزون':'حُذفت المسودة','success');
+  }catch(e){console.error(e);toast('تعذّر إلغاء/حذف قائمة الجرد: '+friendlyError(e),'error')}
+  finally{showLoading(false);window.__busy=false}
 }
 function ensureStockCountViewModal(){
   if(q('stockCountViewModal'))return;
@@ -12182,7 +12259,18 @@ function ensureStockCountViewModal(){
   document.body.appendChild(d);
 }
 async function viewStockCount(id){
-  const r=mergedStockCounts().find(x=>x.id===id); if(!r){toast('لم توجد قائمة الجرد (ربما حُذفت أو غابت عن التحميل — اضغط تحديث)','warn');return;}
+  let r=mergedStockCounts().find(x=>String(x.id)===String(id));
+  if(!r && !String(id).startsWith('loc_')){
+    /* (0149) فتح الجرد من حركة مخزون: المستند قد يكون خارج آخر 100 قائمة
+       محمّلة — يُجلب رأسه بمعرّفه مباشرة بدل إعلان غيابه خطأً. */
+    try{
+      showLoading(true);
+      const rows=await api('pos_stock_counts',{qs:'?select=*&id=eq.'+encodeURIComponent(id)});
+      if(rows?.length){ r=rows[0]; stockCounts.unshift(r); }
+    }catch(e){console.error(e);toast('تعذّر جلب قائمة الجرد: '+friendlyError(e),'error');return;}
+    finally{showLoading(false);}
+  }
+  if(!r){toast('لم توجد قائمة الجرد (ربما حُذفت أو غابت عن التحميل — اضغط تحديث)','warn');return;}
   let items=r._items||null;
   if(!items){
     try{showLoading(true);items=await apiAll('pos_stock_count_items','?select=*&count_id=eq.'+id+'&order=created_at.asc,id.asc');}
@@ -12191,10 +12279,10 @@ async function viewStockCount(id){
   }
   if(!items||!items.length){toast('لا أسطر مسجلة لهذه القائمة','info');return;}
   ensureStockCountViewModal();
-  const eb=q('scvEditBtn'); if(eb) eb.onclick=()=>{ q('stockCountViewModal').classList.remove('show'); editStockCount(String(id)); };
+  const eb=q('scvEditBtn'); if(eb){ eb.style.display=r.status==='cancelled'?'none':''; eb.onclick=()=>{ q('stockCountViewModal').classList.remove('show'); editStockCount(String(id)); }; }
   const l=locations.find(x=>x.id===r.location_id);
   q('scvListTitle').textContent='قائمة جرد'+(r.count_no?(' '+r.count_no):'')+' — '+String(r.count_date||'').slice(0,10)+(l?(' · '+l.name):'');
-  q('scvListMeta').textContent=`المجرِّد: ${r.user_identifier||'—'} · ${money(r.counted_items||0)}/${money(r.items_count||0)} صنف · صافي كمية الفرق: ${money(r.diff_qty||0)} · صافي قيمة الفرق: ${money(r.diff_value||0)} ${APP_CONFIG.currency} · الحالة: ${r.status==='settled'?'مسوّى على المخزون':'مسودة لم تُسوَّ'}${r._local?' · (محفوظة محلياً مؤقتاً)':''}`;
+  q('scvListMeta').textContent=`المجرِّد: ${r.user_identifier||'—'} · ${money(r.counted_items||0)}/${money(r.items_count||0)} صنف · صافي كمية الفرق: ${money(r.diff_qty||0)} · صافي قيمة الفرق: ${money(r.diff_value||0)} ${APP_CONFIG.currency} · الحالة: ${r.status==='settled'?'مسوّى على المخزون':(r.status==='cancelled'?'ملغى (عُكس أثره)':'مسودة لم تُسوَّ')}${r._local?' · (محفوظة محلياً مؤقتاً)':''}`;
   q('scvListBody').innerHTML=items.map(it=>{
     const cls=Number(it.diff_qty)>0?'stock-positive':Number(it.diff_qty)<0?'stock-negative':'';
     return `<tr><td class="ltr"><b>${esc(it.product_code)}</b></td><td>${esc(pLabel(it.product_code,it.product_name))}</td><td style="text-align:center">${money(it.system_qty)}</td><td style="text-align:center">${money(it.counted_qty)}</td><td class="${cls}" style="text-align:center"><b>${money(it.diff_qty)}</b></td><td class="mini ltr" style="text-align:center">${money(it.unit_cost)}</td><td class="${cls}" style="text-align:center">${money(it.diff_value)} ${APP_CONFIG.currency}</td></tr>`;
