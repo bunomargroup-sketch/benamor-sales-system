@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261020-1607';
+const APP_BUILD='b20261020-1959';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10701,13 +10701,50 @@ function getDailyCashData(opts={}){
   }
   const totalSales=daySalesArr.reduce((a,s)=>a+Number(s.total||0),0);
   const totalDiscounts=daySalesArr.reduce((a,s)=>a+Number(s.discount||0),0);
-  const creditSales=daySalesArr.reduce((a,s)=>a+Math.max(0,Number(s.balance_due||0)),0);
+  /* (طلب المالك 2026-10-20) كل رقم في التقرير محصور بالفترة — لا «حتى اليوم»:
+     المدفوع = دفعات الفاتورة التي تاريخها داخل الفترة، والمتبقي = الإجمالي
+     ناقص كل دفعاتها حتى آخر يوم في الفترة. كانت INV-S-1256 تُطبع «مدفوعة 680»
+     في تقرير 11-12 أكتوبر بينما قسم المداخيل يستثنيها (دفعتها 19 أكتوبر) —
+     تناقض في ورقة واحدة. وتوزيع طرق الدفع يُبنى من صفوف pos_sale_payments
+     نفسها (صف = طريقة + مبلغ) لأن حقل payment_method الواحد لا يمثّل تقسيمة. */
+  const invoices=daySalesArr.map(s=>{
+    const c=customers.find(x=>x.id===s.customer_id);
+    const total=Number(s.total||0);
+    const rows=salePayments.filter(p=>p.sale_id===s.id);
+    let paid=0, paidToEnd=0, lines=[];
+    if(rows.length){
+      rows.forEach(p=>{
+        const pd=d10(p.payment_date); const amt=Number(p.amount||0);
+        if(!pd || pd>to) return;                 /* دفعة بعد نهاية الفترة = غير مدفوعة بعد */
+        paidToEnd+=amt;
+        if(pd>=from) paid+=amt;                  /* داخل الفترة */
+      });
+      const byM={};
+      rows.forEach(p=>{ const pd=d10(p.payment_date); if(!pd||pd<from||pd>to) return; const k=p.payment_method||'cash'; byM[k]=(byM[k]||0)+Number(p.amount||0); });
+      lines=Object.entries(byM).filter(([,a])=>Math.abs(a)>0.009).map(([m,a])=>({method:m,amount:a}));
+    }else if(Number(s.paid_amount||0)>0 && d10(s.sale_date)<=to){
+      /* فواتير قديمة بلا صفوف دفع: لا تاريخ للدفعة إلا يوم الفاتورة نفسه */
+      paid=paidToEnd=Math.abs(Number(s.paid_amount||0));
+      lines=[{method:s.payment_method||'cash',amount:paid}];
+    }
+    return {invoice_no:s.invoice_no||s.id.slice(0,8), time:(s.created_at||'').replace('T',' ').slice(0,19), customer:c?.name||'زبون نقدي', payment_method:s.payment_method, payment_lines:lines, total, paid, balance_due:Math.round((total-paidToEnd)*100)/100, seller:dailyCashSellerForSale(s.id)};
+  }).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  const creditSales=invoices.reduce((a,i)=>a+Math.max(0,Number(i.balance_due||0)),0);
   const avgInvoice=invoiceCount?totalSales/invoiceCount:0;
   const salesSummary={invoiceCount,totalSales,cashSales:salesPay.cash,cardSales:salesPay.card,bankSales:salesPay.bank_transfer,creditSales,totalDiscounts,avgInvoice};
-  const invoices=daySalesArr.map(s=>{const c=customers.find(x=>x.id===s.customer_id); return {invoice_no:s.invoice_no||s.id.slice(0,8), time:(s.created_at||'').replace('T',' ').slice(0,19), customer:c?.name||'زبون نقدي', payment_method:s.payment_method, total:Number(s.total||0), paid:Number(s.paid_amount||0), balance_due:Number(s.balance_due||0), seller:dailyCashSellerForSale(s.id)};}).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
   const catMap={};
   dayExpenses.forEach(e=>{const name=expenseCategories.find(c=>c.id===e.category_id)?.name||'بدون تصنيف'; const method=dailyCashMethodFromAccount(e.account_id); const o=catMap[name]||(catMap[name]={name,cash:0,card:0,bank_transfer:0,total:0}); dailyCashAdd(o,method,e.amount);});
   const expensesByCategory=Object.values(catMap).sort((a,b)=>b.total-a.total);
+  /* (طلب المالك 2026-10-20) تفصيل المصاريف: «البيان» هو العمود المهم —
+     ملخص التصنيفات يبقى فوقه، وهذا تحته بكل مصروف ووقته ومستخدمه. */
+  const expenseLines=dayExpenses.slice().sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||''))).map(e=>({
+    time:(e.created_at||'').replace('T',' ').slice(0,19),
+    title:e.title||'',
+    category:expenseCategories.find(c=>c.id===e.category_id)?.name||'بدون تصنيف',
+    method:dailyCashMethodFromAccount(e.account_id),
+    amount:Number(e.amount||0),
+    user:e.created_by||''
+  }));
   const refunds=dayReturns.map(r=>{const orig=sales.find(s=>s.id===r.sale_id); const c=customers.find(x=>x.id===r.customer_id); return {time:(r.created_at||'').replace('T',' ').slice(0,19), original_invoice:orig?.invoice_no||'', refund_method:r.refund_method, amount:Number(r.total||0), customer:c?.name||'زبون نقدي'};});
   const customerPayments=dayCustomerPayMoves.map(({m,method})=>({customer:dailyCashCustomerNameForMovement(m)||'زبون', method, amount:Number(m.amount||0), notes:m.notes||''}));
   const supplierPayments=daySupplierPayMoves.map(({m,method})=>({supplier:dailyCashSupplierNameForMovement(m)||'مورد', method, amount:Number(m.amount||0), notes:m.notes||''}));
@@ -10718,7 +10755,7 @@ function getDailyCashData(opts={}){
   const countedCash=Number(localStorage.getItem(dailyCashCountedKey(date,branch))||0)||0;
   const difference=countedCash-cashRemaining;
   return {date,dateFrom:from,dateTo:to,isRange,branch,branchName,salesPay,expensesPay,customerPay,supplierPay,refundsPay,cashRemaining,invoiceCount,
-    salesSummary,invoices,expensesByCategory,refunds,customerPayments,supplierPayments,nonCash,saved,savedStatus,countedCash,difference,settlementShortage,settlementSurplus,days};
+    salesSummary,invoices,expensesByCategory,expenseLines,refunds,customerPayments,supplierPayments,nonCash,saved,savedStatus,countedCash,difference,settlementShortage,settlementSurplus,days};
 }
 function setCashPeriod(n){
   const to=new Date(); const from=new Date(); from.setDate(from.getDate()-(n-1));
@@ -10789,7 +10826,12 @@ function renderDailyCashReport(){
   const ss=d.salesSummary;
   const salesRows=[`<tr><td>عدد الفواتير</td><td>${ss.invoiceCount}</td></tr>`,`<tr><td>إجمالي المبيعات</td><td><b>${money(ss.totalSales)}</b></td></tr>`,(nz(ss.creditSales)?`<tr><td>مبيعات آجل / غير محصّلة</td><td>${money(ss.creditSales)}</td></tr>`:''),(nz(ss.totalDiscounts)?`<tr><td>إجمالي الخصومات</td><td>${money(ss.totalDiscounts)}</td></tr>`:'')].filter(Boolean);
   const expCatRows=d.expensesByCategory.filter(c=>nz(c.total)).map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${money(c.total)}</td></tr>`);
-  const invRows=d.invoices.map(i=>`<tr><td class="ltr">${esc(i.invoice_no)}</td><td class="ltr">${esc(i.time)}</td><td>${esc(i.customer)}</td><td>${esc(M[i.payment_method]||i.payment_method)}</td><td><b>${money(i.total)}</b></td><td>${money(i.paid)}</td><td class="${i.balance_due>0?'stock-negative':''}">${money(i.balance_due)}</td><td class="mini">${esc(i.seller||'—')}</td></tr>`);
+  /* (طلب المالك 2026-10-20) كل طريقة دفع بمبلغها في سطر — من صفوف الدفعات */
+  const payCellScreen=i=>(i.payment_lines&&i.payment_lines.length)
+    ? i.payment_lines.map(l=>`${esc(M[l.method]||l.method)} ${money(l.amount)}`).join('<br>')
+    : esc(M[i.payment_method]||i.payment_method||'');
+  const expRows=(d.expenseLines||[]).map(e=>`<tr><td class="ltr">${esc(e.time)}</td><td><b>${esc(e.title)}</b></td><td>${esc(e.category)}</td><td>${esc(M[e.method]||e.method)}</td><td><b>${money(e.amount)}</b></td><td class="mini">${esc(e.user||'—')}</td></tr>`);
+  const invRows=d.invoices.map(i=>`<tr><td class="ltr">${esc(i.invoice_no)}</td><td class="ltr">${esc(i.time)}</td><td>${esc(i.customer)}</td><td>${payCellScreen(i)}</td><td><b>${money(i.total)}</b></td><td>${money(i.paid)}</td><td class="${i.balance_due>0?'stock-negative':''}">${money(i.balance_due)}</td><td class="mini">${esc(i.seller||'—')}</td></tr>`);
   const refRows=d.refunds.map(r=>`<tr><td class="ltr">${esc(r.time)}</td><td class="ltr">${esc(r.original_invoice||'—')}</td><td>${esc(M[r.refund_method]||r.refund_method)}</td><td><b>${money(r.amount)}</b></td><td>${esc(r.customer)}</td></tr>`);
   const cpRows=d.customerPayments.map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td class="mini">${esc(p.notes||'')}</td></tr>`);
   const spRows=d.supplierPayments.map(p=>`<tr><td>${esc(p.supplier)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td class="mini">${esc(p.notes||'')}</td></tr>`);
@@ -10797,7 +10839,8 @@ function renderDailyCashReport(){
   const lists=`<div class="panel" style="box-shadow:none;margin-top:12px">
     ${details('ملخص المبيعات', tbl(['البيان','القيمة '+cur],salesRows))}
     ${expCatRows.length?details('المصاريف حسب التصنيف', tbl(['التصنيف','الإجمالي'],expCatRows)):''}
-    ${d.invoices.length?details('قائمة الفواتير ('+d.invoices.length+')', tbl(['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع','المتبقي','البائع'],invRows)):''}
+    ${expRows.length?details('تفاصيل المصاريف ('+expRows.length+')', tbl(['الوقت','البيان','التصنيف','طريقة الدفع','المبلغ','المستخدم'],expRows)):''}
+    ${d.invoices.length?details('قائمة الفواتير ('+d.invoices.length+')', tbl(['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع بالفترة','المتبقي بنهاية الفترة','البائع'],invRows)):''}
     ${d.refunds.length?details('قائمة المرتجعات ('+d.refunds.length+')', tbl(['وقت المرتج','الفاتورة الأصلية','طريقة الاسترداد','المبلغ','الزبون'],refRows)):''}
     ${d.customerPayments.length?details('دفعات الزبائن ('+d.customerPayments.length+')', tbl(['الزبون','الطريقة','المبلغ','ملاحظات'],cpRows)):''}
     ${d.supplierPayments.length?details('دفعات الموردين ('+d.supplierPayments.length+')', tbl(['المورد','الطريقة','المبلغ','ملاحظات'],spRows)):''}
@@ -10829,7 +10872,14 @@ function dailyCashPrintHtml(d, meta={}){
   const ss=d.salesSummary||{};
   const salesRows=[`<tr><td>عدد الفواتير</td><td>${ss.invoiceCount??d.invoiceCount}</td></tr>`,`<tr><td>إجمالي المبيعات</td><td><b>${money(ss.totalSales??0)}</b></td></tr>`,(nz(ss.creditSales)?`<tr><td>مبيعات آجل / غير محصّلة</td><td>${money(ss.creditSales)}</td></tr>`:''),(nz(ss.totalDiscounts)?`<tr><td>إجمالي الخصومات</td><td>${money(ss.totalDiscounts)}</td></tr>`:'')].filter(Boolean);
   const expCatRows=(d.expensesByCategory||[]).filter(c=>nz(c.total)).map(c=>`<tr><td>${esc(c.name)}</td><td><b>${money(c.total)}</b></td></tr>`);
-  const invRows=(d.invoices||[]).map(i=>`<tr><td>${esc(i.invoice_no)}</td><td>${esc(i.time)}</td><td>${esc(i.customer)}</td><td>${esc(M[i.payment_method]||i.payment_method)}</td><td><b>${money(i.total)}</b></td><td>${money(i.paid)}</td><td>${money(i.balance_due)}</td><td>${esc(i.seller||'—')}</td></tr>`);
+  /* (طلب المالك 2026-10-20) تفصيل المصاريف — «البيان» أولاً في الأهمية */
+  const expRows=(d.expenseLines||[]).map(e=>`<tr><td>${esc(e.time)}</td><td><b>${esc(e.title)}</b></td><td>${esc(e.category)}</td><td>${esc(M[e.method]||e.method)}</td><td><b>${money(e.amount)}</b></td><td>${esc(e.user||'—')}</td></tr>`);
+  /* (طلب المالك 2026-10-20) تقسيمة الدفع: صف لكل طريقة بمبلغها من صفوف
+     pos_sale_payments؛ فاتورة بطريقة واحدة = سطر واحد كما كان. */
+  const payCellPrint=i=>(i.payment_lines&&i.payment_lines.length)
+    ? i.payment_lines.map(l=>`${esc(M[l.method]||l.method)} ${money(l.amount)}`).join('<br>')
+    : esc(M[i.payment_method]||i.payment_method||'');
+  const invRows=(d.invoices||[]).map(i=>`<tr><td>${esc(i.invoice_no)}</td><td>${esc(i.time)}</td><td>${esc(i.customer)}</td><td>${payCellPrint(i)}</td><td><b>${money(i.total)}</b></td><td>${money(i.paid)}</td><td>${money(i.balance_due)}</td><td>${esc(i.seller||'—')}</td></tr>`);
   const refRows=(d.refunds||[]).map(r=>`<tr><td>${esc(r.time)}</td><td>${esc(r.original_invoice||'—')}</td><td>${esc(M[r.refund_method]||r.refund_method)}</td><td><b>${money(r.amount)}</b></td><td>${esc(r.customer)}</td></tr>`);
   const cpRows=(d.customerPayments||[]).map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td>${esc(p.notes||'')}</td></tr>`);
   const spRows=(d.supplierPayments||[]).map(p=>`<tr><td>${esc(p.supplier)}</td><td>${esc(M[p.method]||p.method)}</td><td><b>${money(p.amount)}</b></td><td>${esc(p.notes||'')}</td></tr>`);
@@ -10866,7 +10916,16 @@ td.pos{color:#087f5b;font-weight:800}td.neg{color:#dc2626;font-weight:800}
 <h3>المصاريف (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${outRows||'<tr><td colspan="2">لا توجد مصاريف.</td></tr>'}</tbody></table>
 <div class="baqi"><div class="lbl">الباقي كاش للفترة (النقد فقط)</div><div class="amt ${cashCls(d.cashRemaining)}">${money(d.cashRemaining)} ${cur}</div></div>
 <h3>تفصيل يومي</h3><table><thead><tr><th>التاريخ</th><th>عدد الفواتير</th><th>إجمالي المبيعات</th><th>الكاش الداخل</th><th>الكاش الخارج</th><th>المتبقي كاش</th></tr></thead><tbody>${dayRows.join('')||'<tr><td colspan="6">لا توجد بيانات.</td></tr>'}</tbody></table>
-<div class="small" style="margin-top:12px">تقرير مختصر للفترة — لتفاصيل يوم واحد اجعل «من» = «إلى».</div>
+${/* (طلب المالك 2026-10-20) تقرير الفترة يحمل التفاصيل نفسها — و«المدفوع
+     بالفترة / المتبقي بنهاية الفترة» محصوران بالفترة لا بحالة اليوم. */''}
+${T('ملخص المبيعات',['البيان','القيمة '+cur],salesRows)}
+${expCatRows.length?T('المصاريف حسب التصنيف',['التصنيف','الإجمالي '+cur],expCatRows):''}
+${T('تفاصيل المصاريف',['الوقت','البيان','التصنيف','طريقة الدفع','المبلغ','المستخدم'],expRows)}
+${T('قائمة الفواتير',['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع بالفترة','المتبقي بنهاية الفترة','البائع'],invRows)}
+${T('قائمة المرتجعات',['وقت المرتج','الفاتورة الأصلية','طريقة الاسترداد','المبلغ','الزبون'],refRows)}
+${T('دفعات الزبائن',['الزبون','الطريقة','المبلغ','ملاحظات'],cpRows)}
+${T('دفعات الموردين',['المورد','الطريقة','المبلغ','ملاحظات'],spRows)}
+<div class="small" style="margin-top:12px">أرقام الفواتير محصورة بالفترة: «المدفوع بالفترة» = دفعات تاريخها داخل الفترة، و«المتبقي بنهاية الفترة» = الإجمالي ناقص كل الدفعات حتى آخر يوم في الفترة.</div>
 <div class="no-print" style="text-align:center;margin-top:14px"><button onclick="window.print()" style="background:#1d4ed8;color:#fff;border:0;border-radius:10px;padding:9px 22px;font:inherit;font-weight:700;cursor:pointer">طباعة</button></div>
 </body></html>`;
   }
@@ -10911,6 +10970,9 @@ td.empty{text-align:center;color:#94a3b8;padding:12px}
   .head{padding-bottom:6px;margin-bottom:4px}.head .title{font-size:17px}.head .sub{font-size:11px}
   .meta{font-size:10.5px;line-height:1.5}
   .baqi{padding:7px 10px;margin:7px 0;break-inside:avoid}.baqi .amt{font-size:20px}.baqi .lbl{font-size:12px}
+  /* (طلب المالك 2026-10-20) بلوك التسوية والتواقيع يبقى في المستند ويُخفى
+     في الطباعة فقط — ورقة بلا كاش معدود كانت تطبع «عجز −35» غير موجود. */
+  .settle-block{display:none !important}
   .settle,.sign{break-inside:avoid;page-break-inside:avoid}
   .sign{margin-top:20px;gap:40px}
 }
@@ -10923,17 +10985,21 @@ td.empty{text-align:center;color:#94a3b8;padding:12px}
 <div><h3>المصاريف (حسب طريقة الدفع)</h3><table><thead><tr><th>البيان</th><th>المبلغ</th></tr></thead><tbody>${outRows||'<tr><td colspan="2" class="empty">لا توجد مصاريف.</td></tr>'}</tbody></table></div>
 </div>
 <div class="baqi"><div><div class="lbl">الباقي كاش (النقد فقط)</div><div class="small">البطاقة والتحويل لا يدخلان في الباقي الكاشي — فقط النقد الداخل ناقص النقد الخارج.</div></div><div class="amt ${cashCls(d.cashRemaining)}">${money(d.cashRemaining)} ${cur}</div></div>
-<div class="settle"><h3 style="margin:0 0 8px">التسوية النهائية</h3>
+${/* (طلب المالك 2026-10-20) التسوية والتواقيع تبقى في المستند لكن تُخفى
+     في الطباعة وحدها (.settle-block في @media print) — وليست حذفاً.
+     السبب: ورقة بلا إدخال للكاش المعدود كانت تُعلن عجزاً غير موجود. */''}
+<div class="settle-block"><div class="settle"><h3 style="margin:0 0 8px">التسوية النهائية</h3>
 <div class="row">
 <div><label>الكاش المعدود</label><div class="big">${money(d.countedCash||0)} ${cur}</div></div>
 <div><label>الفرق (المعدود − المتوقع)</label><div class="big ${cashCls(diff)}">${(diff>0?'+':'')+money(diff)} ${cur}</div></div>
 </div>
-${notes?`<div class="small" style="margin-top:8px"><b>ملاحظات:</b> ${esc(notes)}</div>`:''}
 <div class="sign"><div>توقيع مسؤول الفرع</div><div>توقيع الإدارة / المحاسب</div></div>
-</div>
+</div></div>
+${notes?`<div class="small" style="margin-top:8px"><b>ملاحظات:</b> ${esc(notes)}</div>`:''}
 ${T('ملخص المبيعات',['البيان','القيمة '+cur],salesRows)}
 ${expCatRows.length?T('المصاريف حسب التصنيف',['التصنيف','الإجمالي '+cur],expCatRows):''}
-${T('قائمة الفواتير',['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع','المتبقي','البائع'],invRows)}
+${T('تفاصيل المصاريف',['الوقت','البيان','التصنيف','طريقة الدفع','المبلغ','المستخدم'],expRows)}
+${T('قائمة الفواتير',['رقم الفاتورة','الوقت','الزبون','طريقة الدفع','الإجمالي','المدفوع بالفترة','المتبقي بنهاية الفترة','البائع'],invRows)}
 ${T('قائمة المرتجعات',['وقت المرتج','الفاتورة الأصلية','طريقة الاسترداد','المبلغ','الزبون'],refRows)}
 ${T('دفعات الزبائن',['الزبون','الطريقة','المبلغ','ملاحظات'],cpRows)}
 ${T('دفعات الموردين',['المورد','الطريقة','المبلغ','ملاحظات'],spRows)}
