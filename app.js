@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261020-1201';
+const APP_BUILD='b20261020-1607';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -679,7 +679,7 @@ function applyPurchaseLocally(saved, body, items, payment){
 }
 /* مرآة post_stock_transfer_transaction */
 function applyTransferLocally(saved, body, items){
-  transfers.unshift({...body,id:saved.id,transfer_no:saved.transfer_no,created_at:new Date().toISOString()});
+  transfers.unshift({...body,id:saved.id,transfer_no:saved.transfer_no,created_by:saved.created_by||'',created_at:new Date().toISOString()});
   items.forEach(it=>{
     transferItems.push({...it,transfer_id:saved.id});
     localAdjustStock(body.from_location_id,it.product_code,it.product_name,-Number(it.qty||0),'transfer_out','pos_stock_transfers',saved.id,'تحويل صادر');
@@ -4554,30 +4554,35 @@ function getStockQty(location_id, product_code){
   if(!m){m=new Map(); for(const x of stock){ if(String(x.location_id)===locKey){ const k=String(x.product_code||'').toLowerCase(); if(!m.has(k)) m.set(k,Number(x.qty)||0); } } _stockQtyCache.maps.set(locKey,m);}
   return m.get(String(product_code||'').toLowerCase())||0;
 }
-/* 0450: adjustStockOnly أُزيل — كان قراء-عدّل-اكتب غير ذرّي (سبب جذري MC10647)؛
-   العكس يمر الآن عبر adjustStock (pos_adjust_stock_checked الذرّي). */
-async function deleteStockMovements(referenceTable, referenceId){
-  await api('pos_stock_movements',{method:'DELETE',qs:`?reference_table=eq.${referenceTable}&reference_id=eq.${referenceId}`});
-}
-async function adjustStock(location_id, item, qtyChange, movementType, referenceId, notes){
-  await rpc('pos_adjust_stock_checked',{
-    p_location_id:location_id,
-    p_product_code:item.product_code,
-    p_product_name:item.product_name,
-    p_qty_change:qtyChange,
-    p_movement_type:movementType,
-    p_reference_table:'pos_stock_transfers',
-    p_reference_id:referenceId,
-    p_notes:notes
-  });
-}
+/* (0153) حُذف adjustStock/deleteStockMovements: تعديل التحويل صار نداء
+   RPC ذرّياً واحداً (update_stock_transfer_transaction) — لا كتابات
+   مخزون/حركات من المتصفح بعد اليوم. */
 function renderTransfers(){
   const scope=sellerBranchScope(); const list=scope?transfers.filter(t=>t.from_location_id===scope||t.to_location_id===scope):transfers;
   q('transfersBody').innerHTML = list.map(t=>{
     const from=locations.find(x=>x.id===t.from_location_id); const to=locations.find(x=>x.id===t.to_location_id);
     const doerTd=sellerCell(t.created_by);   /* (المهمة ٥) منفّذ التحويل */
-    return `<tr><td class="ltr"><span class="code">${esc(t.transfer_no||t.id.slice(0,8))}</span></td><td>${t.transfer_date}</td><td><span class="${branchChip(t.from_location_id)}">${esc(from?.name||'')}</span></td><td><span class="${branchChip(t.to_location_id)}">${esc(to?.name||'')}</span></td><td><span class="chip paid">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td>${doerTd}<td><button class="btn secondary" onclick="openTransferForEdit('${t.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="printTransfer('${t.id}')">🖨️ طباعة</button></td></tr>`;
+    const delBtn=isManager()?` <button class="btn danger" type="button" onclick="deleteStockTransfer('${t.id}')">حذف</button>`:''; /* (0153) الحذف للمدير — والخادم يتحقق */
+    return `<tr><td class="ltr"><span class="code">${esc(t.transfer_no||t.id.slice(0,8))}</span></td><td>${t.transfer_date}</td><td><span class="${branchChip(t.from_location_id)}">${esc(from?.name||'')}</span></td><td><span class="${branchChip(t.to_location_id)}">${esc(to?.name||'')}</span></td><td><span class="chip paid">${typeLabel(t.status)}</span></td><td>${t.notes||''}</td>${doerTd}<td><button class="btn secondary" onclick="openTransferForEdit('${t.id}')">فتح / تعديل</button> <button class="btn secondary" onclick="printTransfer('${t.id}')">🖨️ طباعة</button>${delBtn}</td></tr>`;
   }).join('') || '<tr><td colspan="8">لا توجد تحويلات مخزون بعد.</td></tr>';
+}
+/* (0153) حذف تحويل مخزون — RPC ذرّي يعكس الأثر على مخزون الطرفين ويحذف
+   المستند وبنوده وحركاته في نفس المعاملة (مدير فقط — والخادم يحسم) */
+async function deleteStockTransfer(id){
+  if(!isManager()){toast('حذف تحويلات المخزون للمدير فقط','warn');return;}
+  const t=transfers.find(x=>x.id===id); if(!t){toast('لم يتم العثور على التحويل','warn');return;}
+  const from=locations.find(l=>l.id===t.from_location_id)?.name||'', to=locations.find(l=>l.id===t.to_location_id)?.name||'';
+  if(!confirm(`حذف تحويل مخزون من «${from}» إلى «${to}» بتاريخ ${t.transfer_date}؟\nسيُعكس أثره على مخزون الطرفين ويُحذف المستند وبنوده وحركاته في نفس المعاملة — لا رجوع.`))return;
+  if(window.__busy) return; window.__busy=true;
+  try{
+    showLoading(true);
+    const res=await rpc('delete_stock_transfer_transaction',{p_transfer_id:id,p_user_identifier:appUser?.identifier||''});
+    logAction('stock_transfer_delete','pos_stock_transfers',id,`حذف تحويل مخزون: ${from} ← ${to} · ${t.transfer_date} (عُكست ${res?.legs_removed??0} حركة)`);
+    toast('تم حذف التحويل وعكس أثره على المخزون','success');
+    if(editingTransferId===id) resetTransferForm();
+    await refreshParts(['transfers','stock','stockMovements']);
+  }catch(err){ console.error(err); toast('خطأ في حذف التحويل: '+err.message,'error'); }
+  finally{ showLoading(false); window.__busy=false; }
 }
 function addOrIncrementTransferProduct(p, qty=1){
   const rows=[...q('transferItemsBody').querySelectorAll('tr')];
@@ -10259,19 +10264,9 @@ async function openTransferForEdit(id){
     toast('تم فتح التحويل للتعديل');
   }catch(err){console.error(err);toast('خطأ في فتح التحويل: '+err.message)} finally{showLoading(false);window.__busy=false}
 }
-async function reverseTransferEffects(){
-  if(!editingTransferId || !originalTransfer) return;
-  /* 0450 — إصلاح السبب الجذري (MC10647): العكس كان قراء-عدّل-اكتب بدون قفل
-     (adjustStockOnly) — تحديث ضائع يمسح أثر upsert السيرفر الذرّي ويترك
-     الحركة بلا رصيد. الآن العكس يمر عبر pos_adjust_stock_checked الذرّي
-     (قفل FOR UPDATE + upsert + حركة)؛ الحركات التعويضية تحمل مرجع التحويل
-     القديم فيُحذف مع الأصل التالي — الأثر الصافي كما كان، لكن كل خطوة ذرّية. */
-  for(const it of originalTransferItems){
-    await adjustStock(originalTransfer.from_location_id,it,Math.abs(Number(it.qty||0)),'adjustment',editingTransferId,'عكس تعديل تحويل');
-    await adjustStock(originalTransfer.to_location_id,it,-Math.abs(Number(it.qty||0)),'adjustment',editingTransferId,'عكس تعديل تحويل');
-  }
-  await deleteStockMovements('pos_stock_transfers', editingTransferId);
-}
+/* (0153) حُذف reverseTransferEffects: عكس أثر التحويل عند التعديل صار
+   داخل update_stock_transfer_transaction على الخادم — من الحركات
+   الفعلية لا من لقطة البنود، وفي نفس معاملة إعادة النشر. */
 
 /* قرار المالك (0410/0420): التحقق من الكمية ضد الخادم لا ضد الذاكرة —
    سؤال واحد لكل الأصناف في موقع المصدر (المركّبات تُوسَّع لمكوّناتها كي يطابق الخصم السيرفري).
@@ -10338,30 +10333,17 @@ q('transferForm').addEventListener('submit', async e=>{
       logAction('transfer','pos_stock_transfers',saved.id,`${items.length} صنف - ${locations.find(l=>l.id===from)?.name||''} → ${locations.find(l=>l.id===to)?.name||''}`);
       clearDraftKey('transfer');
       transferId=saved.id;
-      /* (المهمة ٥) منفّذ التحويل: الدالة تستقبل p_user_identifier لكنها لا تخزّنه على الصف،
-         فيُكتب هنا. محاولة لا تُعطّل الحفظ: التحويل نجح فعلاً والاسم تفصيل عرض. */
-      if(appUser?.identifier){
-        api('pos_stock_transfers',{method:'PATCH',qs:`?id=eq.${saved.id}`,body:{created_by:appUser.identifier}})
-          .then(()=>{ const t=transfers.find(x=>x.id===saved.id); if(t) t.created_by=appUser.identifier; })
-          .catch(e=>console.warn('تعذّر تسجيل منفّذ التحويل (قد يحتاج SQL 0058)',e));
-      }
+      /* (0153) المنفّذ يُخزَّن داخل RPC نفسه منذ 0082 — أُزيل PATCH اللاحق وتعليقه العتيق (0058). */
       resetTransferForm(); toast('تم حفظ التحويل وتحديث المخزون','success'); applyTransferLocally(saved, body, items); refreshAfterLocalUpdate();
       return;
     }
-    if(editingTransferId){
-      await reverseTransferEffects();
-      await api('pos_stock_transfers',{method:'PATCH',qs:`?id=eq.${editingTransferId}`,body:{...body,updated_at:new Date().toISOString()}});
-      await api('pos_stock_transfer_items',{method:'DELETE',qs:`?transfer_id=eq.${editingTransferId}`});
-    }else{
-      const transfer=await api('pos_stock_transfers',{method:'POST',body}); transferId=transfer[0].id;
-    }
-    await api('pos_stock_transfer_items',{method:'POST',body:items.map(it=>({...it,transfer_id:transferId}))});
-    for(const it of items){
-      await adjustStock(from,it,-Math.abs(it.qty),'transfer_out',transferId,'تحويل مخزون صادر');
-      await adjustStock(to,it,Math.abs(it.qty),'transfer_in',transferId,'تحويل مخزون وارد');
-    }
-    const msg=editingTransferId?'تم تعديل التحويل وتحديث المخزون':'تم حفظ التحويل وتحديث المخزون';
-    resetTransferForm(); toast(msg); await refreshParts(['transfers','stock','stockMovements']);
+    /* (0153) التعديل نداء RPC ذرّي واحد (update_stock_transfer_transaction)
+       — كانت هنا سلسلة كتابات من المتصفح (عكس بحركات تسوية/حذف كل
+       الحركات/PATCH/حذف البنود وإعادة إدراجها/سيقان جديدة) يفسدها
+       انقطاع واحد بصمت وتضاعف أثرها إعادة المحاولة. الخادم الآن يعكس
+       من الحركات الفعلية ويعيد النشر بسيقان مؤرّخة بتاريخ المستند. */
+    await rpc('update_stock_transfer_transaction',{p_transfer_id:editingTransferId,p_transfer:body,p_items:items,p_user_identifier:appUser?.identifier||''});
+    resetTransferForm(); toast('تم تعديل التحويل وتحديث المخزون'); await refreshParts(['transfers','stock','stockMovements']);
   }catch(err){console.error(err);toast('خطأ في حفظ التحويل: '+err.message)} finally{showLoading(false);window.__busy=false}
 });
 
@@ -11859,6 +11841,7 @@ const AUDIT_ACTION_LABELS={
   customer_debt_repair:'إصلاح ديون زبائن', supplier_debt_repair:'إصلاح ديون مورّدين',
   supplier_payments_apply:'تسوية دفعات مورّدين',
   treasury_transfer_create:'تحويل مالي', treasury_transfer_update:'تعديل تحويل مالي', treasury_transfer_delete:'حذف تحويل مالي',
+  stock_transfer_update:'تعديل تحويل مخزون', stock_transfer_delete:'حذف تحويل مخزون',
 };
 function auditActionLabel(a){ return AUDIT_ACTION_LABELS[a]||a; }
 function renderAuditLog(){
