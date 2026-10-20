@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261019-2041">
+<link rel="stylesheet" href="app.css?v=20261020-1201">
 </head>
 <body class="auth-locked">
   <header>
@@ -43,7 +43,7 @@
       <button data-tab="customers"><i class="ti ti-users"></i><span>الزبائن والديون</span></button>
 
       <div class="nav-group" data-sec="stock">المشتريات والمخزون</div>
-      <button data-tab="products"><i class="ti ti-box"></i><span>قاعدة المنتجات</span></button>
+      <button data-tab="products"><i class="ti ti-box"></i><span>قائمة المنتجات</span></button>
       <button data-tab="priceReview" title="منتجات تغيّرت تكلفتها بفاتورة شراء — راجع سعر البيع"><i class="ti ti-tag"></i><span>مراجعة أسعار البيع</span><span class="nav-badge" id="priceReviewBadge" hidden></span></button>
       <button data-tab="bulkPrice" title="تعديل أسعار الماركات/الموردين/التصنيفات مع بحث بالكود والاسم (للمدير والمبرمج فقط)"><i class="ti ti-trending-up"></i><span>تعديل الأسعار</span></button>
       <button data-tab="suppliers"><i class="ti ti-truck"></i><span>الموردون</span></button>
@@ -164,7 +164,7 @@
         <div class="panel" style="padding:10px 14px">
           <!-- [1] شريط العنوان -->
           <div class="tools" style="margin:0 0 6px">
-            <h2 style="margin:0" title="البيانات مستوردة من ملفك: الكود، الصنف، الماركة، الموديل، المورد، التصنيف، سعر الشراء، سعر البيع، والمخزون حسب المكان">قاعدة المنتجات</h2>
+            <h2 style="margin:0" title="البيانات مستوردة من ملفك: الكود، الصنف، الماركة، الموديل، المورد، التصنيف، سعر الشراء، سعر البيع، والمخزون حسب المكان">قائمة المنتجات</h2>
             <span class="mini" id="productsInfo" style="font-weight:700"></span>
             <input id="productSearch" placeholder="🔍 ابحث... مثال: خلاط كروم أقل من 200" oninput="debounceRenderProducts()" style="width:100%;max-width:500px;font-size:17px;font-weight:700;padding:13px 18px;border:2.5px solid var(--blue);border-radius:14px;background:var(--accent-soft)">
             <button class="btn secondary" type="button" onclick="extraSearchLineProduct()" title="إضافة سطر بحث إضافي — كل الأسطر يجب أن تتطابق معًا (من price checker)">＋ سطر بحث</button>
@@ -1577,6 +1577,6 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261019-2041"></script>
+<script src="app.js?v=20261020-1201"></script>
 </body>
 </html>

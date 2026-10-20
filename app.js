@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261019-2041';
+const APP_BUILD='b20261020-1201';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1988,10 +1988,10 @@ function applyPermissions(){
      طلب واحد صغير، لا يرسم أي شاشة */
   try{ if(navigator.onLine) loadPriceReviewQueue().catch(()=>{}); }catch(_e){}
 }
-/* ═══ (20261012c) شريط الوصول السريع الدائم — طلب المالك: سبعة اختصارات ثابتة
+/* ═══ (20261012c) شريط الوصول السريع الدائم — طلب المالك: اختصارات ثابتة
    تحت الهيدر في كل الألسنة، لا قائمة منسدلة. يُبنى من مصدر الأذونات نفسه
    (canTab + canSeeRegister) لا من نسخة ثانية تنحرف: لو تغيّرت ROLE_TABS
-   تبعَ الشريط تلقائياً. البند ٧ ليس لساناً: السجل داخل finance ويُمرَّر
+   تبعَ الشريط تلقائياً. البند الأخير ليس لساناً: السجل داخل finance ويُمرَّر
    إليه بعد رسم اللسان (renderFinance يهيّئه ويحمّله بنفسه). ═══ */
 /* (20261012d) تحسين المالك: نص أكبر وأوضح (15px/700، أيقونة 20px، هدف لمس 44px،
    حشو 10/16، تباعد 8px، استدارة 12px) ولون بالمعنى من لوحة الإطلاق نفسها
@@ -2001,6 +2001,8 @@ function applyPermissions(){
 const QUICK_BAR_ITEMS=[
   {tab:'sales',           label:'فاتورة جديدة',         icon:'ti-shopping-cart', tone:'lt-orange'},
   {tab:'salesList',       label:'فواتير البيع',         icon:'ti-receipt', tone:'lt-orange'},
+  /* (طلب المالك 2026-10-19) قاعدة المنتجات في الشريط الثابت وباسمها الجديد «قائمة المنتجات» */
+  {tab:'products',        label:'قائمة المنتجات',       icon:'ti-list-search', tone:'lt-blue'},
   {tab:'purchasesList',   label:'فواتير الشراء',        icon:'ti-shopping-bag', tone:'lt-blue'},
   {tab:'transfers',       label:'تحويلات المخزون',      icon:'ti-arrows-exchange', tone:'lt-blue'},
   {tab:'expensesQuick',   label:'المصاريف',             icon:'ti-wallet', tone:'lt-green'},
@@ -2008,7 +2010,7 @@ const QUICK_BAR_ITEMS=[
   {tab:'financeRegister', label:'سجل الحركات المالية',  icon:'ti-list-details', tone:'lt-green', register:true}
 ];
 function quickBarItemVisible(it){
-  /* البند ٧ ليس لساناً: السجل داخل finance وبحارسه الخاص canSeeRegister */
+  /* بند السجل ليس لساناً: السجل داخل finance وبحارسه الخاص canSeeRegister */
   return it.register ? (canTab('finance') && canSeeRegister()) : canTab(it.tab);
 }
 function renderQuickBar(){
@@ -2025,7 +2027,7 @@ function renderQuickBar(){
 }
 function updateQuickBarActive(){
   /* مصدر واحد للحالة النشطة: renderQuickBar يحسبها من activeTabId() —
-     إعادة رسم سبعة أزرار أرخص وأسلم من مسارَي رسم يتنافسان */
+     إعادة رسم ثمانية أزرار أرخص وأسلم من مسارَي رسم يتنافسان */
   renderQuickBar();
 }
 function quickBarGo(tab){
@@ -7894,7 +7896,7 @@ const SHORTCUTS=[
   {group:'عام', kbd:'F1 / ؟ / ?', desc:'ورقة الاختصارات هذه', match:e=>e.key==='F1'||e.key==='?'||e.key==='؟', when:e=>e.key==='F1'||!isTextEditable(e.target), run:e=>{ e.preventDefault(); renderShortcutsSheet(); const m=q('shortcutsModal'); if(m) m.classList.toggle('show'); }},
   {group:'عام', kbd:'Esc', desc:'إغلاق الطبقة العليا فقط: قائمة سياق ← منتقي ← حوار ← النافذة المحددة ← تحديد الصف', match:e=>e.key==='Escape', run:e=>{ if(dispatchEscape(e)) e.preventDefault(); }},
   {group:'عام', kbd:'F3', desc:'قائمة المنتجات (بيع/شراء/تحويل/جرد)', match:e=>e.key==='F3', run:e=>{ e.preventDefault(); if(q('proformas')?.classList.contains('active')) openProformaProductPicker(); else if(q('purchases')?.classList.contains('active')) openPurchaseProductPicker(); else if(q('transfers')?.classList.contains('active')) openTransferProductPicker(); else if(q('stockCount')?.classList.contains('active')) openStockCountPicker(); else openSaleProductPicker(); }},
-  {group:'الشريط والنوافذ', kbd:'Alt+1..7', desc:'أزرار شريط الوصول السريع بالترتيب', match:e=>e.altKey&&!e.ctrlKey&&!e.metaKey&&/^[1-7]$/.test(e.key), run:e=>{ e.preventDefault(); quickBarByIndex(Number(e.key)-1); }},
+  {group:'الشريط والنوافذ', kbd:'Alt+1..8', desc:'أزرار شريط الوصول السريع بالترتيب', match:e=>e.altKey&&!e.ctrlKey&&!e.metaKey&&/^[1-8]$/.test(e.key), run:e=>{ e.preventDefault(); quickBarByIndex(Number(e.key)-1); }},
   {group:'الشريط والنوافذ', kbd:'Ctrl+Tab', desc:'تدوير النوافذ المفتوحة (+Shift للعكس)', match:e=>e.key==='Tab'&&(e.ctrlKey||e.metaKey), run:e=>{ e.preventDefault(); cycleAppWindows(e.shiftKey?-1:1); }},
   {group:'منتقي الزبائن', kbd:'Ctrl+L', desc:'فواتير الزبون المميّز (كل التواريخ) في نافذة — دون مغادرة الفاتورة الجارية', match:e=>(e.ctrlKey||e.metaKey)&&!e.altKey&&!e.shiftKey&&(e.key==='l'||e.key==='L'), when:()=>longPickerOpenForCustomer()&&canTab('salesList'), run:e=>{ e.preventDefault(); longPickerCustomerInvoices(longPickerState.index); }},
   {group:'منتقي الزبائن', kbd:'Ctrl+E', desc:'تعديل بيانات الزبون المميّز في نافذة — يعود المنتقي بعد إغلاقها بنفس البحث', match:e=>(e.ctrlKey||e.metaKey)&&!e.altKey&&!e.shiftKey&&(e.key==='e'||e.key==='E'), when:()=>longPickerOpenForCustomer()&&canTab('customers'), run:e=>{ e.preventDefault(); longPickerCustomerEdit(longPickerState.index); }},

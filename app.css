@@ -592,7 +592,7 @@
     #sales #saleItemsBody tr.margin-yellow td:first-child{border-inline-start:4px solid #eab308}
     #sales #saleItemsBody tr.margin-yellow:hover td{background:color-mix(in srgb,#eab308 16%,var(--card))}
 
-    /* ═══ (المهمة ٢) قاعدة المنتجات — عمود ثابت بارتفاع النافذة ═══ */
+    /* ═══ (المهمة ٢) قائمة المنتجات — عمود ثابت بارتفاع النافذة ═══ */
     #products.active > .panel{display:flex;flex-direction:column;height:calc(100dvh - 130px);min-height:400px;overflow-y:auto;overflow:visible!important}
     #products .product-workbench{flex:1;min-height:200px;display:grid;grid-template-columns:240px minmax(0,1fr);gap:10px;align-items:start}
     #products .product-table-scroll{max-height:none;flex:1;min-height:0;overflow:auto}
