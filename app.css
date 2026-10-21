@@ -1183,6 +1183,11 @@ html[data-theme="dark"] .cat-row .count{color:#cbd5e1}
 
 /* ═══ (0103) عمود «في الشيت» — حالة مزامنة المصاريف مع شيت SmartBalance ═══ */
 .exp-sheet{white-space:nowrap;font-size:12.5px}
+/* (0158) إخفاء عمود «في الشيت» عن غير المدير/المبرمج/المحاسب — الصنف يُضاف
+   على الجدول في renderExpensesList، والخلايا لا تُرسَم أصلاً لذلك الحارس
+   هنا للرأس وحده (وعلى أي صف قديم بقي في DOM أثناء إعادة الرسم) */
+.expenses-table.hide-sheet-col th.exp-sheet-th,
+.expenses-table.hide-sheet-col td.exp-sheet{display:none}
 .exp-sent-ok{color:var(--good);font-weight:800;white-space:nowrap}
 .exp-sent-pend{color:var(--warn);font-weight:700;white-space:nowrap}
 .exp-sent-lb{display:inline-flex;align-items:center;gap:4px;margin:0;cursor:pointer}

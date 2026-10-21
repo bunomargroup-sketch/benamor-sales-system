@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261021-1622';
+const APP_BUILD='b20261021-2015';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -8619,6 +8619,11 @@ function canSeeRegister(){ return ['admin','programmer','accountant'].includes(S
    للمبرمج والمدير والمحاسب فقط. غيرهم تُخفى عنهم البطاقتان ولا تُكتب له
    القيمة في DOM إطلاقاً (إخفاء بصري وحده يترك الرقم مقروءاً من الصفحة). */
 function canSeeDebtTotals(){ return ['admin','programmer','accountant'].includes(String(currentRole?.role||'')); }
+/* (0158) عمود «في الشيت» في سجل المصاريف — قرار المالك (2026-10-21):
+   للمدير والمبرمج والمحاسب فقط. غيرهم لا يُرسَم له العمود ولا تُطلب
+   حالة المزامنة أصلاً (لا شيء في DOM يُقرأ). السبب: العمود يعرض «—»
+   لكل من لا يرسل، ويشوّش على البائع بلا فائدة. */
+function canSeeSheetColumn(){ return ['admin','programmer','accountant'].includes(String(currentRole?.role||'')); }
 function registerTypeLabel(t){ const f=REGISTER_MOVEMENT_TYPES.find(x=>x[0]===t); return f?f[1]:(typeLabel(t)||t); }
 /* ═══ (20261010b) القوائم المتعددة المطوية — زر ملخّص + لوحة مربعات بدل <select multiple> ═══
    لماذا: المتصفح يعرض select[multiple] صندوق قائمة مفتوحاً دائماً يبتلع
@@ -9324,7 +9329,8 @@ q('regPrintBtn')?.addEventListener('click',()=>printFinanceRegister());
 q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const method=q('expensePaymentMethod')?.value||'cash'; if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; if(method==='cash') selectDefaultExpenseAccount(); const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null,created_by:appUser?.identifier||''}; if(!body.location_id)throw new Error('لا يوجد فرع مرتبط بالمستخدم'); if(!body.account_id)throw new Error('اختر الخزينة / الحساب'); validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await logAction('expense','pos_expenses',r[0].id,`${body.title} - ${money(body.amount)} ${APP_CONFIG.currency}`);await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset(); if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; selectDefaultExpenseAccount(); setToday();toast('تم حفظ المصروف'); expenses.unshift(r[0]); if(expensesListInit && expenseMatchesListFilters(r[0])){ expensesListCache.unshift(r[0]); renderExpensesList(); } localMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title); refreshAfterLocalUpdate();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 /* ═════════════ سجل المصاريف: قائمة + فلاتر + تعديل/حذف ذرّي عبر RPC ═════════════
-   القاعدة: من سجّل المصروف يعدّله في نفس يوم تسجيله فقط — والمدير يعدّل ويحذف الكل.
+   القاعدة: من سجّل المصروف يعدّله في نفس يوم تسجيله فقط — والمدير يعدّل ويحذف الكل،
+   والمحاسب يعدّله مطلقاً (0158).
    العبرة بـ created_at (وقت التسجيل) لا expense_date. الحذف لغير المدير ممنوع. */
 let expensesListCache=[], expensesListLimit=500, expensesListInit=false, expensesSearchTimer=null, editingExpenseId=null;
 /* (0103) المصاريف → شيت SmartBalance: خريطة المؤكَّد (expense_id→sent_at) + المعلق محلياً + الاختيار */
@@ -9332,6 +9338,9 @@ let expensesSheetSentMap=new Map(), expensesSheetPending=new Set(), expenseSheet
 function expenseTodayUTC(){ return new Date().toISOString().slice(0,10); } /* مطابق لـ current_date بتوقيت الخادم */
 function canEditExpenseRow(x){
   if(isManager()) return true;
+  /* (0158) طلب المالك: المحاسب يعدّل مصروفاً أنشأه مستخدم آخر — بلا شرط
+     اليوم ولا شرط المنشئ. الحدّ الأعلى يبقى الحذف (للمدير وحده). */
+  if(String(currentRole?.role||'')==='accountant') return true;
   if(!x.created_by || String(x.created_by)!==String(appUser?.identifier||'')) return false;
   return String(x.created_at||'').slice(0,10)===expenseTodayUTC();
 }
@@ -9430,6 +9439,8 @@ function onExpensesTabOpen(){ initExpensesListTab(); renderExpensesList(); fetch
 function expensesLoadMore(){ expensesListLimit+=500; fetchExpensesList(); }
 /* (0103) حالة مزامنة المصاريف مع شيت SmartBalance — قراءة خفيفة (عمودان، بلا select=*) */
 async function loadExpensesSheetStatus(){
+  /* (0158) من لا يرى عمود «في الشيت» لا تُطلب له حالتها أصلاً — لا شبكة ولا DOM */
+  if(!canSeeSheetColumn()){ expensesSheetSentMap=new Map(); expensesSheetPending=new Set(); return; }
   try{
     const rows=await api('pos_sheet_expense_sent',{qs:'?select=expense_id,sent_at&limit=10000'});
     expensesSheetSentMap=new Map((rows||[]).map(r=>[r.expense_id,String(r.sent_at)]));
@@ -9491,7 +9502,7 @@ function expenseToolbarAction(kind){
   if(!x){toast('حدد مصروفاً من القائمة أولاً','warn');return;}
   if(kind==='view'){ viewExpense(x.id); return; }
   if(kind==='edit'){
-    if(!canEditExpenseRow(x)){toast('لا يمكنك تعديل هذا المصروف — المدير، أو منشئه في نفس يوم تسجيله فقط','warn');return;}
+    if(!canEditExpenseRow(x)){toast('لا يمكنك تعديل هذا المصروف — المدير والمحاسب، أو منشئه في نفس يوم تسجيله فقط','warn');return;}
     editExpense(x.id); return;
   }
   if(kind==='delete'){
@@ -9536,7 +9547,7 @@ function viewExpense(id){
     row('الفرع', esc(loc?.name||'—')),
     row('مَن سجّل', esc(x.created_by||'—')),
     row('وقت التسجيل', esc(String(x.created_at||'').replace('T',' ').slice(0,19))),
-    row('شيت SmartBalance', esc(sheetState)),
+    canSeeSheetColumn()?row('شيت SmartBalance', esc(sheetState)):'',
     x.notes?row('ملاحظات', esc(x.notes)):''
   ].filter(Boolean).join('');
   q('evEditBtn').classList.toggle('hidden', !canEditExpenseRow(x));
@@ -9554,10 +9565,16 @@ function renderExpensesList(){
   const brLabel= bv==='__no_branch__' ? 'بدون فرع' : (bv ? (locMap.get(bv)||'؟') : '');
   /* (0103) زر «إرسال للجدول» يراه المدير وحده — والخادم يتحقق مرة أخرى */
   const isAdmin=isManager();
+  /* (0158) عمود «في الشيت» للمدير والمبرمج والمحاسب فقط: يُخفى رأسُه بالصنف
+     على الجدول، ولا تُرسَم خلاياه إطلاقاً، وتُقصَر colspans بقدره */
+  const showSheet=canSeeSheetColumn();
+  const cols=showSheet?8:7;
+  const tbl=body.closest?body.closest('table'):null;
+  if(tbl&&tbl.classList) tbl.classList.toggle('hide-sheet-col',!showSheet);
   q('expensesSendSheetBtn')?.classList.toggle('hidden',!isAdmin);
   if(!expensesListCache.length){
-    body.innerHTML='<tr><td colspan="8">لا توجد مصاريف مطابقة للفلاتر.</td></tr>';
-    if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML='<tr><td colspan="8" class="mini">—</td></tr>';
+    body.innerHTML='<tr><td colspan="'+cols+'">لا توجد مصاريف مطابقة للفلاتر.</td></tr>';
+    if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML='<tr><td colspan="'+cols+'" class="mini">—</td></tr>';
     if(q('expensesListInfo')) q('expensesListInfo').textContent=brLabel?`لا توجد نتائج · الفرع: ${brLabel}`:'لا توجد نتائج';
     q('expensesMoreBtn')?.classList.add('hidden');
     if(selectedExpenseId){ selectedExpenseId=null; } updateExpenseToolbar();
@@ -9579,20 +9596,21 @@ function renderExpensesList(){
       : (isAdmin
         ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-expid="${x.id}" ${expenseSheetSel.has(x.id)?'checked':''} onchange="expenseSheetToggle(this)"></label><span class="muted">—</span>`
         : '<span class="muted">—</span>');
+    const sheetTd = showSheet?`<td class="exp-sheet">${sheetCell}</td>`:'';
     const acts=[
       canEdit?`<button class="ibtn" type="button" title="تعديل" onclick="event.stopPropagation();editExpense('${safe}')"><i class="ti ti-pencil"></i></button>`:'',
       canDel?`<button class="ibtn ibtn-danger" type="button" title="حذف" onclick="event.stopPropagation();deleteExpense('${safe}')"><i class="ti ti-trash"></i></button>`:''
     ].join('');
-    return `<tr data-id="${safe}" class="${selectedExpenseId===x.id?'selected-row':''}" onclick="selectExpenseRow('${safe}')" title="نقرة: تحديد · نقرتان: مشاهدة"><td class="exp-date">${esc(x.expense_date)}</td><td>${esc(x.title)}${sub?`<div class="mini exp-sub">${sub}</div>`:''}</td><td>${locName?`<span class="${branchChip(x.location_id)}">${esc(locName)}</span>`:'<span class="muted">—</span>'}</td><td class="exp-acc">${esc(accMap.get(x.account_id)||'—')}</td><td class="exp-amt"><b>${money(x.amount)}</b></td><td class="exp-by">${esc(x.created_by||'—')}</td><td class="exp-sheet">${sheetCell}</td><td class="exp-act">${acts}</td></tr>`;
+    return `<tr data-id="${safe}" class="${selectedExpenseId===x.id?'selected-row':''}" onclick="selectExpenseRow('${safe}')" title="نقرة: تحديد · نقرتان: مشاهدة"><td class="exp-date">${esc(x.expense_date)}</td><td>${esc(x.title)}${sub?`<div class="mini exp-sub">${sub}</div>`:''}</td><td>${locName?`<span class="${branchChip(x.location_id)}">${esc(locName)}</span>`:'<span class="muted">—</span>'}</td><td class="exp-acc">${esc(accMap.get(x.account_id)||'—')}</td><td class="exp-amt"><b>${money(x.amount)}</b></td><td class="exp-by">${esc(x.created_by||'—')}</td>${sheetTd}<td class="exp-act">${acts}</td></tr>`;
   }).join('');
-  if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML=`<tr><td colspan="4"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="3" class="mini">${expensesListCache.length} مصروفاً</td></tr>`;
+  if(q('expensesTotalFoot')) q('expensesTotalFoot').innerHTML=`<tr><td colspan="4"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="${showSheet?3:2}" class="mini">${expensesListCache.length} مصروفاً</td></tr>`;
   if(q('expensesListInfo')) q('expensesListInfo').textContent=`النتائج: ${expensesListCache.length}${expensesListCache.length>=expensesListLimit?'+ (يوجد المزيد)':''}${brLabel?' · الفرع: '+brLabel:''}`;
   q('expensesMoreBtn')?.classList.toggle('hidden', expensesListCache.length<expensesListLimit);
   updateExpenseToolbar();
 }
 function editExpense(id){
   const x=expensesListCache.find(e=>e.id===id)||expenses.find(e=>e.id===id); if(!x){toast('لم يتم العثور على المصروف','warn');return;}
-  if(!canEditExpenseRow(x)){toast('لا يمكنك تعديل هذا المصروف — المدير، أو منشئه في نفس يوم تسجيله فقط','warn');return;}
+  if(!canEditExpenseRow(x)){toast('لا يمكنك تعديل هذا المصروف — المدير والمحاسب، أو منشئه في نفس يوم تسجيله فقط','warn');return;}
   editingExpenseId=id;
   if(q('expenseEditBranch')) q('expenseEditBranch').innerHTML='<option value="">بلا فرع</option>'+locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
   fillExpenseCategoryFilter();
