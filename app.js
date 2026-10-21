@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261020-2027';
+const APP_BUILD='b20261021-1200';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1775,8 +1775,19 @@ function renderDashboard(){
   q('suppliersCount').textContent=suppliers.length;
   q('productsCount').textContent=products.length;
   q('salesCount').textContent=sales.length;
-  q('customersDebtTotal').textContent=money(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0));
-  q('suppliersBalance').textContent=money(suppliers.reduce((a,s)=>a+Number(s.balance||0),0));
+  /* (طلب المالك 2026-10-21) بطاقتا الديون للمبرمج والمدير والمحاسب فقط */
+  const seeDebt=canSeeDebtTotals();
+  const debtCard=q('dashCardCustomersDebt'), suppCard=q('dashCardSuppliersBalance');
+  if(debtCard) debtCard.classList.toggle('hidden',!seeDebt);
+  if(suppCard) suppCard.classList.toggle('hidden',!seeDebt);
+  if(seeDebt){
+    q('customersDebtTotal').textContent=money(customers.reduce((a,c)=>a+Math.max(0,Number(c.balance||0)),0));
+    q('suppliersBalance').textContent=money(suppliers.reduce((a,s)=>a+Number(s.balance||0),0));
+  }else{
+    /* لا تُترك قيمة قديمة من جلسة سابقة في DOM — تُفرَّغ البطاقتان */
+    if(q('customersDebtTotal')) q('customersDebtTotal').textContent='';
+    if(q('suppliersBalance')) q('suppliersBalance').textContent='';
+  }
   const today=new Date().toISOString().slice(0,10); const scScope=sellerBranchScope(); const todaySales=sales.filter(s=>s.sale_date===today && (!scScope||s.location_id===scScope));
   if(q('todaySalesTotal')) q('todaySalesTotal').textContent=money(todaySales.reduce((a,s)=>a+Number(s.total||0),0));
   if(q('todaySalesCount')) q('todaySalesCount').textContent=todaySales.length;
@@ -8426,6 +8437,10 @@ const REGISTER_MOVEMENT_TYPES=[['sale_payment','دفعة بيع'],['customer_pay
 /* المحاسب كان يرى جدول الحركات (آخر 200) قبل السجل فبقي يرى السجل كاملاً؛
    البائع لا يفتح تبويب الخزائن أصلاً، وحارس العرض يمنعه حتى عبر REST مباشرة */
 function canSeeRegister(){ return ['admin','programmer','accountant'].includes(String(currentRole?.role||'')); }
+/* (طلب المالك 2026-10-21) ديون الزبائن وأرصدة الموردين في الصفحة الرئيسية:
+   للمبرمج والمدير والمحاسب فقط. غيرهم تُخفى عنهم البطاقتان ولا تُكتب له
+   القيمة في DOM إطلاقاً (إخفاء بصري وحده يترك الرقم مقروءاً من الصفحة). */
+function canSeeDebtTotals(){ return ['admin','programmer','accountant'].includes(String(currentRole?.role||'')); }
 function registerTypeLabel(t){ const f=REGISTER_MOVEMENT_TYPES.find(x=>x[0]===t); return f?f[1]:(typeLabel(t)||t); }
 /* ═══ (20261010b) القوائم المتعددة المطوية — زر ملخّص + لوحة مربعات بدل <select multiple> ═══
    لماذا: المتصفح يعرض select[multiple] صندوق قائمة مفتوحاً دائماً يبتلع
