@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261021-1320';
+const APP_BUILD='b20261021-1421';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -6454,6 +6454,39 @@ function handleBarcodeInput(){
   if(v.length>=2 && !window.__scannerRapid){
     quickSearchTimer=setTimeout(()=>{ const cur=(q('saleBarcodeInput')?.value||'').trim(); if(cur.length>=2 && !window.__scannerRapid) openQuickSearch(cur); else if(cur.length<2) closeQuickSearch(); },120);
   } else if(v.length<2){ closeQuickSearch(); }
+}
+
+/* ═══ (0156) المسح بالكاميرا — نفس مسار الماسح الضوئي تماماً ═══
+   الكاميرا تُنتج نص الكود كما ينتجه الماسح، ثم يمرّ على findProductByCodeOrBarcode.
+   لا مسار بحث ثانٍ ولا OCR. الوحدة barcode-cam.js مستقلة (عارض الأسعار يستخدمها أيضاً). */
+function findProductByScannedCode(text, format){
+  const raw=String(text==null?'':text).replace(/[\u200e\u200f\u202a-\u202e]/g,'').trim();
+  if(!raw) return null;
+  let p=findProductByCodeOrBarcode(raw);
+  /* ملصق Code39 بمحرف تحقّق: لا نقصّه إلا إذا فشلت المطابقة التامة */
+  if(!p && window.BarcodeCam && BarcodeCam.isCode39(format)) p=findProductByCodeOrBarcode(raw.slice(0,-1));
+  return p||null;
+}
+function openSaleScanner(){
+  if(!window.BarcodeCam){ toast('وحدة الكاميرا غير محمّلة — حدّث الصفحة','warn'); return; }
+  /* وضع القراءة الواحدة: صنف ← سطر ← عودة للشاشة (كسلوك الماسح الضوئي)،
+     والكاميرا تبقى مفتوحة عند كود غير معروف كي يُعاد المسح فوراً. */
+  BarcodeCam.open({
+    mode:'single',
+    title:'مسح صنف — شاشة البيع',
+    onScan:(text,meta)=>{
+      const p=findProductByScannedCode(text, meta&&meta.format);
+      if(!p) return false;                      /* الوحدة تعرض الكود وزرّي «بحث» و«مسح مرة أخرى» */
+      addOrIncrementSaleProduct(p,1);
+      const inp=q('saleBarcodeInput'); if(inp){ inp.value=''; setTimeout(()=>inp.focus(),60); }
+      return true;
+    },
+    onSearch:(code)=>{
+      const inp=q('saleBarcodeInput');
+      if(inp){ inp.value=code; inp.focus(); inp.select && inp.select(); }
+      openQuickSearch(code);
+    }
+  });
 }
 
 // Hardware barcode scanner guard: rapid key streams are redirected to the barcode input.

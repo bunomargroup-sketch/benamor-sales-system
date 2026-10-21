@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261021-1320">
+<link rel="stylesheet" href="app.css?v=20261021-1421">
 </head>
 <body class="auth-locked">
   <header>
@@ -447,6 +447,7 @@
             <div class="sale-barcode-strip">
               <label for="saleBarcodeInput" class="sale-barcode-icon"><i class="ti ti-barcode"></i></label>
               <input id="saleBarcodeInput" class="ltr barcode-input" placeholder="امسح الباركود ثم Enter" onkeydown="handleBarcodeKey(event)" oninput="handleBarcodeInput()">
+              <button type="button" class="schip scan-cam-btn" id="saleScanBtn" onclick="openSaleScanner()" title="مسح بالكاميرا — للفروع بلا ماسح ضوئي" aria-label="مسح بالكاميرا"><i class="ti ti-camera"></i> كاميرا</button>
               <button type="button" class="schip schip-picker" onclick="openSaleProductPicker()">قائمة المنتجات <b class="kbd">F3</b></button>
             </div>
             <!-- [5] سطر المعلومات السياقي — يظهر عند اختيار صنف فقط -->
@@ -1582,6 +1583,7 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="app.js?v=20261021-1320"></script>
+<script src="barcode-cam.js?v=20261021-1421"></script>
+<script src="app.js?v=20261021-1421"></script>
 </body>
 </html>

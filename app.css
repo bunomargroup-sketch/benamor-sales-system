@@ -1308,3 +1308,10 @@ body.auth-locked #quickBar{display:none}
 nav{top:var(--sticky-top)}
 .sticky-actions{top:calc(var(--sticky-top) - 4px)}
 .cashier-side{top:calc(var(--sticky-top) + 2px)}
+
+/* ═══ (0156) زر مسح الكاميرا في شريط الباركود ═══
+   للفروع بلا ماسح ضوئي: نفس مكان الماسح، ويفتح الكاميرا الخلفية. */
+.sale-barcode-strip .scan-cam-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;border-color:#14b8a6;color:#5eead4}
+.sale-barcode-strip .scan-cam-btn:hover{background:#0f2f2c}
+.sale-barcode-strip .scan-cam-btn .ti{font-size:16px}
+@media(max-width:640px){.sale-barcode-strip .scan-cam-btn{padding:0 9px}}

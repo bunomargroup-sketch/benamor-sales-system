@@ -13,11 +13,14 @@
      الحالي + clients.claim + إبلاغ الصفحات «صدر تحديث» لتعرض شريط
      إعادة التحميل (بلا إعادة تحميل تلقائية — الفاتورة المفتوحة أغلى).
    ═══════════════════════════════════════════════════════════════════ */
-const BUILD='20261021-1320'; /* يُستبدل بسكربت النشر */
+const BUILD='20261021-1421'; /* يُستبدل بسكربت النشر */
 const CACHE='benamor-pos-'+BUILD;
 /* (العمل دون اتصال) الخطوط ضمن التخزين المسبق: أول فتح دون اتصال
    يجب أن يعرض الخط والأيقونات، لا أن ينتظر زيارة سابقة تملأ الكاش. */
-const CORE=['./','./index.html','./app.css','./app.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
+const CORE=['./','./index.html','./app.css','./app.js','./barcode-cam.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
+  /* (0156) محرّك الاحتياط لقراءة الباركود (آيفون) — مخزَّن مسبقاً ⇒ يعمل دون إنترنت،
+     ولا يُحمَّل من أي شبكة خارجية ولا يدخل حزمة التحميل الأولى للشاشة نفسها */
+  './assets/vendor/zxing.min.js',
   './assets/app-fonts.css', './assets/logo-benamor.jpeg', /* (20261008a) شعار الفاتورة — يُطبع حتى دون اتصال */
   './assets/fonts/cairo-arabic.woff2','./assets/fonts/cairo-latin.woff2','./assets/fonts/cairo-latin-ext.woff2',
   './assets/fonts/tabler-icons.woff2'];
