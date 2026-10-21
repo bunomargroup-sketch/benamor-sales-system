@@ -1310,8 +1310,20 @@ nav{top:var(--sticky-top)}
 .cashier-side{top:calc(var(--sticky-top) + 2px)}
 
 /* ═══ (0156) زر مسح الكاميرا في شريط الباركود ═══
-   للفروع بلا ماسح ضوئي: نفس مكان الماسح، ويفتح الكاميرا الخلفية. */
-.sale-barcode-strip .scan-cam-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;border-color:#14b8a6;color:#5eead4}
-.sale-barcode-strip .scan-cam-btn:hover{background:#0f2f2c}
-.sale-barcode-strip .scan-cam-btn .ti{font-size:16px}
-@media(max-width:640px){.sale-barcode-strip .scan-cam-btn{padding:0 9px}}
+   للفروع بلا ماسح ضوئي: نفس مكان الماسح، ويفتح الكاميرا الخلفية.
+   ⚠️ يُكتب ببادئة #sales/#stockCount لأن قاعدة أزرار الشريط (#sales .schip،
+   لونها أبيض) أقوى منه بالمحدِّد — بلا البادئة يصير الزر أبيض على خلفية
+   فاتحة في الوضع النهاري فلا يُرى. والألوان من متغيّرات السمة لا ثابتة. */
+#sales .sale-barcode-strip .scan-cam-btn,
+#stockCount .sale-barcode-strip .scan-cam-btn{
+  flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+  background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--blue) 45%,var(--border));
+  color:var(--blue)}
+#sales .sale-barcode-strip .scan-cam-btn:hover,
+#stockCount .sale-barcode-strip .scan-cam-btn:hover{background:color-mix(in srgb,var(--blue) 16%,var(--accent-soft))}
+#sales .sale-barcode-strip .scan-cam-btn .ti,
+#stockCount .sale-barcode-strip .scan-cam-btn .ti{font-size:16px}
+@media(max-width:640px){
+  #sales .sale-barcode-strip .scan-cam-btn,
+  #stockCount .sale-barcode-strip .scan-cam-btn{padding:0 9px}
+}

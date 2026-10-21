@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261021-1421">
+<link rel="stylesheet" href="app.css?v=20261021-1517">
 </head>
 <body class="auth-locked">
   <header>
@@ -1583,7 +1583,434 @@
   <button type="button" onclick="cellCtxAction('copy')" style="display:block;width:100%;text-align:right;padding:10px 14px;background:none;border:none;cursor:pointer;font-size:14px;border-top:1px solid #e5e7eb" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">📋 نسخ الخلية</button>
 </div>
 
-<script src="barcode-cam.js?v=20261021-1421"></script>
-<script src="app.js?v=20261021-1421"></script>
+<!-- BCAM:START -->
+<script>
+/* barcode-cam.js — مضمَّنة آلياً بـscripts/bump-build.js. المصدر الوحيد: barcode-cam.js */
+/* ═══════════════════════════════════════════════════════════════════
+   barcode-cam.js — مسح الباركود بالكاميرا (شاشة البيع + عارض الأسعار)
+   ───────────────────────────────────────────────────────────────────
+   ملصقات بن عمر تحمل **كود المنتج الداخلي** نفسه في الباركود
+   (LG40860 …) وليس باركوداً تجارياً. لذلك الماسح الضوئي والماسح
+   بالكاميرا يُنتجان نفس النص، وكلاهما يمرّ على نفس دالة البحث —
+   لا مسار ثانٍ للبحث ولا OCR.
+
+   المحرّكان:
+     • BarcodeDetector الأصلي (كروم على أندرويد — هواتف الفروع)
+     • ZXing-js احتياطياً (آيفون/سفاري) — يُحمَّل عند الحاجة فقط
+       من assets/vendor/zxing.min.js، وهو مخزَّن في الـService Worker
+       مسبقاً ⇒ يعمل بلا إنترنت. لا يُحمَّل من أي CDN.
+
+   الواجهة:
+     BarcodeCam.open({mode,title,onScan,onSearch,onClose,onError})
+     → يعيد {close, torch, pause, resume}
+     onScan(text, meta) ⇒ true إذا استُهلك الكود (أُضيف)، false إن لم يُعثر عليه
+   ═══════════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+/* عدة صيغ معاً — لا صيغة واحدة مفترضة (الملصق قد يكون Code128 أو Code39) */
+const FORMATS = ['code_128','code_39','ean_13','ean_8','upc_a','itf'];
+const DEDUPE_MS = 2000;          /* نفس الملصق مرتين خلال ثانيتين = سطر واحد */
+const DECODE_EVERY_MS = 110;     /* ~9 محاولات/ثانية: كافية وسخية على البطارية */
+const ZXING_PATH = 'assets/vendor/zxing.min.js';
+const ZX_FORMAT_NAMES = { 0:'aztec',1:'codabar',2:'code_39',3:'code_93',4:'code_128',5:'data_matrix',
+  6:'ean_8',7:'ean_13',8:'itf',9:'maxicode',10:'pdf_417',11:'qr_code',12:'rss_14',13:'rss_expanded',
+  14:'upc_a',15:'upc_e',16:'msi',17:'plessey' };
+
+let audioCtx = null;
+let zxingPromise = null;
+let stylesInjected = false;
+let active = null;   /* المتحكّم المفتوح حالياً — واحد فقط */
+
+/* ── تنقية النص القادم من الكاميرا ──
+   بعض المحرّكات تُرجع مسافات أو محارف اتجاه خفية؛ الكود عندنا
+   حروف/أرقام لاتينية بلا مسافات. لا نحوّل حالة الأحرف هنا كي يبقى
+   النص المعروض للمستخدم كما قرأته الكاميرا حرفياً. */
+function normalize(text){
+  return String(text == null ? '' : text)
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,'')  /* محارف اتجاه */
+    .replace(/[\u0000-\u001f]/g,'')                            /* محارف تحكّم */
+    .trim();
+}
+/* Code39 قد يُطبع مع محرف تحقّق كحرف بيانات أخير (LG40860C).
+   لا نقصّه إلا إذا فشلت المطابقة التامة **وكانت** الصيغة code_39 —
+   كي لا نظلم كوداً حقيقياً ينتهي بحرف. */
+function isCode39(format){ return String(format||'').toLowerCase().replace('-','_') === 'code_39'; }
+
+/* قاعدة منع التكرار: نفس النص خلال نافذة 2000 مللي = قراءة واحدة.
+   نقية كي تُختبر بلا كاميرا: (lastText, lastAt, text, now) ⇒ bool */
+function isDuplicate(lastText, lastAt, text, now){
+  return !!lastText && text === lastText && (Number(now) - Number(lastAt)) < DEDUPE_MS;
+}
+
+function beep(){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    audioCtx = audioCtx || new Ctx();
+    if(audioCtx.state === 'suspended') audioCtx.resume && audioCtx.resume();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1500, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.1);
+  }catch(e){ /* الصوت كمال — لا يُفشل المسح */ }
+}
+function buzz(){
+  try{ if(navigator.vibrate) navigator.vibrate([40,40,60]); }catch(e){}
+}
+
+function injectStyles(){
+  if(stylesInjected || document.getElementById('bcStyles')) return;
+  stylesInjected = true;
+  const css = `
+  .bc-overlay{position:fixed;inset:0;z-index:100000;background:#080c17;display:flex;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);direction:rtl;font-family:Cairo,Tahoma,Arial,sans-serif}
+  .bc-shell{width:min(720px,100%);height:100%;display:flex;flex-direction:column;background:#080c17;color:#eef4ff}
+  .bc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#0f1728;border-bottom:1px solid #22304d}
+  .bc-head b{font-size:15px}
+  .bc-close{border:0;border-radius:10px;background:#2a1620;color:#fecaca;padding:8px 12px;font-weight:900;font-family:inherit}
+  .bc-stage{position:relative;flex:1;min-height:180px;background:#000;overflow:hidden}
+  .bc-stage video{width:100%;height:100%;object-fit:cover;display:block}
+  .bc-reticle{position:absolute;left:8%;right:8%;top:32%;bottom:32%;border:2px solid rgba(255,255,255,.55);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);pointer-events:none;transition:border-color .12s}
+  .bc-reticle.ok{border-color:#18c989;box-shadow:0 0 0 9999px rgba(0,0,0,.12),0 0 22px rgba(24,201,137,.55)}
+  .bc-hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;font-weight:900;color:#cbd5e1;text-shadow:0 1px 3px #000;pointer-events:none}
+  .bc-flash{position:absolute;inset:0;background:#18c989;opacity:0;pointer-events:none;transition:opacity .18s}
+  .bc-flash.on{opacity:.22}
+  .bc-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#0f1728;border-top:1px solid #22304d;flex-wrap:wrap}
+  .bc-chip{background:#0b1020;border:1px solid #22304d;color:#94a3b8;border-radius:9px;padding:5px 8px;font-size:11px;font-weight:900}
+  .bc-chip b{color:#7fa0ff}
+  .bc-btn{border:1px solid #22304d;background:#141d30;color:#eef4ff;border-radius:10px;padding:8px 12px;font-weight:900;font-family:inherit}
+  .bc-btn.on{background:#fbbf24;color:#3b2a05;border-color:#fbbf24}
+  .bc-btn.primary{background:linear-gradient(135deg,#3546bd,#5a7cff);border:0;color:#fff}
+  .bc-btn[hidden]{display:none}
+  .bc-nf{margin:10px 12px;padding:12px;border-radius:14px;background:#1b1730;border:1px solid #3b2f63}
+  .bc-nf.hidden,.bc-err.hidden{display:none}
+  .bc-nf .bc-code{direction:ltr;display:inline-block;background:#0b1020;border:1px solid #3b2f63;border-radius:8px;padding:3px 8px;font-weight:900;color:#c4b5fd;word-break:break-all}
+  .bc-nf-actions{display:flex;gap:8px;margin-top:10px}
+  .bc-nf-actions .bc-btn{flex:1}
+  .bc-err{margin:12px;padding:14px;border-radius:14px;background:#2a1620;border:1px solid #6b2a3a;color:#fecaca;font-weight:900;line-height:1.6}
+  .bc-err small{display:block;margin-top:6px;color:#fca5a5;font-weight:700}
+  `;
+  const st = document.createElement('style');
+  st.id = 'bcStyles';
+  st.textContent = css;
+  (document.head || document.documentElement).appendChild(st);
+}
+
+function cameraErrorMessage(err){
+  const name = String(err && err.name || '');
+  if(name === 'NotAllowedError' || name === 'SecurityError')
+    return ['لم يُسمح باستخدام الكاميرا.','يمكنك إدخال الكود يدوياً في المربع كما اليوم — كل شيء آخر يعمل طبيعياً.'];
+  if(name === 'NotFoundError' || name === 'OverconstrainedError')
+    return ['لا توجد كاميرا متاحة على هذا الجهاز.','استخدم الماسح الضوئي أو الإدخال اليدوي.'];
+  if(name === 'NotReadableError')
+    return ['الكاميرا مشغولة بتطبيق آخر.','أغلق التطبيق الآخر ثم أعد المحاولة، أو أدخل الكود يدوياً.'];
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    return ['هذا المتصفح لا يسمح بالكاميرا من داخل الصفحة.','إدخال الكود يدوياً يعمل كما هو.'];
+  return ['تعذّر تشغيل الكاميرا: ' + (err && err.message || 'خطأ غير معروف'),'الإدخال اليدوي يعمل كما هو.'];
+}
+
+/* تحميل ZXing مرة واحدة فقط — من ملف محلي مخزَّن في الـSW (يعمل دون إنترنت) */
+function loadZXing(){
+  if(window.ZXing) return Promise.resolve(window.ZXing);
+  if(zxingPromise) return zxingPromise;
+  zxingPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = ZXING_PATH;
+    s.async = true;
+    s.onload = () => window.ZXing ? resolve(window.ZXing) : reject(new Error('ZXING_EMPTY'));
+    s.onerror = () => reject(new Error('ZXING_LOAD_FAILED'));
+    document.head.appendChild(s);
+  }).catch(err => { zxingPromise = null; throw err; });
+  return zxingPromise;
+}
+
+function makeEngine(){
+  const Det = window.BarcodeDetector;
+  if(Det && Det.getSupportedFormats){
+    return Det.getSupportedFormats()
+      .then(supported => {
+        const use = FORMATS.filter(f => supported.includes(f));
+        if(!use.length) throw new Error('NO_FORMATS');
+        return {kind:'native', detector: new Det({formats: use}), formats: use};
+      })
+      .catch(() => makeZXing());
+  }
+  return makeZXing();
+}
+function makeZXing(){
+  return loadZXing().then(ZX => {
+    const formats = ['CODE_128','CODE_39','EAN_13','EAN_8','UPC_A','ITF']
+      .map(n => ZX.BarcodeFormat[n]).filter(v => v !== undefined);
+    const hints = new Map();
+    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+    const reader = new ZX.MultiFormatReader();
+    reader.setHints(hints);
+    return {kind:'zxing', ZX, reader};
+  });
+}
+
+/* فك من إطار فيديو عبر ZXing: المحاولة الأولى الإطار كاملاً، ثم مركزه
+   (الملصق يكون عادةً في وسط الكادر) — بعض الإطارات تنجح مع أحدهما فقط */
+function zxDecodeFrame(engine, video){
+  const ZX = engine.ZX;
+  const nw = video.videoWidth || video.width, nh = video.videoHeight || video.height;
+  if(!nw || !nh) return null;
+  const maxW = 1280;
+  const scale = Math.min(1, maxW / nw);
+  const w = Math.round(nw * scale), h = Math.round(nh * scale);
+  const canvas = engine.canvas || (engine.canvas = document.createElement('canvas'));
+  canvas.width = w; canvas.height = h;
+  const c2d = canvas.getContext('2d', {willReadFrequently:true});
+  if(!c2d) return null;
+  c2d.drawImage(video, 0, 0, w, h);
+
+  const tryRect = (x, y, rw, rh) => {
+    const data = c2d.getImageData(x, y, rw, rh).data;
+    const lum = new Uint8ClampedArray(rw * rh);
+    for(let i = 0, p = 0; i < lum.length; i++, p += 4)
+      lum[i] = (306 * data[p] + 601 * data[p+1] + 117 * data[p+2]) >> 10;
+    try{
+      const src = new ZX.RGBLuminanceSource(lum, rw, rh);
+      const bmp = new ZX.BinaryBitmap(new ZX.HybridBinarizer(src));
+      const res = engine.reader.decode(bmp);
+      const fmt = ZX_FORMAT_NAMES[res.getBarcodeFormat()] || String(res.getBarcodeFormat());
+      return {text: res.getText(), format: fmt};
+    }catch(e){ return null; }
+  };
+  return tryRect(0, 0, w, h)
+      || tryRect(Math.round(w * 0.10), Math.round(h * 0.25), Math.round(w * 0.80), Math.round(h * 0.50))
+      || tryRect(Math.round(w * 0.20), Math.round(h * 0.33), Math.round(w * 0.60), Math.round(h * 0.34));
+}
+
+function buildOverlay(opts){
+  injectStyles();
+  const ov = document.createElement('div');
+  ov.className = 'bc-overlay';
+  ov.id = 'bcOverlay';
+  ov.innerHTML = `
+    <div class="bc-shell">
+      <div class="bc-head"><b id="bcTitle"></b><button type="button" class="bc-close" id="bcClose">إغلاق</button></div>
+      <div class="bc-stage">
+        <video id="bcVideo" playsinline muted autoplay></video>
+        <div class="bc-reticle" id="bcReticle"></div>
+        <div class="bc-hint" id="bcHint">وجّه الكاميرا إلى الباركود — يُقرأ تلقائياً</div>
+        <div class="bc-flash" id="bcFlash"></div>
+      </div>
+      <div class="bc-bar">
+        <span class="bc-chip" id="bcEngine">—</span>
+        <span class="bc-chip" id="bcCount">٠ صنف</span>
+        <button type="button" class="bc-btn" id="bcTorch" hidden>🔆 المصباح</button>
+      </div>
+      <div class="bc-nf hidden" id="bcNf">
+        <div>لم يُعثر على الكود: <span class="bc-code" id="bcNfCode"></span></div>
+        <div class="bc-nf-actions">
+          <button type="button" class="bc-btn primary" id="bcNfSearch">بحث</button>
+          <button type="button" class="bc-btn" id="bcNfAgain">مسح مرة أخرى</button>
+        </div>
+      </div>
+      <div class="bc-err hidden" id="bcErr"></div>
+    </div>`;
+  const $ = id => ov.querySelector('#' + id);
+  $('bcTitle').textContent = opts.title || 'مسح الباركود';
+  (document.body || document.documentElement).appendChild(ov);
+  return {$:$, ov};
+}
+
+function open(opts){
+  opts = opts || {};
+  if(active) active.close('replaced');
+  const mode = opts.mode === 'continuous' ? 'continuous' : 'single';
+  const ui = buildOverlay(opts);
+  const $ = ui.$;
+  let stream = null, track = null, running = true, paused = false, pageHidden = false;
+  let timer = null, lastAt = 0, lastText = '', lastTextAt = 0, accepted = 0, torchOn = false;
+  let engine = null;
+
+  const setHint = (msg, ok) => {
+    $('bcHint').textContent = msg;
+    $('bcReticle').classList.toggle('ok', !!ok);
+  };
+  const flash = () => {
+    const f = $('bcFlash');
+    f.classList.add('on');
+    setTimeout(() => f.classList.remove('on'), 160);
+  };
+  const countChip = () => { $('bcCount').textContent = accepted + ' صنف'; };
+
+  function showError(err){
+    const [title, sub] = cameraErrorMessage(err);
+    const box = $('bcErr');
+    box.innerHTML = '';
+    const t = document.createElement('div'); t.textContent = title;
+    const s = document.createElement('small'); s.textContent = sub;
+    box.appendChild(t); box.appendChild(s);
+    box.classList.remove('hidden');
+    setHint('الكاميرا غير متاحة — الإدخال اليدوي يعمل', false);
+    try{ opts.onError && opts.onError(err); }catch(e){}
+  }
+
+  function showNotFound(text){
+    paused = true;
+    $('bcNfCode').textContent = text;
+    $('bcNf').classList.remove('hidden');
+    setHint('الكود غير موجود — ماذا تريد؟', false);
+  }
+  function dismissNotFound(){
+    $('bcNf').classList.add('hidden');
+    paused = false;
+    lastText = ''; lastTextAt = 0;   /* «مسح مرة أخرى» تعني: اقرأه من جديد فوراً */
+    setHint('وجّه الكاميرا إلى الباركود — يُقرأ تلقائياً', false);
+  }
+
+  function handleText(text, format){
+    const clean = normalize(text);
+    if(!clean) return;
+    const now = Date.now();
+    /* منع تكرار نفس الملصق: نفس النص خلال ثانيتين = قراءة واحدة */
+    if(isDuplicate(lastText, lastTextAt, clean, now)) return;
+    lastText = clean; lastTextAt = now;
+    beep(); buzz();
+    flash();
+    $('bcReticle').classList.add('ok');
+    setTimeout(() => $('bcReticle').classList.remove('ok'), 420);
+
+    let consumed = false;
+    try{ consumed = !!opts.onScan(clean, {format: format || '', mode: mode}); }
+    catch(e){ consumed = false; }
+    if(consumed){
+      accepted++; countChip();
+      if(mode === 'single'){ close('scanned'); return; }
+      setHint('أُضيف: ' + clean + ' — أمسك الملصق التالي', true);
+      paused = false;
+    }else{
+      showNotFound(clean);
+    }
+  }
+
+  async function tick(){
+    if(!running) return;
+    timer = setTimeout(tick, DECODE_EVERY_MS);
+    if(paused || pageHidden || !engine || !stream) return;
+    const video = $('bcVideo');
+    if(!video || (video.readyState !== undefined && video.readyState < 2)) return;
+    try{
+      if(engine.kind === 'native'){
+        const codes = await engine.detector.detect(video);
+        if(codes && codes.length){
+          const c = codes[0];
+          handleText(c.rawValue, String(c.format || '').toLowerCase().replace('-','_'));
+        }
+      }else{
+        const r = zxDecodeFrame(engine, video);
+        if(r) handleText(r.text, r.format);
+      }
+    }catch(e){ /* إطار غير قابل للفك — نتابع */ }
+  }
+
+  function close(reason){
+    if(!running) return;
+    running = false;
+    clearTimeout(timer);
+    try{ document.removeEventListener('visibilitychange', onVisibility); }catch(e){}
+    try{ window.removeEventListener('pagehide', onPageHide); }catch(e){}
+    try{ if(stream) stream.getTracks().forEach(t => t.stop()); }catch(e){}
+    try{ ui.ov.remove(); }catch(e){}
+    if(active === controller) active = null;
+    try{ opts.onClose && opts.onClose(reason || 'closed'); }catch(e){}
+  }
+
+  const onVisibility = () => { pageHidden = !!(document && document.hidden); };
+  const onPageHide = () => close('pagehide');
+  try{ document.addEventListener('visibilitychange', onVisibility); }catch(e){}
+  try{ window.addEventListener('pagehide', onPageHide); }catch(e){}
+
+  const controller = {close: close, isOpen: () => running, mode: mode};
+
+  $('bcClose').addEventListener('click', () => close('closed'));
+  $('bcNfSearch').addEventListener('click', () => {
+    const code = $('bcNfCode').textContent || '';
+    close('search');
+    try{ opts.onSearch && opts.onSearch(code); }catch(e){}
+  });
+  $('bcNfAgain').addEventListener('click', dismissNotFound);
+  $('bcTorch').addEventListener('click', () => {
+    if(!track || !track.applyConstraints) return;
+    torchOn = !torchOn;
+    let p;
+    try{ p = track.applyConstraints({advanced:[{torch:torchOn}]}); }
+    catch(e){ torchOn = false; $('bcTorch').hidden = true; return; }
+    Promise.resolve(p)
+      .then(() => $('bcTorch').classList.toggle('on', torchOn))
+      .catch(() => { torchOn = false; $('bcTorch').hidden = true; });
+  });
+
+  active = controller;
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    showError({name:'UnsupportedError'});
+    $('bcEngine').textContent = 'بلا كاميرا';
+    return controller;
+  }
+
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}},
+    audio:false
+  }).then(s => {
+    if(!running){ s.getTracks().forEach(t => t.stop()); return; }
+    stream = s;
+    track = s.getVideoTracks()[0] || null;
+    const video = $('bcVideo');
+    video.srcObject = s;
+    if(video.play) { const p = video.play(); if(p && p.catch) p.catch(() => {}); }
+    /* المصباح: يظهر فقط إن أعلن المتصفح دعمه */
+    try{
+      const caps = track && track.getCapabilities ? track.getCapabilities() : null;
+      if(caps && caps.torch) $('bcTorch').hidden = false;
+    }catch(e){}
+    return makeEngine().then(en => {
+      if(!running) return;
+      engine = en;
+      $('bcEngine').textContent = en.kind === 'native' ? 'محرّك الجهاز' : 'ZXing (احتياطي)';
+      setHint('وجّه الكاميرا إلى الباركود — يُقرأ تلقائياً', false);
+      tick();
+    }).catch(() => {
+      showError({name:'EngineError'});
+      const box = $('bcErr');
+      box.classList.remove('hidden');
+      if(!box.textContent) box.textContent = 'تعذّر تحميل محرّك قراءة الباركود.';
+      $('bcEngine').textContent = 'محرّك غير متاح';
+    });
+  }).catch(err => {
+    showError(err);
+    $('bcEngine').textContent = 'بلا كاميرا';
+  });
+
+  return controller;
+}
+
+window.BarcodeCam = {
+  FORMATS: FORMATS.slice(),
+  DEDUPE_MS: DEDUPE_MS,
+  normalize: normalize,
+  isCode39: isCode39,
+  isDuplicate: isDuplicate,
+  /* يُستخدم بعد فشل المطابقة التامة: كود Code39 قد يُقرأ بمحرف تحقّق زائد */
+  withoutCode39Check: function(text){ return String(text||'').slice(0, -1); },
+  open: open,
+  close: function(){ if(active) active.close('closed'); },
+  isOpen: function(){ return !!active; }
+};
+})();
+
+</script>
+<!-- BCAM:END -->
+<script src="app.js?v=20261021-1517"></script>
 </body>
 </html>

@@ -13,11 +13,11 @@
      الحالي + clients.claim + إبلاغ الصفحات «صدر تحديث» لتعرض شريط
      إعادة التحميل (بلا إعادة تحميل تلقائية — الفاتورة المفتوحة أغلى).
    ═══════════════════════════════════════════════════════════════════ */
-const BUILD='20261021-1421'; /* يُستبدل بسكربت النشر */
+const BUILD='20261021-1517'; /* يُستبدل بسكربت النشر */
 const CACHE='benamor-pos-'+BUILD;
 /* (العمل دون اتصال) الخطوط ضمن التخزين المسبق: أول فتح دون اتصال
    يجب أن يعرض الخط والأيقونات، لا أن ينتظر زيارة سابقة تملأ الكاش. */
-const CORE=['./','./index.html','./app.css','./app.js','./barcode-cam.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
+const CORE=['./','./index.html','./app.css','./app.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
   /* (0156) محرّك الاحتياط لقراءة الباركود (آيفون) — مخزَّن مسبقاً ⇒ يعمل دون إنترنت،
      ولا يُحمَّل من أي شبكة خارجية ولا يدخل حزمة التحميل الأولى للشاشة نفسها */
   './assets/vendor/zxing.min.js',
@@ -26,9 +26,16 @@ const CORE=['./','./index.html','./app.css','./app.js','./barcode-cam.js','./man
   './assets/fonts/tabler-icons.woff2'];
 const NETWORK_FIRST_PATHS=['/app.js','/app.css','/index.html','/manifest.webmanifest']; /* + كل طلب تنقل */
 
+/* (0156) تخزين مسبق متسامح: addAll ذرّية — ملف واحد ناقص على الخادم
+   كان يُفرغ الكاش كله (حزمة، خطوط، محرّك الباركود). نجرب addAll أولاً
+   (أسرع وأقل ضجيجاً)، وإن فشل نُخزّن بند-بند فالمفقود وحده يبقى بلا كاش. */
+async function precache(cache, urls){
+  try{ await cache.addAll(urls); return; }catch(err){}
+  for(const u of urls){ try{ await cache.add(u); }catch(err){} }
+}
 self.addEventListener('install',e=>{
   self.skipWaiting(); /* فعّل النسخة الجديدة فوراً — لا انتظار إغلاق التبويبات */
-  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE).catch(()=>{})));
+  e.waitUntil(caches.open(CACHE).then(c=>precache(c,CORE)));
 });
 
 self.addEventListener('activate',e=>{
