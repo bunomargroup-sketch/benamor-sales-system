@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261021-1517">
+<link rel="stylesheet" href="app.css?v=20261021-1622">
 </head>
 <body class="auth-locked">
   <header>
@@ -179,6 +179,8 @@
             <select id="productColorFilter" onchange="renderProducts()"></select>
             <select id="productSupplierFilter" onchange="renderProducts()"></select>
             <button class="btn secondary" type="button" onclick="clearProductFilters()">مسح الفلاتر</button>
+            <!-- (0157) إرجاع القائمة إلى ترتيبها الافتراضي (آخر حركة أولاً) -->
+            <button class="btn secondary hidden" type="button" id="productSortResetBtn" onclick="clearProductSort()" title="إرجاع الترتيب إلى الافتراضي: آخر حركة أولاً">↺ ترتيب افتراضي</button>
             <button class="btn secondary" onclick="loadAll()">تحديث</button>
             <button class="btn secondary" type="button" onclick="resetTableColumns('products')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
           </div>
@@ -2011,6 +2013,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261021-1517"></script>
+<script src="app.js?v=20261021-1622"></script>
 </body>
 </html>

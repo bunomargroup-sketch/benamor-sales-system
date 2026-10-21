@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261021-1517';
+const APP_BUILD='b20261021-1622';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -36,7 +36,10 @@ let currentReport="overview";
 /* (0143) الافتراضيان لقاعدة المالك «الأحدث أولاً»:
    المنتجات: -1 = آخر حركة أولاً (بلا عمود خاص — انقر أي عمود للترتيب به).
    المخزون: 8 = عمود «آخر تحديث» (updated_at = تاريخ آخر حركة على السطر). */
-let productSortIndex=-1, productSortDir='desc';
+/* (0157) الفرز بمفتاح العمود (معرّف العمود) لا برقمه: إخفاء عمود أو
+   إظهاره يزحزح الأرقام فيخبط الترتيب على عمود آخر. وnull = الافتراضي
+   (آخر حركة أولاً) كما كان. */
+let productSortKey=null, productSortDir='desc';
 let stockSortIndex=8, stockSortDir='desc';
 let pickerSelectedIndex=0;
 let pickerSortIndex=5, pickerSortDir='desc';
@@ -2543,7 +2546,17 @@ function toggleProductCol(colId){
 function applyProductColVisibility(shown, smartParsed=null){
   const hidden=getProductHiddenCols();
   const vis=id=>!hidden.includes(id);
-  const heads=PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>`<th${c.min?` data-min="${c.min}"`:''}>${c.label}</th>`).join(''); /* (20261007b) الحدّ الأدنى معلَن من الجدول */
+  /* (0157) كل رأس يحمل مفتاح عموده: الفرز لا يعتمد على موضعه بين الأعمدة
+     الظاهرة (إخفاء عمود كان يزحزح الخريطة على عمود آخر). ويحمل حالة
+     الترتيب فيبنى السهم مع الرسم نفسه — لا يضيع مع إعادة بناء الرأس. */
+  const heads=PRODUCT_COLS.filter(c=>vis(c.id)).map(c=>{
+    const on=!!productSortKey&&productSortKey===c.id;
+    const cls='sortable'+(on?` sorted-${productSortDir}`:'');
+    const aria=on?` aria-sort="${productSortDir==='asc'?'ascending':'descending'}"`:'';
+    /* data-sort-ready: يمنع setupTableSorting من ربط مستمع ثانٍ على الرأس
+       (الربط يتم بالتفويض من الجدول — يبقى حياً بعد كل إعادة رسم) */
+    return `<th class="${cls}" data-sort-key="${c.id}" data-sort-ready="1"${aria} title="اضغط للترتيب تصاعدي/تنازلي"${c.min?` data-min="${c.min}"`:''}>${c.label}</th>`;
+  }).join(''); /* (20261007b) الحدّ الأدنى معلَن من الجدول */
   const cells=(p,isComp,vS)=>{
     const safe=String(p.code||'').replace(/'/g,"\\'");
     const nm='<span class="name">'+esc(pLabel(p.code,p.name))+'</span>'+(isComp?' <span class="chip br-sr">مركّب</span>':'');
@@ -2908,6 +2921,116 @@ function lastMoveByProduct(){
   }
   return _lastMoveCache.map;
 }
+/* ══════════ (0157) فرز قائمة المنتجات حسب العمود ══════════
+   نقر العمود: أول نقرة على عمود جديد = الاتجاه الطبيعي له (الأرقام من
+   الكبير إلى الصغير، النصوص تصاعدي)، والنقرة التالية تعكسه. الحالة في
+   متغيّرين لا في dataset الرأس، لأن الرأس يُعاد بناؤه مع كل رسم فكان
+   dataset.dir يضيع ويبقى الاتجاه تصاعدياً أبداً (لا يمكن بلوغ التنازلي).
+   الفرز يعمل على نسخة — مصفوفة products لا تُمسّ إطلاقاً. */
+const PRODUCT_SORT_META={
+  code:{field:'code',type:'text'},
+  name:{field:'_label',type:'text'},
+  brand:{field:'brand',type:'text'},
+  color:{field:'color',type:'text'},
+  barcode:{field:'barcode',type:'text'},
+  supplier:{field:'supplier_name',type:'text'},
+  notes:{field:'description',type:'text'},
+  category:{field:'category',type:'text'},
+  /* الأرقام كلها تُقرأ كما تُعرض في الجدول (التكلفة الحيّة، المخزون الحيّ) */
+  cost:{field:'_cost',type:'num'},
+  purchase:{field:'purchase_price',type:'num'},
+  retail:{field:'retail_price',type:'num'},
+  margin:{field:'_mv',type:'num'},
+  margin_pct:{field:'_mp',type:'num'},
+  s11:{field:'_s11',type:'num'},
+  ssr:{field:'_ssr',type:'num'},
+  sjz:{field:'_sjz',type:'num'},
+  total:{field:'_total',type:'num'}
+};
+function productSortLabel(colId){
+  if(!colId) return 'آخر حركة';
+  const c=PRODUCT_COLS.find(x=>x.id===colId);
+  return c?c.label:colId;
+}
+function productSortDefaultDir(colId){
+  const m=PRODUCT_SORT_META[colId];
+  return (m&&m.type==='num')?'desc':'asc';   /* الأرقام: الكبير أولاً */
+}
+function productSortValue(p,field){
+  if(!p) return '';
+  switch(field){
+    case '_lastmove': return lastMoveByProduct().get(String(p.code||''))||'';
+    case '_label':  return pLabel(p.code,p.name);
+    case '_cost':   return Number(productCost(p.code)||0);
+    case '_mv':     return Number(p._mv!==undefined?p._mv:(Number(p.retail_price||0)-productCost(p.code)));
+    case '_mp':     return Number(p._mp!==undefined?p._mp:marginOf(p.retail_price,productCost(p.code)));
+    case '_s11':    return Number(liveBranchQty(p.code,'stock_11_june')||0);
+    case '_ssr':    return Number(liveBranchQty(p.code,'stock_sarraj')||0);
+    case '_sjz':    return Number(liveBranchQty(p.code,'stock_janzour')||0);
+    case '_total':  return Number(liveTotalQty(p.code)||0);
+    default:        return p[field];
+  }
+}
+function productSortEmpty(field,v,type){
+  if(field==='_lastmove') return !v;                 /* بلا حركة ⇒ دائماً في الذيل */
+  if(v===null||v===undefined||v==='') return true;
+  return type==='num' && isNaN(Number(v));
+}
+function productSortCompare(a,b,colId,dir){
+  const meta=colId?PRODUCT_SORT_META[colId]:null;
+  const field=meta?meta.field:'_lastmove';
+  const type=meta?meta.type:'text';
+  const va=productSortValue(a,field), vb=productSortValue(b,field);
+  const ea=productSortEmpty(field,va,type), eb=productSortEmpty(field,vb,type);
+  let c;
+  /* الفراغ آخر القائمة دائماً — والاتجاه لا يقلبه: هذا شرط عرض لا ترتيب
+     («من لا حركة له في الذيل» قاعدة 0143، وتنطبق على أي عمود فارغ) */
+  if(ea&&eb) c=0;
+  else if(ea) return 1;
+  else if(eb) return -1;
+  else if(type==='num'){
+    const na=Number(va), nb=Number(vb); c=na-nb;
+  }else{
+    c=String(va).localeCompare(String(vb),'ar',{numeric:true,sensitivity:'base'});
+  }
+  if(c) return dir==='asc'?c:-c;
+  /* تعادل: الكود يفصل — ترتيب ثابت لا يرجّ الصفوف بين رسمين */
+  return String(a.code||'').localeCompare(String(b.code||''),'ar',{numeric:true});
+}
+/* نسخة جديدة دائماً — لا sort على مصفوفة products أو على نتائج الفلترة */
+function sortProductsForView(rows,colId,dir){
+  const list=(rows||[]).slice();
+  if(!colId) dir=dir||'desc';
+  list.sort((a,b)=>productSortCompare(a,b,colId,dir||'desc'));
+  return list;
+}
+function clearProductSort(silent){
+  productSortKey=null; productSortDir='desc';
+  renderProducts();
+  if(!silent) toast('أُلغي الترتيب — عادت القائمة إلى «آخر حركة أولاً»','info');
+}
+function applyProductSortClick(colId){
+  if(!colId) return;
+  if(productSortKey===colId) productSortDir=(productSortDir==='asc'?'desc':'asc');
+  else{ productSortKey=colId; productSortDir=productSortDefaultDir(colId); }
+  /* «لا يؤثر على الجدول»: نُعيد موضع التمرير بعد إعادة الرسم */
+  const sc=document.querySelector('#products .product-table-scroll');
+  const top=sc?sc.scrollTop:0;
+  renderProducts();
+  if(sc) sc.scrollTop=top;
+  toast(`ترتيب: ${productSortLabel(productSortKey)} ${productSortDir==='asc'?'تصاعدي ▲':'تنازلي ▼'} — انقر ثانيةً للعكس`,'info');
+}
+function markProductSortHeaders(){
+  const ths=document.querySelectorAll('#products .product-table-wrap thead th');
+  ths.forEach(th=>{
+    const on=!!productSortKey&&th.dataset.sortKey===productSortKey;
+    th.classList.toggle('sorted-asc',on&&productSortDir==='asc');
+    th.classList.toggle('sorted-desc',on&&productSortDir==='desc');
+    if(on) th.setAttribute('aria-sort',productSortDir==='asc'?'ascending':'descending');
+    else th.removeAttribute('aria-sort');
+  });
+}
+
 function renderProducts(){
   const filterDefs=[['productBrandFilter','brand','كل الماركات'],['productColorFilter','color','كل الألوان'],['productSupplierFilter','supplier_name','كل الموردين']];
   filterDefs.forEach(([id,key,label])=>{const el=q(id); if(el && !el.dataset.ready){const vals=[...new Set(products.map(p=>p[key]).filter(Boolean))].sort(); el.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''); el.dataset.ready='1';}});
@@ -2945,28 +3068,22 @@ function renderProducts(){
   /* (1959) الأسطر الإضافية: تضييق إضافي — كل سطر يجب أن يتطابق */
   const extraLines=extraSearchTerms('productExtraSearch');
   if(extraLines.length) rows=rows.filter(p=>extraLines.every(t=>smartMatch(t,productSearchFields(p))));
-  const productCols=['code','name','brand','color','barcode','supplier_name','category','purchase_price','retail_price','margin_value','margin_pct','stock_11_june','stock_sarraj','stock_janzour','total_stock'];
-  /* (0143) -1 = الوضع الافتراضي: آخر حركة أولاً — أول صنف في الجدول هو
-     صاحب آخر حركة. أي نقر على عمود يستبدله كالعادة. */
-  const key=productSortIndex===-1?'_lastmove':(productCols[productSortIndex]||'total_stock');
-  const lm=lastMoveByProduct();
-  rows.sort((a,b)=>{
-    if(key==='_lastmove'){
-      const va=lm.get(String(a.code||''))||'', vb=lm.get(String(b.code||''))||'';
-      const c=vb.localeCompare(va);   /* desc: الأحدث أولاً، ومن لا حركة له في الذيل */
-      if(c) return productSortDir==='asc'?-c:c;
-      return String(a.code||'').localeCompare(String(b.code||''),'ar');
-    }
-    const va=key==='margin_value'?a._mv:(key==='margin_pct'?a._mp:(a[key]??'')), vb=key==='margin_value'?b._mv:(key==='margin_pct'?b._mp:(b[key]??'')); const na=parseFloat(va), nb=parseFloat(vb); const c=(!isNaN(na)&&!isNaN(nb))?na-nb:String(va).localeCompare(String(vb),'ar'); return productSortDir==='asc'?c:-c;
-  });
+  /* (0157) فرز بمفتاح العمود على نسخة — الافتراضي (بلا عمود) آخر حركة أولاً */
+  rows=sortProductsForView(rows, productSortKey, productSortDir);
   const shown=rows.slice(0,100);
   applyProductColVisibility(shown, smartParsed);
   try{ initResizableTables(); }catch(e){ console.warn('col-resize init',e); } /* (20261006h) الجدول أُعيد بناؤه بالكامل */
+  setTimeout(setupTableSorting,0); /* (0157) إعادة بناء الرأس تُسقط قائمة الأعمدة بالزر الأيمن — نُعيد ربطها */
 
   const sp=selectedProductCode?products.find(p=>p.code===selectedProductCode):null;
   if(q('selectedProductInfo')) q('selectedProductInfo').textContent=sp?`المحدد: ${sp.code} - ${sp.name}`:'';
   if(q('productActionBar')) q('productActionBar').classList.toggle('hidden',!sp);
-  q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج` + (rows.length>100 ? ' - اكتب في البحث لتضييق النتائج' : '');
+  const sortTxt=productSortKey
+    ? ` · مرتب: ${productSortLabel(productSortKey)} ${productSortDir==='asc'?'▲':'▼'}`
+    : ' · آخر حركة أولاً';
+  q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج` + (rows.length>100 ? ' - اكتب في البحث لتضييق النتائج' : '') + sortTxt;
+  const resetBtn=q('productSortResetBtn'); if(resetBtn) resetBtn.classList.toggle('hidden',!productSortKey);
+  try{ markProductSortHeaders(); }catch(e){}
 }
 
 
@@ -11579,6 +11696,21 @@ function renderColumnSettings(){
   box.innerHTML = blocks.join('') || '<div class="mini">افتح الشاشات مرة واحدة لتظهر جداولها هنا.</div>';
 }
 
+/* (0157) ترتيب قائمة المنتجات: تفويض على المستند لا ربط لكل رأس.
+   السبب: applyProductColVisibility يعيد بناء thead في كل رسم (كتابة بحث،
+   فلتر، فرز) — فأي مستمع مربوط بالرأس يموت مع أول رسم، وهو سبب «الترتيب
+   لا يعمل» و«ربما يقفز الجدول». هنا: مستمع واحد في مرحلة الالتقاط يسبق
+   أي مستمع قديم ويمنع تكرار المعالجة. */
+document.addEventListener('click',e=>{
+  const th=e.target && e.target.closest ? e.target.closest('#products .product-table-wrap thead th') : null;
+  if(!th) return;
+  const colId=th.dataset.sortKey;
+  if(!colId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  applyProductSortClick(colId);
+},true);
+
 function setupTableSorting(){
   document.querySelectorAll('table').forEach(table=>{
     /* وسم الجدول بمعرّف جسمه: عليه تُبنى قواعد إخفاء الأعمدة */
@@ -11597,14 +11729,16 @@ function setupTableSorting(){
               action:()=>toggleTableCol(colKey,c.i)})),
             {sep:true},
             {label:'إظهار كل الأعمدة',icon:'ti-eye',action:()=>showAllTableCols(colKey)},
-            ...(__tableSort[colKey]?[{label:'إلغاء الترتيب',icon:'ti-arrows-sort',action:()=>clearTableSort(colKey)}]:[])
+            ...((__tableSort[colKey]||(colKey==='productsBody'&&productSortKey))?[{label:'إلغاء الترتيب',icon:'ti-arrows-sort',
+                action:()=>{ if(colKey==='productsBody') clearProductSort(); else clearTableSort(colKey); }}]:[])
           ]);
         });
       }
     }
     const ths=table.querySelectorAll('thead th');
     ths.forEach((th,idx)=>{
-      if(th.dataset.sortReady) return;
+      if(th.dataset.sortReady) return;   /* رؤوس المنتجات (0157) تُدار بالتفويض */
+
       th.dataset.sortReady='1'; th.classList.add('sortable');
       th.title='اضغط للترتيب تصاعدي/تنازلي';
       th.addEventListener('click',()=>{
