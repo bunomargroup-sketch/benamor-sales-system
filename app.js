@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261021-1200';
+const APP_BUILD='b20261021-1320';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -301,6 +301,10 @@ function friendlyError(err){
   if(/duplicate key|already exists/i.test(m)) return 'القيمة موجودة مسبقًا';
   if(/permission|RLS|not authorized/i.test(m)) return 'لا تملك صلاحية لهذه العملية';
   if(/relation .* does not exist|404/i.test(m)) return 'هذا القسم غير مُفعّل في قاعدة البيانات بعد';
+  /* (0155) رسائل الحارس تصل من الخادم ببادئة CODE — نعرض النص العربي وحده */
+  if(/COMPOSITE_CONVERSION_BLOCKED/.test(m)) return m.replace(/^[\s\S]*?COMPOSITE_CONVERSION_BLOCKED:\s*/,'').trim();
+  if(/COMPOSITE_IN_PURCHASE_NOT_ALLOWED/.test(m)) return m.replace(/^[\s\S]*?COMPOSITE_IN_PURCHASE_NOT_ALLOWED:\s*/,'').trim();
+  if(/COMPOSITE_IN_TRANSFER_NOT_ALLOWED/.test(m)) return m.replace(/^[\s\S]*?COMPOSITE_IN_TRANSFER_NOT_ALLOWED:\s*/,'').trim();
   return m||'حدث خطأ غير متوقع';
 }
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
@@ -4618,7 +4622,31 @@ function addOrIncrementTransferProduct(p, qty=1){
   addTransferRow({product_code:p.code,product_name:p.name,qty});
   const last=q('transferItemsBody').lastElementChild; if(last){ updateTransferAvailable(last.querySelector('.ti-qty')); } /* (20261007b) لا سطر فرعي تحت الكود */
 }
+/* (0155) قرار المالك 2026-10-21: لا سطر مركّب جديد — والأسطر القائمة
+   تُستثنى بذاتها (نفس الكود + الكمية + التكلفة حيث وُجدت)، لا بتاريخها.
+   يعيد كود أول سطر مرفوض أو null. */
+function compositeLineBlocked(items, originalItems, withCost){
+  const norm=x=>String(x||'').toLowerCase();
+  const isComp=code=>compositeItems.some(ci=>norm(ci.composite_code)===norm(code));
+  const r4=n=>Math.round(Number(n||0)*1e4)/1e4;
+  const remaining=(originalItems||[]).map(x=>({code:norm(x.product_code),qty:r4(x.qty),cost:r4(x.unit_cost)}));
+  for(const it of items){
+    const code=norm(it.product_code);
+    if(!isComp(code)) continue;
+    const qty=r4(it.qty), cost=r4(it.unit_cost);
+    const i=remaining.findIndex(x=>x.code===code && x.qty===qty && (!withCost || x.cost===cost));
+    if(i<0) return it.product_code||code;
+    remaining.splice(i,1);
+  }
+  return null;
+}
+let hydratingTransferItems=false;   /* أثناء فتح تحويل قائم لا نمنع أسطره التاريخية */
 function addTransferRow(item={}){
+  /* (0155) سطر جديد بكود مركّب مرفوض قبل إنشائه — الأسطر القائمة تُحمَّل بالعلم أعلاه */
+  if(!hydratingTransferItems && item.product_code && compositeItems.some(ci=>String(ci.composite_code||'').toLowerCase()===String(item.product_code).toLowerCase())){
+    toast('«'+item.product_code+'» منتج مركّب — لا يُضاف في تحويل مخزون. حوّل مكوّناته بدلاً منه','warn');
+    return;
+  }
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"></td><td><input class="ti-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
   q('transferItemsBody').appendChild(tr); updateTransferAvailable(tr.querySelector('.ti-qty'));
@@ -9825,7 +9853,12 @@ q('productForm').addEventListener('submit', async e=>{
       toast(productFormMode==='duplicate'?'تم إنشاء المنتج المنسوخ':'تم إنشاء المنتج');
     }
     await saveProductComponents(code); resetProductForm(); await refreshParts(['products','stock','composites','cost']);
-  }catch(err){console.error(err);toast('خطأ في حفظ المنتج: '+err.message+' - إذا ظهر pos_products غير موجود شغل ملف إعداد المنتجات')}
+  }catch(err){
+    console.error(err);
+    /* (0155) رسالة حظر التحويل عربية مكتملة — لا نلحقها بنصائح SQL */
+    if(/COMPOSITE_CONVERSION_BLOCKED|لا يمكن تحويل هذا المنتج/.test(String(err&&err.message||''))) toast(String(err.message).replace(/^[\s\S]*?COMPOSITE_CONVERSION_BLOCKED:\s*/,'').trim(),'error');
+    else toast('خطأ في حفظ المنتج: '+(err&&err.message||'')+' - إذا ظهر pos_products غير موجود شغل ملف إعداد المنتجات');
+  }
   finally{showLoading(false);window.__busy=false}
 });
 
@@ -10218,9 +10251,10 @@ q('purchaseForm').addEventListener('submit', async e=>{
   if(window.__busy) return; window.__busy=true;
   const items=getPurchaseItems();
   if(!items.length){toast('أضف صنف واحد على الأقل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
-  /* (0132) حارس العميل لقاعدة الشراء — الخادم يرفض أيضاً (COMPOSITE_IN_PURCHASE_NOT_ALLOWED) */
-  const compLine=items.find(x=>compositeItems.some(ci=>String(ci.composite_code).toLowerCase()===String(x.product_code||'').toLowerCase()));
-  if(compLine){toast('«'+compLine.product_code+'» منتج مركّب — لا يُشترى ذاته؛ أضف مكوّناته إلى الفاتورة'+(editingPurchaseId?' (استبدل سطر الطقم بمكوّناته ثم احفظ)':''),'warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  /* (0155) حارس العميل: السطر المركّب مرفوض إن كان جديداً أو متغيّراً؛
+     الأسطر القائمة (فاتورة تاريخية فيها طقم) تُحفظ كما هي. الخادم يحسم أيضاً. */
+  const compLine=compositeLineBlocked(items, originalPurchaseItems, true);
+  if(compLine){toast('«'+compLine+'» منتج مركّب — لا يُضاف في فاتورة شراء. أضف مكوّناته بدلاً منه'+(editingPurchaseId?' (أو اترك سطر الطقم القائم بلا تغيير)':''),'warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   try{
     showLoading(true);
     updatePurchaseTotal();
@@ -10290,7 +10324,9 @@ async function openTransferForEdit(id){
     openTab('transfers');
     q('transferFrom').value=t.from_location_id||''; q('transferTo').value=t.to_location_id||''; q('transferDate').value=t.transfer_date||''; q('transferNotes').value=t.notes||'';
     q('transferItemsBody').innerHTML='';
-    rows.forEach(it=>addTransferRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty}));
+    hydratingTransferItems=true;
+    try{ rows.forEach(it=>addTransferRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty})); }
+    finally{ hydratingTransferItems=false; }
     refreshTransferAvailability();
     q('transferSubmitBtn').textContent='حفظ التعديل وتحديث المخزون';
     q('transferCancelEditBtn').classList.remove('hidden');
@@ -10353,6 +10389,9 @@ q('transferForm').addEventListener('submit', async e=>{
   if(from===to){toast('لا يمكن التحويل لنفس المكان','warn'); window.__busy=false; return;}
   let items=groupTransferItems(getTransferItems());
   if(!items.length){toast('أضف صنف واحد على الأقل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  /* (0155) لا سطر مركّب جديد في التحويل — والقائم يُحفظ بلا مساس */
+  const compTr=compositeLineBlocked(items, originalTransferItems, false);
+  if(compTr){toast('«'+compTr+'» منتج مركّب — لا يُضاف في تحويل مخزون. حوّل مكوّناته بدلاً منه','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   /* 0420: التحقق ضد الخادم — المصدر نفسه الذي تعرضه الشاشة (0410) */
   showLoading(true);
   const v=await validateTransferStockServer(items, from);
@@ -12443,14 +12482,22 @@ function addProductComponent(){
 }
 function removeProductComponent(i){editingProductComponents.splice(i,1);renderProductComponents();}
 async function saveProductComponents(productCode){
+  const wasComposite=compositeItems.some(ci=>String(ci.composite_code||'')===String(productCode));
+  if(!editingProductComponents.length && !wasComposite) return;
+  /* (0155) حفظ المكوّنات في معاملة واحدة على الخادم: التحويل إلى مركّب
+     يُرفض إن كان للمنتج فاتورة شراء منذ 2026-09-01 — والرسالة تحمل العدد
+     وآخر تاريخ. كانت هنا DELETE ثم POST غير ذرّيين، وبلا أي فحص. */
   try{
-    const wasComposite=compositeItems.some(ci=>ci.composite_code===productCode);
-    if(!editingProductComponents.length && !wasComposite) return;
-    await api('pos_composite_items',{method:'DELETE',qs:`?composite_code=eq.${encodeURIComponent(productCode)}`});
-    if(editingProductComponents.length){
-      await api('pos_composite_items',{method:'POST',body:editingProductComponents.map(c=>({composite_code:productCode,component_code:c.code,component_name:c.name,qty:c.qty}))});
-    }
-  }catch(e){console.warn('composite save failed',e);}
+    await rpc('save_product_composite',{
+      p_composite_code:productCode,
+      p_components:editingProductComponents.map(c=>({component_code:c.code,component_name:c.name,qty:c.qty})),
+      p_user_identifier:appUser?.identifier||''
+    });
+  }catch(e){
+    const m=String(e&&e.message||e||'');
+    const clean=m.replace(/^[\s\S]*?COMPOSITE_CONVERSION_BLOCKED:\s*/,'').trim();
+    throw new Error(clean||m);
+  }
 }
 /* ═══ نافذة تعديل المنتج المركّب — مكوّناته + أسعاره + وصفه في نافذة مستقلة (لا تعتمد على نموذج تبويب المنتجات) ═══ */
 const staticOpenCountState={id:null,comps:[]};
@@ -12559,10 +12606,12 @@ async function ceSave(){
     await api('pos_products',{method:'PATCH',qs:`?code=eq.${encodeURIComponent(sb.id)}`,body:{
       name, brand:(q('ceBrand')?.value||'').trim(), model:(q('ceModel')?.value||'').trim(), color:(q('ceColor')?.value||'').trim(),
       retail_price:retail, wholesale_price:whole, purchase_price:pur, description:desc}});
-    await api('pos_composite_items',{method:'DELETE',qs:`?composite_code=eq.${encodeURIComponent(sb.id)}`});
-    if(sb.comps.length){
-      await api('pos_composite_items',{method:'POST',body:sb.comps.map(c=>({composite_code:sb.id,component_code:c.code,component_name:c.name,qty:c.qty}))});
-    }
+    /* (0155) RPC ذرّي واحد — حظر تحويل منتج له فواتير شراء حديثة + رسالة بالأرقام */
+    await rpc('save_product_composite',{
+      p_composite_code:sb.id,
+      p_components:sb.comps.map(c=>({component_code:c.code,component_name:c.name,qty:c.qty})),
+      p_user_identifier:appUser?.identifier||''
+    });
     await logAction('composite_update','pos_products',sb.id,
       becamePlain?`تفكيك مركّب ${sb.id} («${name}») — أصبح منتجاً عادياً`
                  :`تعديل مركّب ${sb.id} («${name}») — ${sb.comps.length} مكوّناً — سعر ${retail}`);
