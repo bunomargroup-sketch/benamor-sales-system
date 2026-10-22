@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261021-2015';
+const APP_BUILD='b20261022-1439';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4691,10 +4691,10 @@ function getStockQty(location_id, product_code){
    مخزون/حركات من المتصفح بعد اليوم. */
 function renderTransfers(){
   const scope=sellerBranchScope(); const list=scope?transfers.filter(t=>t.from_location_id===scope||t.to_location_id===scope):transfers;
-  /* (0154) قرار المالك: المبرمج يعرض ويطبع فقط — لا ينشئ ولا يعدّل ولا يحذف.
-     الحذف للمدير وحده (المبرمج كان يمرّ عبر isManager ⇒ ROLE_RANK 9). */
-  const canEdit=!isProgrammer();
-  const canDelete=String(currentRole?.role||'')==='admin';
+  /* (0159) قرار المالك: المبرمج أعلى من المدير — أُلغي منع 0154.
+     التعديل متاح للجميع (الخادم يفحص الطرف/الفرع)، والحذف للمدير والمبرمج. */
+  const canEdit=true;
+  const canDelete=isManager();
   q('transfersBody').innerHTML = list.map(t=>{
     const from=locations.find(x=>x.id===t.from_location_id); const to=locations.find(x=>x.id===t.to_location_id);
     const doerTd=sellerCell(t.created_by);   /* (المهمة ٥) منفّذ التحويل */
@@ -4704,20 +4704,16 @@ function renderTransfers(){
   }).join('') || '<tr><td colspan="8">لا توجد تحويلات مخزون بعد.</td></tr>';
   applyTransferPermissions();
 }
-/* (0154) دور «المبرمج»: عرض وطباعة فقط — تُعطَّل أدوات الإنشاء/التعديل
-   وتظهر لافتة تشرح السبب. تُنادى من renderTransfers كي تتبع الدور عند
-   تبديل المستخدم على الجهاز نفسه. */
+/* (0159) أُفرغت بعد إلغاء منع 0154: لا دور يُعطَّل له نموذج التحويل.
+   بقيت الدالة (بلا أثر) لأن renderTransfers تناديها، ولتبقى نقطة واحدة
+   لأي تقييد مستقبلي بدل شروط متناثرة. */
 function applyTransferPermissions(){
-  const blocked=isProgrammer();
-  const note=q('transferRoleNote'); if(note) note.style.display=blocked?'':'none';
-  const form=q('transferForm'); if(form) [...form.elements].forEach(el=>{ try{ el.disabled=blocked; }catch(e){} });
-  const btn=q('transferSubmitBtn'); if(btn) btn.classList.toggle('hidden',blocked);
-  const cancel=q('transferCancelEditBtn'); if(cancel&&blocked) cancel.classList.add('hidden');
+  const note=q('transferRoleNote'); if(note) note.style.display='none';
 }
 /* (0153) حذف تحويل مخزون — RPC ذرّي يعكس الأثر على مخزون الطرفين ويحذف
    المستند وبنوده وحركاته في نفس المعاملة (مدير فقط — والخادم يحسم) */
 async function deleteStockTransfer(id){
-  if(String(currentRole?.role||'')!=='admin'){toast('حذف تحويلات المخزون للمدير فقط','warn');return;} /* (0154) المبرمج ممنوع */
+  if(!isManager()){toast('حذف تحويلات المخزون للمدير والمبرمج فقط','warn');return;} /* (0159) parity */
   const t=transfers.find(x=>x.id===id); if(!t){toast('لم يتم العثور على التحويل','warn');return;}
   const from=locations.find(l=>l.id===t.from_location_id)?.name||'', to=locations.find(l=>l.id===t.to_location_id)?.name||'';
   if(!confirm(`حذف تحويل مخزون من «${from}» إلى «${to}» بتاريخ ${t.transfer_date}؟\nسيُعكس أثره على مخزون الطرفين ويُحذف المستند وبنوده وحركاته في نفس المعاملة — لا رجوع.`))return;
@@ -6181,7 +6177,6 @@ function sgUpdateSelectedInfo(){
   }
 }
 function createTransferFromSuggestions(){
-  if(isProgrammer()){toast('دور «المبرمج» لا يملك صلاحية إنشاء تحويلات المخزون — العرض والطباعة فقط','warn');return;} /* (0154) */
   if(!sgSelected.size){toast('حدّد اقتراحًا واحدًا على الأقل','warn');return;}
   const groups={};
   for(const x of sgSelected.values()){
@@ -10482,7 +10477,6 @@ function resetTransferForm(){
   q('transferCancelEditBtn').classList.add('hidden');
 }
 async function openTransferForEdit(id){
-  if(isProgrammer()){toast('دور «المبرمج» لا يملك صلاحية تعديل تحويلات المخزون — العرض والطباعة فقط','warn');return;} /* (0154) */
   try{
     showLoading(true);
     const rows=await api('pos_stock_transfer_items',{qs:`?select=*&transfer_id=eq.${id}&order=created_at.asc`});
@@ -10549,8 +10543,6 @@ async function validateTransferStockServer(items, from){
 }
 q('transferForm').addEventListener('submit', async e=>{
   e.preventDefault();
-  /* (0154) قرار المالك: المبرمج لا ينشئ ولا يعدّل تحويلات المخزون */
-  if(isProgrammer()){toast('دور «المبرمج» لا يملك صلاحية إنشاء أو تعديل تحويلات المخزون — العرض والطباعة فقط','warn');return;}
   if(window.__busy) return; window.__busy=true;
   const from=q('transferFrom').value, to=q('transferTo').value;
   if(!from || !to){toast('اختر مكان التحويل من وإلى','warn'); window.__busy=false; return;}
