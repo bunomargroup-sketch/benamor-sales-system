@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>نظام البيع</title>
   <!-- الخطوط محليّة بالكامل: المنظومة تفتح دون اتصال بخطّها وأيقوناتها كاملة.
        كانت تُجلب من fonts.googleapis.com و cdn.jsdelivr.net، والعامل الخدمي
@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261022-1439">
+<link rel="stylesheet" href="app.css?v=20261024-1627">
 </head>
 <body class="auth-locked">
   <header>
@@ -492,7 +492,7 @@
               <div class="finish-actions">
                 <button class="btn secondary hidden" id="saleFinishCancelEditBtn" type="button" onclick="resetSaleFormWithConfirm()">إلغاء التعديل</button>
                 <button class="btn secondary" type="button" onclick="parkCurrentSale()">تعليق</button>
-                <button class="btn secondary" type="button" onclick="resumeParkedSale()">المعلقة</button>
+                <button class="btn secondary" type="button" id="saleParkedBtn" onclick="resumeParkedSale()">المعلقة</button>
                 <button class="btn secondary" type="button" onclick="resetSaleFormWithConfirm()">فاتورة جديدة</button>
                 <button class="btn" id="salePayBtn" type="button" onclick="openSalePaymentScreen()"><i class="ti ti-cash"></i> الدفع <b class="kbd">F6</b></button>
               </div>
@@ -2009,6 +2009,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261022-1439"></script>
+<script src="app.js?v=20261024-1627"></script>
 </body>
 </html>

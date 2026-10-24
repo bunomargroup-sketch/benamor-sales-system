@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261022-1439';
+const APP_BUILD='b20261024-1627';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -896,7 +896,7 @@ async function saveSaleOfflineQueued(rpcPromise,payload,body,items,paymentsForRp
   const cust=customers.find(x=>x.id===body.customer_id);
   const entry=await enqueueOfflineSale(payload,{total:body.total,customer_name:cust?.name||'زبون نقدي',sale_date:body.sale_date,location_id:body.location_id,items_count:items.length});
   clearDraftKey('sale'); /* ضروري: حتى لا يتشارك مفتاح idempotency مع الفاتورة التالية */
-  clearActiveSaleDraft();
+  clearActiveSaleDraft(); consumeCurrentParkedDraft();
   mirrorOfflineQueue().catch(()=>{}); /* المرآة (0106): فور توفر اتصال — وإلا عند أول مزامنة */
   logAction('sale_offline_queue','pos_offline_queue',entry.temp_id,`فاتورة محلية بانتظار الاتصال - ${money(body.total)} ${APP_CONFIG.currency}`);
   const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new';
@@ -6901,6 +6901,9 @@ async function openSaleForEdit(id){
     if(!sl){toast('لم يتم العثور على الفاتورة','warn');return;}
     if(String(sl.created_by||'')!==String(appUser?.identifier||'')){toast(sl.created_by?'يمكنك تعديل الفواتير التي أنشأتها أنت فقط — أبلغ المدير لتعديل غيرها':'هذه فاتورة قديمة لا يعرف النظام من أنشأها — المدير وحده يعدّلها','warn');return;}
   }
+  /* (0161) لا نمسح فاتورة على الشاشة بلا سؤال (كانت تختفي بلا أثر) */
+  if(typeof saleHasContent==='function' && saleHasContent() && String(editingSaleId||'')!==String(id) && !__bypassWipeConfirm
+     && !confirm('يوجد فاتورة على الشاشة. فتح هذه الفاتورة للتعديل سيستبدلها — هل تريد المتابعة؟')) return;
   try{
     showLoading(true);
     const rows=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`});
@@ -7485,6 +7488,9 @@ async function openProformaForEdit(id){
 async function convertSaleToProforma(id){
   try{showLoading(true); const sl=sales.find(x=>x.id===id)||(await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`}); const c=customers.find(x=>x.id===sl.customer_id); const subtotal=rows.reduce((a,x)=>a+Number(x.line_total||0),0); const pr=await api('pos_proformas',{method:'POST',body:{proforma_date:sl.sale_date,location_id:sl.location_id,customer_id:sl.customer_id,customer_name:c?.name||null,customer_phone:c?.phone||null,subtotal,discount:Number(sl.discount||0),total:Number(sl.total||subtotal),status:'draft',source_sale_id:id,notes:'تم إنشاؤها من فاتورة بيع'}}); await api('pos_proforma_items',{method:'POST',body:rows.map(it=>({proforma_id:pr[0].id,product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount||0,discount_text:it.discount_text||'',line_total:it.line_total}))}); toast('تم تحويل فاتورة البيع إلى مبدئية'); await refreshParts(['proformas']); openTab('proformas');}catch(e){console.error(e);toast('خطأ في التحويل: '+e.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}}
 async function convertProformaToSale(id){
+  /* (0161) التحويل يستبدل ما على شاشة البيع — لا يفعله بلا سؤال */
+  if(typeof saleHasContent==='function' && saleHasContent() && !__bypassWipeConfirm
+     && !confirm('يوجد فاتورة بيع على الشاشة. تحويل المبدئية سيستبدلها — هل تريد المتابعة؟')) return;
   try{showLoading(true); const pr=proformas.find(x=>x.id===id)||(await api('pos_proformas',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_proforma_items',{qs:`?select=*&proforma_id=eq.${id}&order=created_at.asc`}); openTab('sales'); resetSaleForm(); q('saleLocation').value=pr.location_id||''; q('saleCustomer').value=pr.customer_id||''; q('saleNewCustomerName').value=pr.customer_name||''; q('saleNewCustomerPhone').value=pr.customer_phone||''; q('saleNotes').value='من فاتورة مبدئية '+(pr.proforma_no||pr.id.slice(0,8)); q('saleDiscount').value=Number(pr.discount||0); q('saleItemsBody').innerHTML=''; rows.forEach(it=>addSaleRow({product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount,discount_text:it.discount_text})); updateSaleTotal(); await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{status:'converted'}}).catch(()=>{}); toast('تم فتح الفاتورة في شاشة البيع، راجع الدفع ثم احفظ البيع');}catch(e){console.error(e);toast('خطأ في تحويل المبدئية إلى بيع: '+e.message)}finally{showLoading(false);window.__busy=false}}
 
 
@@ -7662,6 +7668,11 @@ function openWindow(sec){
   const node=document.getElementById(sec);
   if(!node || !node.classList.contains('section')) return;
 
+  /* (0162) على اللمس: القائمة دُرج عائم — تُغلق قبل فتح النافذة كي لا تظهر
+     النافذة «تحت القائمة الجانبية» (بلاغ المالك 2026-10-24) */
+  if(navIsOverlay() && !document.body.classList.contains('nav-collapsed')){
+    document.body.classList.add('nav-collapsed'); syncWinLayer();
+  }
   syncWinLayer();   /* (20261012) الحزام يقيس نفسه قبل أن تُفتح النافذة */
   const g=clampWinGeom(Object.assign(nextWinPos(), __winGeom[sec]||{}));   /* الاستعادة مقيدة بحدود الحزام */
   const el=document.createElement('div');
@@ -7923,6 +7934,8 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
   else q(btn.dataset.tab).classList.add('active');
   if(btn.dataset.tab==='sales') document.body.classList.add('nav-collapsed');
   else document.body.classList.toggle('nav-collapsed', (localStorage.getItem('posNavCollapsed')==='1'));
+  /* (20261023) على الهاتف/التابلت: اختيار قسم يغلق الدُرج — بلا لمس الزر مرتين */
+  if(isSmallScreen()) document.body.classList.add('nav-collapsed');
   if(btn.dataset.tab==='sales'){ applySaleLayoutPrefs(); toggleSaleCustomerPanel(true); if(!editingSaleId && !saleHasContent()){q('saleItemsBody').innerHTML=''; ensureSaleInvoiceNo(false);} setTimeout(()=>{ autoResumeParkedSaleIfFlagged(); q('saleBarcodeInput')?.focus(); },50); }
   if(btn.dataset.tab==='reports' && btn.dataset.reportDefault){setTimeout(()=>showReport(btn.dataset.reportDefault),50);}
   if(btn.dataset.tab==='dailyCashClosing'){setTimeout(()=>renderDailyCashReport(),50);}
@@ -8257,6 +8270,16 @@ function ensureSaleInvoiceNo(force=false){
   if(force || !el.value) el.value='سيولد تلقائيًا';
   return el.value;
 }
+/* (0161) رقم الفاتورة عند التعديل: يُرسَل الرقم الأصلي حصراً — لا يغيّره
+   حقل الشاشة، ولا تُكتب عبارة «سيولد تلقائيًا» كرقم فعلي في القاعدة.
+   سبب العطل المُبلَّغ: «فاتورة تأخذ رقم فاتورة». */
+function saleInvoiceNoForSave(){
+  const orig=String(originalSale?.invoice_no||'').trim();
+  if(orig) return orig;
+  const typed=String(q('saleInvoiceNo')?.value||'').trim();
+  if(!typed||typed==='سيولد تلقائيًا') return null;
+  return typed;
+}
 
 function saleDraftStorageKey(){return `posActiveSaleDraft_${appUser?.identifier||'user'}_${appUser?.branch_id||'branch'}`}
 function parkedSalesKey(){return `posParkedSales_${appUser?.identifier||'user'}_${appUser?.branch_id||'branch'}`}
@@ -8342,56 +8365,156 @@ async function tryRestoreActiveSaleDraft(){
 }
 function resetSaleFormWithConfirm(){
   if(saleHasContent() && !confirm('يوجد أصناف في الفاتورة. هل تريد تفريغها وبدء فاتورة جديدة؟')) return;
-  clearActiveSaleDraft(); clearDraftKey('sale'); resetSaleForm();
+  clearActiveSaleDraft(); clearDraftKey('sale'); currentParkedDraftId=null; resetSaleForm();
 }
+/* ═══════════════════════════════════════════════════════════════════
+   (0161) تعليق الفواتير — محرّك «لا فقدان» (2026-10-24)
+   بلاغ المالك: فاتورتان معلّقتان، وبعد استرجاع الأولى وحفظها بقي
+   مستند واحد واختفت الثانية. في المحرّك القديم خمس ثقوب تُفقد مسودة:
+   ① القائمة كتلة واحدة في localStorage وتُحذف **بالترتيب** لا بالهوية:
+      أي إزاحة بين ما استُعيد وما حُذف تمسح فاتورة أخرى بلا أثر.
+   ② «فواتير البيع» تعلّق الجارية ثم تُسترجَع «أحدث معلّقة» بعد ٥٠مث
+      **فوق ما على الشاشة بلا سؤال** — فتأكل فاتورة بدأت في الأثناء.
+   ③ الاسترجاع التلقائي يشغل أثناء الاسترجاع اليدوي (كلاهما async) فيحذف
+      مرتين: splice(0,1) ثم splice(n-1,1) → مسودتان تختفيان لواحدة.
+   ④ الكتابة last-write-wins: أي نافذة/تبويب ثانٍ يكتب القائمة كاملة فوق
+      ما كتبه الأول.
+   ⑤ فشل الكتابة (امتلاء المخزن) كان يُفرِّغ الشاشة رغم أن الحفظ فشل.
+   الآن: معرّف ثابت لكل مسودة، والحذف بالمعرّف فقط، والكتابة دمجية لا
+   تمحو ما كتبه غيرنا، ولا استرجاع فوق فاتورة قائمة، ولا تفريغ للشاشة إن
+   فشل الحفظ، وعدّاد ظاهر على زر «المعلقة»، واستهلاك المسودة بعد الحفظ.
+   ═══════════════════════════════════════════════════════════════════ */
+const PARKED_MAX=200;
+let currentParkedDraftId=null;   /* مسودة استُرجعت إلى الشاشة ولم تُحفظ بعد */
+let __bypassWipeConfirm=false;   /* استرجاع موافَق عليه مسبقاً: لا نسأل ثانية */
+function newParkedDraftId(){
+  try{ if(crypto?.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return 'pk-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+}
+function readParkedSales(){
+  try{
+    const raw=localStorage.getItem(parkedSalesKey());
+    if(!raw) return [];
+    const arr=JSON.parse(raw);
+    if(!Array.isArray(arr)) return [];
+    return arr.filter(d=>d&&typeof d==='object').map((d,i)=>({...d,id:String(d.id||('legacy-'+i))}));
+  }catch(e){ console.warn('parked read failed',e); return []; }
+}
+/* كتابة دمجية: نقرأ الطازج، نحذف بالمعرّف، نضيف/نحدّث بالمعرّف.
+   لا نكتب فوق ما كتبه تبويب آخر، ولا نحذف إلا ما طُلب حذفه صراحةً. */
+function writeParkedSales(add=[],dropIds=[]){
+  try{
+    const drop=new Set((dropIds||[]).map(String));
+    const byId=new Map();
+    for(const d of readParkedSales()) if(!drop.has(d.id)) byId.set(d.id,d);
+    for(const d of (add||[])) if(d&&d.id&&!drop.has(String(d.id))){ const k=String(d.id); byId.set(k,{...byId.get(k),...d,id:k}); }
+    const list=[...byId.values()].sort((a,b)=>Number(b.ts||0)-Number(a.ts||0)).slice(0,PARKED_MAX);
+    localStorage.setItem(parkedSalesKey(),JSON.stringify(list));
+    updateParkedSalesBadge();
+    return true;
+  }catch(e){
+    console.error('parked write failed',e);
+    toast('تعذّر حفظ الفاتورة المعلقة في هذا المتصفح (المساحة ممتلئة؟) — الشاشة لم تُفرَّغ، احفظ الفاتورة أو أفرغ مساحة','error');
+    return false;
+  }
+}
+function parkedSalesCount(){ return readParkedSales().length; }
+function updateParkedSalesBadge(){
+  try{
+    const n=parkedSalesCount();
+    const btn=q('saleParkedBtn'); if(btn) btn.textContent=n?('المعلقة ('+n+')'):'المعلقة';
+  }catch(e){}
+}
+function draftTotalValue(d){
+  const sub=(d.items||[]).reduce((a,it)=>a+Number(it.qty||0)*Number(it.unit_price||0)-Number(it.line_discount||0),0);
+  return Math.max(0,sub-Number(d.discount||0));
+}
+function draftLabel(d,i){
+  const t=new Date(Number(d.ts)||Date.now()).toLocaleString('ar-LY');
+  const first=(d.items||[])[0];
+  return `${i+1}) ${t} — ${(d.items||[]).length} صنف — ${money(draftTotalValue(d))} ${APP_CONFIG.currency} — ${d.customer_name||'زبون نقدي'}${first?(' — '+first.product_name):''}`;
+}
+/* تعليق الفاتورة الجارية. يعيد معرّف المسودة (أو null عند الفشل) —
+   المستدعي يحتاجه ليسترجع **نفسها** لا «أحدث معلّقة». */
 function parkCurrentSale(){
   const d=collectSaleDraft();
-  if(!d.items.length){toast('لا توجد فاتورة لتعليقها','warn');return;}
-  const arr=JSON.parse(localStorage.getItem(parkedSalesKey())||'[]');
-  arr.unshift({...d,id:crypto?.randomUUID?.()||String(Date.now())});
-  localStorage.setItem(parkedSalesKey(),JSON.stringify(arr.slice(0,30)));
-  clearActiveSaleDraft(); clearDraftKey('sale'); resetSaleForm(); toast('تم تعليق الفاتورة','success');
+  if(!d.items.length){toast('لا توجد فاتورة لتعليقها','warn');return null;}
+  const rec={...d,id:newParkedDraftId(),ts:Number(d.ts)||Date.now()};
+  if(!writeParkedSales([rec])) return null;   /* فشل الحفظ: لا نفرّغ الشاشة */
+  clearActiveSaleDraft(); clearDraftKey('sale'); currentParkedDraftId=null; resetSaleForm();
+  toast('تم تعليق الفاتورة — تجدها في زر «المعلقة»','success');
+  return rec.id;
 }
-async function resumeParkedSale(){
-  const arr=JSON.parse(localStorage.getItem(parkedSalesKey())||'[]');
-  if(!arr.length){toast('لا توجد فواتير معلقة','info');return;}
-  const label=arr.map((d,i)=>`${i+1}) ${new Date(d.ts).toLocaleString('ar-LY')} - ${d.items.length} صنف - ${d.customer_name||'زبون نقدي'}`).join('\n');
-  const n=Number(prompt('اختر رقم الفاتورة المعلقة:\n'+label,'1'));
-  if(!n||!arr[n-1]) return;
-  if(saleHasContent() && !confirm('سيتم استبدال الفاتورة الحالية. متابعة؟')) return;
-  const d=arr[n-1];
-  const ok=await restoreSaleDraft(d);
-  if(!ok) return; /* (1978) عند تعذّر الاسترجاع تبقى المعلّقة في قائمتها */
-  arr.splice(n-1,1); localStorage.setItem(parkedSalesKey(),JSON.stringify(arr));
+async function resumeParkedSale(n){
+  const arr=readParkedSales();
+  if(!arr.length){toast('لا توجد فواتير معلقة','info');return false;}
+  let idx=null;
+  const given=(n===undefined||n===null)?'':String(n).trim();
+  if(given!==''){
+    if(!/^\d+$/.test(given)){toast('رقم غير صحيح','warn');return false;}
+    idx=Number(given)-1;
+  }else{
+    const answer=prompt('اختر رقم الفاتورة المعلقة:\n'+arr.map(draftLabel).join('\n'),'1');
+    if(answer===null||answer===undefined) return false;
+    const a=String(answer).trim();
+    if(!/^\d+$/.test(a)) return false;
+    idx=Number(a)-1;
+  }
+  const d=arr[idx];
+  if(!d){toast('لا توجد فاتورة معلقة بهذا الرقم','warn');return false;}
+  return await resumeParkedDraftById(d.id);
+}
+async function resumeParkedDraftById(id){
+  const d=readParkedSales().find(x=>x.id===String(id));
+  if(!d){toast('هذه المسودة لم تعد في القائمة — حدّث القائمة','warn');return false;}
+  if(saleHasContent() && !confirm('سيتم استبدال الفاتورة الحالية. متابعة؟')) return false;
+  let ok=false;
+  __bypassWipeConfirm=true;
+  try{ ok=await restoreSaleDraft(d); } finally{ __bypassWipeConfirm=false; }
+  if(!ok) return false;                       /* (1978) تبقى في القائمة عند التعذّر */
+  writeParkedSales([],[d.id]);                /* الحذف بالهوية فقط — لا بالترتيب */
+  currentParkedDraftId=d.id;
   openTab('sales'); toast('تم استرجاع الفاتورة المعلقة','success');
+  return true;
+}
+/* بعد حفظ ناجح: المسودة المسترجعة تُستهلك نهائياً (شبكة أمان لو بقي أثرها) */
+function consumeCurrentParkedDraft(){
+  const id=currentParkedDraftId; currentParkedDraftId=null;
+  if(id) writeParkedSales([],[id]);
 }
 function saleHasContent(){ return q('saleItemsBody') && getSaleItems().length>0; }
 
 /* (المهمة ٢) الانتقال إلى فواتير البيع من شاشة البيع دون فقدان الفاتورة الجارية:
-   إن وُجدت أصناف غير محفوظة ⇒ تُعلَّق بنفس آلية التعليق (parkCurrentSale)
-   وتُسترجَع تلقائياً عند العودة إلى تبويب البيع — لا فقدان ولا سؤال */
-let __autoResumeParkedOnSaleTab=false;
+   تُعلَّق الجارية وتُسترجَع **نفسها بالمعرّف** عند العودة، ولا تُسترجَع فوق
+   فاتورة بدأت في الأثناء (تبقى في «المعلقة») */
+let __autoResumeParkedOnSaleTab=false, __autoResumeParkedDraftId=null;
 function openSalesListFromSale(){
   if(typeof saleHasContent==='function' && saleHasContent() && !editingSaleId){
-    parkCurrentSale();          /* نفس آلية «تعليق» القائمة الجانبية تماماً */
-    __autoResumeParkedOnSaleTab=true;
-    toast('عُلّقت الفاتورة الجارية — ستُسترجع تلقائياً عند عودتك لشاشة البيع','info');
+    const id=parkCurrentSale();
+    if(id){
+      __autoResumeParkedOnSaleTab=true; __autoResumeParkedDraftId=id;
+      toast('عُلّقت الفاتورة الجارية — ستُسترجع تلقائياً عند عودتك لشاشة البيع','info');
+    }
   }
   openTab('salesList');
 }
 async function autoResumeParkedSaleIfFlagged(){
   if(!__autoResumeParkedOnSaleTab) return;
   __autoResumeParkedOnSaleTab=false;
+  const id=__autoResumeParkedDraftId; __autoResumeParkedDraftId=null;
+  if(!id) return;
+  /* لا نستبدل أبداً فاتورة قائمة على الشاشة — تبقى المسودة في «المعلقة» */
+  if(saleHasContent()||editingSaleId){ toast('لديك فاتورة على الشاشة — المعلّقة محفوظة في زر «المعلقة»','info'); return; }
   try{
-    const arr=JSON.parse(localStorage.getItem(parkedSalesKey())||'[]');
-    if(!arr.length) return;
-    const d=arr[0]; /* أحدث معلّقة = التي علّقناها للتو */
+    const d=readParkedSales().find(x=>x.id===String(id));
+    if(!d) return;
     const ok=await restoreSaleDraft(d);
-    if(!ok) return; /* (1978) تبقى في القائمة عند التعذّر */
-    arr.splice(0,1); localStorage.setItem(parkedSalesKey(),JSON.stringify(arr));
+    if(!ok) return;                            /* تبقى في القائمة عند التعذّر */
+    writeParkedSales([],[d.id]); currentParkedDraftId=d.id;
     toast('استُرجعت الفاتورة الجارية تلقائياً','success');
   }catch(e){ console.warn('auto resume failed',e); }
 }
+try{ window.addEventListener('storage',e=>{ if(e&&e.key===parkedSalesKey()){ try{updateParkedSalesBadge()}catch(_e){} } }); }catch(e){}
 
 function openSalePaymentScreen(){ closeQuickSearch();
   const items=getSaleItems();
@@ -9937,7 +10060,7 @@ q('saleForm').addEventListener('submit', async e=>{
       window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;
     }
     const customer_id=await ensureSaleCustomer(balance_due);
-    const invoice_no=editingSaleId ? q('saleInvoiceNo').value.trim() : null; const body={invoice_no,sale_date:q('saleDate').value,location_id,customer_id,payment_method:detectSalePaymentMethod(balance_due),subtotal,discount,total,paid_amount:paid,balance_due,status:'posted',notes:q('saleNotes').value.trim(),created_by:appUser?.identifier||''}; /* (المهمة ٢) يُكتب في كل فاتورة جديدة — حتى مسار الحفظ الاحتياطي المباشر */
+    const invoice_no=editingSaleId ? saleInvoiceNoForSave() : null; const body={invoice_no,sale_date:q('saleDate').value,location_id,customer_id,payment_method:detectSalePaymentMethod(balance_due),subtotal,discount,total,paid_amount:paid,balance_due,status:'posted',notes:q('saleNotes').value.trim(),created_by:appUser?.identifier||''}; /* (المهمة ٢) يُكتب في كل فاتورة جديدة — حتى مسار الحفظ الاحتياطي المباشر */
     let saleId=editingSaleId;
     if(!editingSaleId){
       const paymentsForRpc=payRows.map(r=>({...r,account_id:defaultAccountFor(r.payment_method,location_id),notes:''}));
@@ -9953,7 +10076,7 @@ q('saleForm').addEventListener('submit', async e=>{
       }
       saleId=saved.id; body.invoice_no=saved.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||''; syncSaleInvoiceNoText();
       if(sourcePriceCheckerCartId){await rpc('mark_pricechecker_cart_converted',{p_cart_id:sourcePriceCheckerCartId}).catch(console.warn); sourcePriceCheckerCartId=null;}
-      clearDraftKey('sale'); clearActiveSaleDraft();
+      clearDraftKey('sale'); clearActiveSaleDraft(); consumeCurrentParkedDraft();
       logAction('sale','pos_sales',saleId,`${body.invoice_no||saleId.slice(0,8)} - ${money(body.total)} ${APP_CONFIG.currency}`);
       const msg='تم حفظ فاتورة البيع وتحديث المخزون';
       const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); clearActiveSaleDraft(); resetSaleForm(); applySaleLocally(saleId, body, items, paymentsForRpc); refreshAfterLocalUpdate(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
@@ -9975,7 +10098,7 @@ q('saleForm').addEventListener('submit', async e=>{
     saleId=updated.id; body.invoice_no=updated.invoice_no||body.invoice_no; q('saleInvoiceNo').value=body.invoice_no||''; syncSaleInvoiceNoText();
     /* ⚙️ أُزيلت logAction('sale_edit') من العميل: 0065 يسطر التدقيق من الخادم بتفاصيل أغنى (سجل التعديلات داخل الفاتورة) */
     const msg='تم تعديل فاتورة البيع وتحديث المخزون';
-    const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); clearActiveSaleDraft(); resetSaleForm(); await refreshSalesDomain(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
+    const shouldPrint=q('salePrintAfterSave').value==='yes'; const mode=saleSaveMode||'new'; closeSalePaymentScreen(); clearActiveSaleDraft(); consumeCurrentParkedDraft(); resetSaleForm(); await refreshSalesDomain(); toast(msg,'success'); if(shouldPrint) setTimeout(()=>printSale(saleId),300); if(mode==='close') openTab('salesList'); saleSaveMode='new';
   }catch(err){console.error(err);toast('خطأ في حفظ البيع: '+friendlyError(err),'error')}
   finally{showLoading(false);window.__busy=false;document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false)}
 });
@@ -12105,6 +12228,30 @@ function setupLongPickers(){
   document.addEventListener('keydown',e=>{const el=e.target; if(!el)return; if((LONG_PICKER_IDS.has(el.id)||LONG_INPUT_IDS.has(el.id))&&(e.key==='Enter'||e.key===' '||e.key==='ArrowDown')){e.preventDefault();openLongPicker(el.id);}},true);
 }
 
+/* (20261023) حجاب خلف دُرج القائمة على الهاتف/التابلت: لمسه يغلق الدُرج.
+   لا يفعل شيئاً على سطح المكتب — CSS يخفيه فوق 900px. */
+function ensureNavBackdrop(){
+  if(!document.body || document.querySelector('.nav-backdrop')) return;
+  const bd=document.createElement('div');
+  bd.className='nav-backdrop';
+  bd.setAttribute('aria-hidden','true');
+  bd.addEventListener('click',()=>document.body.classList.add('nav-collapsed'));
+  document.body.appendChild(bd);
+}
+function isSmallScreen(){
+  /* (0162) «الشاشة الصغيرة» = شاشة لمس. العرض وحده لا يكفي: نافذة متصفح ضيّقة
+     أو مكبَّرة (Zoom 125–150%) على كمبيوتر بفأرة كانت تُعامل كتابلت فتصير
+     القائمة دُرجاً فوق المحتوى وتُسقط التخطيط إلى عمود واحد. */
+  return typeof matchMedia==='function' && matchMedia('(max-width:900px) and (pointer:coarse)').matches;
+}
+/* (0162) هل القائمة عمود في التخطيط (سطح مكتب) أم دُرج عائم فوق المحتوى (لمس)؟ */
+function navIsOverlay(){
+  try{
+    const n=document.querySelector('nav');
+    if(!n || typeof getComputedStyle!=='function') return false;
+    return getComputedStyle(n).position==='fixed';
+  }catch(e){ return false; }
+}
 function toggleNav(){
   document.body.classList.toggle('nav-collapsed');
   try{localStorage.setItem('posNavCollapsed',document.body.classList.contains('nav-collapsed')?'1':'0')}catch(e){}
@@ -12877,7 +13024,8 @@ function renderComposites(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDateFrom')) q('dailyCashDateFrom').value=d; if(q('dailyCashDateTo')) q('dailyCashDateTo').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); applyHiddenCols(); injectCsvButtons(); injectReportRangeButtons(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{if(localStorage.getItem('posNavCollapsed')==='1') document.body.classList.add('nav-collapsed');}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
+initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); applyHiddenCols(); injectCsvButtons(); injectReportRangeButtons(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{const _nc=localStorage.getItem('posNavCollapsed'); if(_nc==='1'||(_nc===null&&isSmallScreen())) document.body.classList.add('nav-collapsed');}catch(e){}
+  try{ensureNavBackdrop();}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); setTimeout(()=>{try{updateParkedSalesBadge();}catch(e){}},900); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
 
 /* ══════════════════ (المهمة ٤) التقارير: تصدير CSV عام · فترات جاهزة · طباعة ══════════════════
    كان في المنظومة موضعان اثنان فقط يصدّران CSV (قائمة الفواتير والجرد المطلوب)،

@@ -1332,3 +1332,160 @@ nav{top:var(--sticky-top)}
   #sales .sale-barcode-strip .scan-cam-btn,
   #stockCount .sale-barcode-strip .scan-cam-btn{padding:0 9px}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   (20261023) صقل الهاتف والتابلت — طبقة إضافية لا تلمس سطح المكتب
+   ─────────────────────────────────────────────────────────────────────
+   المشكلة قبل هذه الطبقة، بالقياس على شاشة هاتف 390px:
+     • القائمة الجانبية كانت تصير شبكة عمودين في أعلى الصفحة: ٢٥ زراً ⇒
+       ١٣ سطراً تدفع الفاتورة خارج الشاشة قبل أن يبدأ العمل.
+     • شريط الإنهاء الثابت يقف عند 10px بينما شريط الحالة الثابت يحتل
+       أول 34px من الأسفل ⇒ ثلث الشريط وزر الدفع تحت شريط الحالة.
+     • الترويسة: الأزرار + شريحة المزامنة «جاهز للمزامنة مع Supabase»
+       + اسم المستخدم في سطر واحد بلا التفاف ⇒ فيض أفقي.
+     • .cards تُصبح عموداً واحداً على التابلت فتضيع المساحة.
+   ما يلي يعالجها، وكل قاعدة داخل @media أو @supports — سطح المكتب
+   (≥901px وفأرة) لا يتغيّر فيه بكسل واحد.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── ① الحافة السفلية الآمنة (آيفون بشريط سفلي) ─────────────────────── */
+@supports (padding: env(safe-area-inset-bottom)){
+  body{padding-bottom:calc(42px + env(safe-area-inset-bottom,0px))}
+  .statusbar{height:calc(34px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
+}
+
+/* ─── ② القائمة: دُرج من جهة البداية، يُغلق بلمسة خارجه أو باختيار قسم ───
+   (0162) الدُرج **للمس وحده**: كان `(max-width:900px)` بلا شرط فيسري على أي
+   نافذة متصفح ضيّقة أو مكبَّرة (Zoom) على كمبيوتر بفأرة — فينهار التخطيط إلى
+   عمود واحد وتصير القائمة عائمة فوق المحتوى، فتظهر نوافذ «إغلاق الخزينة
+   اليومي» و«المصاريف» تحتها لا بجانبها (بلاغ المالك 2026-10-24).
+   الآن: اللمس = دُرج، الفأرة = عمود جانبي بجانب المحتوى (القاعدة ⑪ أدناه). */
+@media (max-width:900px) and (pointer:coarse){
+  nav{position:fixed;inset-block:0;inset-inline-start:0;width:min(84vw,330px);max-width:330px;
+      height:100dvh;max-height:100dvh;overflow-y:auto;overscroll-behavior:contain;z-index:60;
+      display:block;margin:0;border:0;border-inline-end:1px solid var(--border);border-radius:0;
+      padding:calc(12px + env(safe-area-inset-top,0px)) 10px calc(20px + env(safe-area-inset-bottom,0px));
+      box-shadow:-18px 0 60px rgba(2,6,23,.38)}
+  body.nav-collapsed nav{display:none}
+  nav button{font-size:15.5px;padding:13px 14px;min-height:48px;margin:2px 0;border-radius:14px}
+  nav button i{font-size:20px;min-width:22px}
+  nav .nav-group{font-size:12.5px;letter-spacing:.03em;padding:12px 10px 6px;color:var(--muted);font-weight:800}
+
+  /* حجاب خلف الدُرج — لمسه يغلقه (العنصر يُنشأ من app.js) */
+  .nav-backdrop{position:fixed;inset:0;z-index:55;display:none;background:rgba(2,6,23,.45)}
+  body:not(.nav-collapsed) .nav-backdrop{display:block}
+  body.auth-locked .nav-backdrop{display:none}
+}
+@media (min-width:901px){ .nav-backdrop{display:none!important} }
+/* ─── ⑪ (0162) فأرة على شاشة ضيّقة: العمود يبقى بجانب المحتوى لا فوقه ────
+   بلاغ المالك: «نوافذ إغلاق الخزينة اليومي والمصاريف بدأن يظهرن تحت القائمة
+   الجانبية وليس بجانبها». على كمبيوتر بفأرة يكون العرض الفعلي أحياناً ≤900px
+   (نافذة ضيّقة أو تكبير 125–150%)، فكانت قواعدُ التابلت تجعل القائمة دُرجاً
+   عائماً فوق المحتوى وتُسقط التخطيط إلى عمود واحد. هنا يبقى العمودان:
+   قائمة جانبية أنحف (≤232px) بجانب المحتوى من 561px وحتى 900px. */
+@media (min-width:561px) and (max-width:900px) and (pointer:fine){
+  .wrap{grid-template-columns:min(232px,30vw) minmax(0,1fr);gap:12px}
+  nav{position:sticky;inset:auto;top:86px;width:auto;max-width:none;height:max-content;
+      max-height:calc(100dvh - 100px);overflow:auto;overscroll-behavior:contain;z-index:auto;
+      display:flex;flex-direction:column;gap:2px;margin:0;padding:8px;
+      border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+  nav button{font-size:13.5px;padding:9px 10px;min-height:0;margin:1px 0}
+  nav button i{font-size:17px;min-width:20px}
+  nav .nav-group{padding:9px 8px 4px;font-size:11.5px}
+  .nav-backdrop{display:none!important}
+  body.nav-collapsed .wrap{grid-template-columns:1fr}
+}
+
+
+/* ─── ③ الترويسة على الهاتف: أزرار اللمس في صف، والنصوص تحتها ─────────── */
+@media (max-width:700px){
+  header{padding:10px 12px}
+  .top{gap:8px;align-items:stretch}
+  .brand{gap:1px}
+  .brand h1{font-size:18.5px;line-height:1.25}
+  .brand p{font-size:11.5px;opacity:.82}
+  .top > .row{width:100%;gap:7px;align-items:center}
+  .icon-btn{width:44px;height:44px;font-size:19px;flex:0 0 auto}
+  #syncState{order:10;flex:1 1 100%;min-width:0;font-size:11.5px;padding:6px 11px;
+             overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+  #userPill{order:11;flex:1 1 100%;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px}
+  #userPill .btn{padding:8px 14px}
+  #userPill span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wrap{margin:12px auto;padding:0 10px}
+  .section > .panel:first-child,.panel{border-radius:12px}
+}
+
+/* ─── ④ الشبكات: عمودان على الهاتف بدل عمود واحد طويل ────────────────── */
+@media (max-width:900px){
+  .cards,.report-kpi,.stock-summary-grid,.reg-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .launcher{gap:10px}
+}
+@media (min-width:601px) and (max-width:900px){
+  .form{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media (max-width:560px){
+  .form{grid-template-columns:1fr}
+  .cards{gap:8px}
+  .card{padding:12px}
+  .num{font-size:22px}
+  .panel{padding:12px;margin-top:12px}
+  .panel h2{font-size:17px}
+  .launcher{gap:8px;margin-bottom:12px}
+  .launch-tile{min-height:92px;font-size:13.5px;border-radius:14px;gap:7px}
+  .launch-tile i{font-size:28px}
+  .sales-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .picker-grid{grid-template-columns:1fr}
+  .modal{padding:8px;align-items:flex-start}
+  .modal-card{width:100%;max-height:calc(100dvh - 16px);padding:13px;border-radius:16px}
+  .modal-head{position:sticky;top:-13px;z-index:3;background:var(--card);padding:8px 0;margin:-8px 0 8px}
+  .totalBox{padding:11px}
+  .totalBox b{font-size:20px}
+}
+
+/* ─── ⑤ اللمس: أهداف ≥44px، وبلا آثار تحويم تبقى معلّقة بعد اللمس ──────── */
+@media (pointer:coarse){
+  .btn,.seg-btn,#quickBar.quick-bar button,.icon-btn,nav button{min-height:44px}
+  .btn,.seg-btn,.launch-tile,.quick-tile{touch-action:manipulation}
+  body{-webkit-tap-highlight-color:transparent}
+  .launch-tile:hover,.quick-tile:hover{transform:none}
+  .form input,.form select,.form textarea,.tools input,.tools select{min-height:44px}
+  input[type=checkbox],input[type=radio]{min-height:0}
+}
+
+/* ─── ⑥ الجداول على الهاتف: تمرير لمسي، وحقول لا تُطلق تكبير آيفون ────── */
+@media (max-width:700px){
+  .table-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:thin}
+  .table-scroll > table{border-radius:0}
+  th{font-size:12px}
+  td,th{padding:9px 8px}
+  table{font-size:12.5px}
+  #sales #saleItemsBody input{font-size:16px;min-height:36px}
+}
+
+/* ─── ⑦ شريط الإنهاء: فوق شريط الحالة لا تحته ─────────────────────────── */
+@media (max-width:900px) and (pointer:coarse){
+  #sales .sale-finish-bar{bottom:calc(42px + env(safe-area-inset-bottom,0px));left:8px;right:8px;
+                          padding:9px 11px;gap:8px;border-radius:12px;flex-wrap:wrap;min-height:0}
+  #sales #saleForm{padding-bottom:132px}
+  #sales .sale-finish-bar .finish-total b{font-size:20px}
+  #sales .sale-finish-bar .finish-actions{flex-wrap:wrap}
+  #sales #salePayBtn{padding:11px 18px;font-size:14.5px}
+}
+
+/* ─── ⑧ شريط الوصول السريع: أزرار أوضح للإبهام ───────────────────────── */
+@media (max-width:700px){
+  #quickBar.quick-bar{padding:6px 10px;scroll-snap-type:x proximity}
+  #quickBar.quick-bar button{min-height:46px;padding:9px 13px;font-size:14px;scroll-snap-align:start}
+  #quickBar.quick-bar button i{font-size:18px}
+  #quickBar .qb-row{gap:6px}
+}
+
+/* ─── ⑨ التابلت (901–1100): عمود جانبي أنحف لصالح الجدول ─────────────── */
+@media (min-width:901px) and (max-width:1100px){
+  .wrap{grid-template-columns:232px 1fr;gap:14px}
+  nav button{font-size:14.5px;padding:10px 11px}
+}
+
+/* ─── ⑩ صور لا تفيض أبداً ────────────────────────────────────────────── */
+img{max-width:100%;height:auto}
