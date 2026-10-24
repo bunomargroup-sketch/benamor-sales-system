@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261024-1908';
+const APP_BUILD='b20261024-1928';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4767,6 +4767,13 @@ function addTransferRow(item={}){
 function fillTransferRow(input){
   const p=findProductByInput(input.value);
   if(!p) return;
+  /* (0155ب) الكتابة اليدوية للكود كانت تتجاوز حارس addTransferRow */
+  if(!hydratingTransferItems && isCompositeCode(p.code)){
+    toast('«'+p.code+'» منتج مركّب — لا يُضاف في تحويل مخزون. حوّل مكوّناته بدلاً منه','warn');
+    input.value='';
+    const tr=input.closest('tr'); if(tr){const n=tr.querySelector('.ti-name'); if(n) n.value='';}
+    return;
+  }
   const tr=input.closest('tr');
   tr.querySelector('.ti-code').value=p.code||'';
   tr.querySelector('.ti-name').value=p.name||'';
@@ -7501,7 +7508,18 @@ function addOrIncrementPurchaseProduct(p, qty=1){
   addPurchaseRow({product_code:p.code,product_name:p.name,qty,unit_cost:Number(p.purchase_price||0)});
 }
 
+let hydratingPurchaseItems=false;   /* أثناء فتح فاتورة شراء قائمة لا نمنع أسطرها التاريخية */
+/* (0155ب) سطر مركّب جديد في فاتورة شراء مرفوض **عند الإضافة** لا عند الحفظ
+   فقط — بنفس رسالة 0155. الأسطر التاريخية تُحمَّل بالعلم أعلاه. */
+function isCompositeCode(code){
+  const c=String(code||'').toLowerCase();
+  return !!c && compositeItems.some(ci=>String(ci.composite_code||'').toLowerCase()===c);
+}
 function addPurchaseRow(item={}){
+  if(!hydratingPurchaseItems && item.product_code && isCompositeCode(item.product_code)){
+    toast('«'+item.product_code+'» منتج مركّب (طقم يُركَّب داخلياً) — لا يُشترى ذاته. أضف مكوّناته إلى الفاتورة بدلاً منه','warn');
+    return;
+  }
   const tr=document.createElement('tr');
   const p=item.product_code?productByCode(item.product_code):null;
   const oldCost=Number(item.old_cost ?? p?.purchase_price ?? item.unit_cost ?? 0);
@@ -10488,7 +10506,9 @@ async function openPurchaseForEdit(id){
     q('purchaseSupplier').value=p.supplier_id||''; q('purchaseLocation').value=p.location_id||''; q('purchaseDate').value=p.purchase_date||''; if(q('purchaseAutoNo')) q('purchaseAutoNo').value=p.purchase_no||p.id?.slice(0,8)||'';
     q('purchaseInvoiceNo').value=p.invoice_no||''; q('purchaseNotes').value=p.notes||''; q('purchaseDiscount').value=Number(p.discount||0);
     q('purchaseItemsBody').innerHTML='';
-    rows.forEach(it=>addPurchaseRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty, unit_cost:it.unit_cost}));
+    hydratingPurchaseItems=true;
+    try{ rows.forEach(it=>addPurchaseRow({product_code:it.product_code, product_name:it.product_name, qty:it.qty, unit_cost:it.unit_cost})); }
+    finally{ hydratingPurchaseItems=false; }
     updatePurchaseTotal();
     await loadPurchaseEmbeddedPayment(id);
     q('purchaseSubmitBtn').textContent='حفظ التعديل وتحديث المخزون';
