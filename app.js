@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261024-1627';
+const APP_BUILD='b20261024-1908';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -13024,7 +13024,29 @@ function renderComposites(){
 }
 
 function setToday(){const d=new Date().toISOString().slice(0,10); q('paymentDate').value=d; q('purchaseDate').value=d; q('transferDate').value=d; q('saleDate').value=d; if(q('proformaDate')) q('proformaDate').value=d; q('customerPaymentDate').value=d; if(q('dailyCashDateFrom')) q('dailyCashDateFrom').value=d; if(q('dailyCashDateTo')) q('dailyCashDateTo').value=d; if(q('expenseLocation')&&appUser?.branch_id&&!q('expenseLocation').value) q('expenseLocation').value=appUser.branch_id; ['financeTransferDate','expenseDate','salaryPaymentDate'].forEach(id=>{if(q(id))q(id).value=d}); if(q('reportTo')) q('reportTo').value=d; if(q('reportFrom') && !q('reportFrom').value){const first=new Date(); first.setDate(1); q('reportFrom').value=first.toISOString().slice(0,10)}}
-initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); applyHiddenCols(); injectCsvButtons(); injectReportRangeButtons(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); try{const _nc=localStorage.getItem('posNavCollapsed'); if(_nc==='1'||(_nc===null&&isSmallScreen())) document.body.classList.add('nav-collapsed');}catch(e){}
+/* ═══════════════════════════════════════════════════════════════════
+   (0163) كل شاشة داخل <main> — لا شاشة أسفل القائمة الجانبية
+   بلاغ المالك 2026-10-24: «إغلاق الخزينة اليومي والمصاريف… تظهر تحت
+   القائمة الجانبية وليس بجانبها»، والفراغ الأعلى يكبر كلما طالت القائمة.
+   السبب الحقيقي: `</div>` يتيم في index.html (خلّفه حذف صندوق «دور
+   المبرمج» في 0159) أغلق `.wrap` باكراً، فصارت عشرة أقسام — users,
+   finance, expensesQuick, dailyCashClosing, reports, settings, next,
+   stockCount, auditLog, composites — أبناءً مباشرين لـ<body> خارج
+   `<main>`. عند تفعيلها تُرسم **بعد** `.wrap` كله: عمود القائمة وحده
+   يملأ الشاشة الأولى ثم تظهر الشاشة تحته بعد تمرير كامل.
+   أُصلح الـHTML، وهذا حارس وقت تشغيل: أي قسم يجد نفسه خارج main
+   يُنقل إليه عند الإقلاع — فلا يعود العطل صامتاً لو تكرر خطأ التحرير.
+   ═══════════════════════════════════════════════════════════════════ */
+function ensureSectionsInMain(){
+  try{
+    const main=document.querySelector('main'); if(!main) return 0;
+    const strays=[...document.querySelectorAll('.section')].filter(s=>!main.contains(s));
+    strays.forEach(s=>{ main.appendChild(s); });
+    if(strays.length) console.warn('sections moved into main:', strays.map(s=>s.id).join(','));
+    return strays.length;
+  }catch(e){ console.warn('ensureSectionsInMain',e); return 0; }
+}
+initBranding(); fillSettingsForm(); initConnectivity(); startAutoRefresh(); initOfflineQueue(); initNavGroups(); applyHiddenCols(); injectCsvButtons(); injectReportRangeButtons(); setupDecimalInputs(); setupRightClickPaste(); setupSaleTabFlow(); setupLongPickers(); setTimeout(toggleFinancePaymentMethods,0); setToday(); q('saleLocation')?.addEventListener('change',function(){ if(this.value) localStorage.setItem('posLastSaleLocation',this.value); }); ensureSectionsInMain(); try{const _nc=localStorage.getItem('posNavCollapsed'); if(_nc==='1'||(_nc===null&&isSmallScreen())) document.body.classList.add('nav-collapsed');}catch(e){}
   try{ensureNavBackdrop();}catch(e){} renderStatusBar(); renderGDriveStatus(); addTransferRow(); if(q('proformaItemsBody')) addProformaRow(); ensureSaleInvoiceNo(true); updateAuthUI(); loadLoginBranches(); setTimeout(tryRestoreActiveSaleDraft,600); setTimeout(()=>{try{updateParkedSalesBadge();}catch(e){}},900); if(appUser?.id && authSession?.access_token){syncOfflineQueue().catch(e=>console.warn('offline queue sync',e)).finally(()=>{loadCore().then(async()=>{await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); markAllTabsDirty(); renderTab(activeTabId(), true); /* (0076) نفس سياق الدخول: النواة أولاً ثم التاريخ الكامل بالخلفية */ loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);}); notifyAdminOfSellerEdits();}).catch(e=>{console.error(e); logoutPOS(); toast('انتهت الجلسة، سجل الدخول مرة أخرى','warn')});});}else{q('loginIdentifier')?.focus();}
 
 /* ══════════════════ (المهمة ٤) التقارير: تصدير CSV عام · فترات جاهزة · طباعة ══════════════════
