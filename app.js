@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261025-1210';
+const APP_BUILD='b20261025-1514';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1927,6 +1927,12 @@ ROLE_TABS.admin=ROLE_TABS.programmer.filter(t=>!['users','settings','locations']
 const ROLE_RANK={viewer:0,seller_11:1,seller_sarraj:1,warehouse:1,sales_purchase:2,accountant:2,admin:8,programmer:9};
 function roleRank(r){ return ROLE_RANK[String(r||'')] ?? 0; }
 function isManager(){ return roleRank(currentRole?.role) >= ROLE_RANK.admin; }
+/* (20261025) من يرى الهامش (قيمةً ونسبةً وإجمالياً): المدير والمبرمج والمحاسب — صراحةً لا بالرتبة.
+   السبب: رتبة المحاسب 2 (viewer 0 · بائع/مستودع 1 · بيع-وشراء/محاسب 2 · مدير 8 · مبرمج 9)،
+   فـisManager() تستثنيه وهو مطلوب له صراحةً. وبوابة واحدة تُستعمل في كل موضع هامش
+   في الشاشة كي لا يرى دورٌ هامش الصف ولا يرى إجماليه أو العكس. */
+const MARGIN_ROLES=['admin','programmer','accountant'];
+function canSeeMargin(){ return MARGIN_ROLES.includes(String(currentRole?.role||'')); }
 function isProgrammer(){ return roleRank(currentRole?.role) >= ROLE_RANK.programmer; }
 /* (20261006e) 1993 (المبرجج) يجب أن يستطيع فعل كل شيء: قوائم الأدوار
    الصلبة في مواضع تعديل الفاتورة كانت تستثني المبرمج — لا يظهر له زر
@@ -5041,7 +5047,7 @@ function saleListRowHtml(sl){
   const badge=st==='refund'?'<span class="chip refund">مُستردّة</span>':(st==='paid'?'<span class="chip paid">مدفوعة</span>':(st==='partial'?'<span class="chip partial">مدفوعة جزئيًا</span>':'<span class="chip due">غير مدفوعة</span>'));
   const canCollect=Number(sl.balance_due)>0 && !sl.offline_pending;
   const sellerTd=sellerCell(sl.created_by);   /* (المهمة ٥) */
-  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(payCellText(sl,ctx))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td>${(()=>{ /* (20261017) نسبة الهامش للجميع على التكلفة (SPEC 0115)، والقيمة للمدير فقط — لا نخفي العمود: أزرار مرتجع «بلا فاتورة» تسكن الخلية المقابلة، وإخفاء عمود يكسر تخطيط الجدول القابل للسحب (درس 20261007d) */ const c=ctx.costBySale?.get(sl.id); if(c===undefined||c===null) return '<td class="amount total">—</td><td class="amount">—</td>'; const mv=Number(sl.total||0)-c, mp=marginOf(Number(sl.total||0),Number(c)); return `<td class="amount total">${isManager()?money(mv):'—'}</td><td class="amount${mv<0?' neg':''}">${money(mp)}%</td>`;})()}${sellerTd}</tr>`;
+  return `<tr class="${selectedSaleId===sl.id?'selected-row':''}" data-id="${safe}" onclick="selectSaleRow('${safe}')" title="اضغط مرتين للمشاهدة"><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span>${sl.offline_pending?' <span class="chip partial">محلية</span>':''}</td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span><div class="mini ltr">${esc(c?.phone||'')}</div></td><td>${badge}<div class="mini">${esc(payCellText(sl,ctx))}</div></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount">${money(sl.paid_amount)}</td><td class="amount ${Number(sl.balance_due)>0?'neg':''}"><b>${money(sl.balance_due)}</b></td>${(()=>{ /* (20261017) نسبة الهامش للجميع على التكلفة (SPEC 0115)، والقيمة للمدير فقط — لا نخفي العمود: أزرار مرتجع «بلا فاتورة» تسكن الخلية المقابلة، وإخفاء عمود يكسر تخطيط الجدول القابل للسحب (درس 20261007d) */ const c=ctx.costBySale?.get(sl.id); if(c===undefined||c===null) return '<td class="amount total">—</td><td class="amount">—</td>'; const mv=Number(sl.total||0)-c, mp=marginOf(Number(sl.total||0),Number(c)), showM=canSeeMargin(); return `<td class="amount total">${showM?money(mv):'—'}</td><td class="amount${showM&&mv<0?' neg':''}">${showM?money(mp)+'%':'—'}</td>`;})()}${sellerTd}</tr>`;
 }
 function returnListRowHtml(r){
   /* (المهمة ٥) المرتجعات تُعرض داخل نفس جدول الفواتير — تحتاج خلية بائع
@@ -5604,21 +5610,24 @@ function renderSales(){
   /* (20261017) سياق التنقل داخل نافذة مشاهدة الفاتورة: أرقام الفواتير
      (لا المرتجعات) بترتيب القائمة المعروضة نفسه — الأحدث أولاً */
   window.__salesListSaleIds=entries.slice(0,salesListLimit).filter(e=>e.kind==='sale').map(e=>e.sl.id);
-  /* شريط الإجماليات تحت القائمة — (20261017) البائع يرى إجمالي فواتيره
-     المعروضة بلا هامش ولا ديون؛ كل البطاقات وإجمالي الهامش للمدير فقط */
+  /* شريط الإجماليات تحت القائمة — (20261025) بوابتان لا واحدة:
+     • البطاقات ١–٤ (إجمالي الفواتير · الإرجاع · الصافي · ديون الزبائن المعروضة)
+       لكل الأدوار — البائع يرى أرقام ما هو معروض أمامه بفلتره.
+     • البطاقة ٥ (إجمالي هامش الفواتير) لأدوار الهامش وحدها: مدير · مبرمج · محاسب.
+       كانت البطاقات كلها خلف isManager() فحُرم المحاسب من الهامش، وهو مطلوب له. */
   const bar=q('salesTotalsBar');
   if(bar){
-    const mgr=isManager();
+    const showM=canSeeMargin();
     bar.style.display='';
     const cur=esc(APP_CONFIG.currency);
     const chip=(lbl,val,neg)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--card)"><div class="mini">${lbl}</div><b class="${neg?'stock-negative':''}" style="font-size:15px">${val}</b></div>`;
     bar.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
       ${chip(`💰 إجمالي الفواتير (${rows.length})`,money(gross)+' '+cur)}
-      ${mgr?chip(`↩️ إجمالي فواتير الإرجاع (${rets.length})`,'− '+money(retSum)+' '+cur,true):''}
-      ${mgr?chip('📊 الصافي بعد الإرجاع',money(gross-retSum)+' '+cur):''}
-      ${mgr?chip('🧾 ديون الزبائن (المعروضة)',money(totalDue)+' '+cur,Number(totalDue)>0):''}
-      ${mgr?chip('💹 إجمالي هامش الفواتير',money(totalMargin)+' '+cur,Number(totalMargin)<0):''}
-    </div><div class="mini" style="margin-top:4px">${mgr?'القيم تنعكس فورياً مع كل فلتر أعلاه — وتظهر تفاصيل الهامش للمدير فقط':'إجمالي فواتيرك المعروضة يتغيّر مع كل فلتر أعلاه — الهامش يظهر للمدير فقط'}</div>`;
+      ${chip(`↩️ إجمالي فواتير الإرجاع (${rets.length})`,'− '+money(retSum)+' '+cur,true)}
+      ${chip('📊 الصافي بعد الإرجاع',money(gross-retSum)+' '+cur)}
+      ${chip('🧾 ديون الزبائن (المعروضة)',money(totalDue)+' '+cur,Number(totalDue)>0)}
+      ${showM?chip('💹 إجمالي هامش الفواتير',money(totalMargin)+' '+cur,Number(totalMargin)<0):''}
+    </div><div class="mini" style="margin-top:4px">${showM?'القيم تنعكس فورياً مع كل فلتر أعلاه — وتظهر تفاصيل الهامش لهذا الدور (مدير · مبرمج · محاسب)':'الأرقام تتبع الفلاتر أعلاه وتتغيّر مع كل تعديل عليها'}</div>`;
   }
 }
 
