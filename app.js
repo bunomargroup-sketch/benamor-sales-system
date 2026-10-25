@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261024-1928';
+const APP_BUILD='b20261025-1210';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -134,7 +134,10 @@ function fillLineAttrs(tr,p){
 function cfgText(v){return esc(v)}
 function initBranding(){document.title=APP_CONFIG.businessName+' - '+APP_CONFIG.tagline;
   if(q('settingsBuild')) q('settingsBuild').textContent=APP_BUILD; if(q('brandTitle'))q('brandTitle').textContent=APP_CONFIG.businessName; if(q('brandTagline'))q('brandTagline').textContent=APP_CONFIG.tagline; if(q('loginTitle'))q('loginTitle').textContent='دخول '+APP_CONFIG.businessName; try{console.log('نسخة نظام بن عمر: '+APP_BUILD); const card=document.querySelector('#loginScreen .modal-card'); if(card&&!q('appBuildTag')){const t=document.createElement('div'); t.id='appBuildTag'; t.style.cssText='text-align:center;font-size:12px;color:#94a3b8;margin-top:10px'; t.textContent='نسخة التشغيل: '+APP_BUILD; card.appendChild(t);}}catch(e){}}
-function money(n){return Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+/* (0164) كان كل نداء يُنشئ منسّق Intl جديداً — والتقرير الواحد يستدعي money
+   مئات آلاف المرات. المنسّق الواحد يعطي نفس النص حرفياً (تحقّق في الاختبار). */
+const __moneyFmt=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+function money(n){return __moneyFmt.format(Number(n||0))}
 function normalizeDigits(v){return String(v??'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}
 function parseDecimal(v){
   let s=normalizeDigits(v).trim().replace(/\s/g,'');
@@ -338,7 +341,13 @@ async function ensureAuth(){
 async function authSignIn(identifier,code){const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:staffEmail(identifier),password:code})}); const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error_description||data.msg||data.message||'auth failed'); authSession=data; localStorage.setItem('posAuthSession',JSON.stringify(authSession)); return data.user}
 async function fetchWithAuthRetry(url, options={}, parseEmptyAs=null){
   await ensureAuth();
-  let res=await fetch(url, options);
+  let res;
+  try{ res=await fetch(url, options); window.__netDown=false; }
+  catch(err){
+    /* (0164) فشل الشبكة لا يعني «الجداول فارغة» — يعني «ابقَ على المحفوظ».
+       بلا هذا العلم كانت ردود catch ترجع [] فتمحو الكاش من الذاكرة. */
+    window.__netDown=true; throw err;
+  }
   let text=await res.text(); let data=text?JSON.parse(text):parseEmptyAs;
   const msg=String(data?.message||text||'');
   if((res.status===401 || /JWT expired|PGRST303/i.test(msg)) && authSession?.refresh_token){
@@ -477,7 +486,9 @@ function applyEssentialCache(c){
   locations=c.locations||[]; suppliers=c.suppliers||[]; stock=c.stock||[]; purchases=c.purchases||[]; purchaseItems=c.purchaseItems||[]; products=c.products||[]; transfers=c.transfers||[]; sales=c.sales||[]; saleItems=c.saleItems||[]; salePayments=c.salePayments||[]; customers=c.customers||[]; customerLedger=c.customerLedger||[]; userRoles=c.userRoles||[]; financeAccounts=c.financeAccounts||[]; financeMovements=c.financeMovements||[]; expenseCategories=c.expenseCategories||[]; expenses=c.expenses||[]; dailyCashClosings=c.dailyCashClosings||[]; costMovements=c.costMovements||[];
   ['productCategoryFilter','productBrandFilter','productColorFilter','productSupplierFilter','stockCategoryFilter','stockBrandFilter','stockSupplierFilter'].forEach(id=>{if(q(id)) q(id).dataset.ready='';});
   buildProductCostIndex(); buildProductSearchIndex();
-  renderAll();
+  /* (0164) كان renderAll يرسم ٢١ شاشة قبل أن يرى المستخدم شيئاً. الآن الشاشة
+     المفتوحة تُرسم فوراً والباقي بعد أول رسم — نفس العمل، بلا تجميد الشاشة. */
+  renderAllProgressive();
   setSyncState(navigator.onLine?'cache':'offline',`بيانات محفوظة محليًا ${c.saved_at?('من '+c.saved_at.replace('T',' ').slice(0,16)):''}`);
   return true;
 }
@@ -1195,10 +1206,13 @@ function applyCostReference(){
    (0150) التاريخ هو movement_date فقط — لا created_at (حركات مهاجَرة
    خُتمت بلحظة الترحيل)، والترتيب داخل اليوم بـlegacy_seq. */
 async function loadCostMovements(){
+  /* (0164) دون إنترنت كان هذا النداء يرفض فيُسقط loadCore كله ⇒ يُطرد الكاشير
+     إلى شاشة الدخول. الآن الفشل يعني «ابقَ على آخر حركات سليمة». */
   const r=await apiAll('pos_stock_movements',
     '?select=product_code,movement_type,qty_change,movement_date,reference_table,legacy_seq'+
     '&movement_type=in.(adjustment,waste,return_supplier,return_customer)'+
-    '&order=movement_date.asc,legacy_seq.asc.nullslast,id.asc');
+    '&order=movement_date.asc,legacy_seq.asc.nullslast,id.asc').catch(e=>{
+      console.warn('حركات التكلفة غير متاحة الآن — نبقى على آخر ما حُمِّل', e); return null; });
   /* فراغٌ بعد نجاح سابق = فشل مؤقت في الشبكة: نُبقي آخر بيانات سليمة */
   if(r && r.length) costMovements=r;
   return costMovements;
@@ -1207,6 +1221,12 @@ async function loadCostMovements(){
 async function loadCore(){
   // أولاً: بيانات الجلسة السابقة (تظهر فوراً ثم تتحدّث — stale-while-revalidate)
   try{ const _c=loadEssentialCache(); if(_c) applyEssentialCache(_c); }catch(cacheErr){ console.warn('فشل عرض البيانات المحفوظة محليًا — سيتم التحديث من الخادم',cacheErr); }
+  if(navigator.onLine===false || window.__netDown){
+    console.warn('لا اتصال — نبقى على البيانات المحفوظة محلياً');
+    buildProductSearchIndex(); applyCostReference();
+    renderProductDatalist(); fillSupplierSelects(); renderStatusBar(); applyPermissions();
+    return;
+  }
   const [bulk,finAcc]=await Promise.all([
     tryBulk(CORE_TABLES),
     apiAll('pos_finance_account_balances','?select=*&order=name.asc').catch(e=>{console.warn('finance accounts not setup yet',e); return null}),
@@ -1219,18 +1239,26 @@ async function loadCore(){
     compositeItems=bulk.pos_composite_items||[];
     legacyCostRows=bulk.pos_product_legacy_cost||legacyCostRows;
   } else {
+    try{
     [locations,suppliers,userRoles,products,stock,financeAccounts,expenseCategories,compositeItems]=await Promise.all([
-      api('pos_locations',{qs:'?select=*&order=name.asc'}),
-      api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}),
-      apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return []}),
-      apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return []}),
-      apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc'),
+      /* (0164) كان أي فشل شبكة هنا يرفض Promise.all فيُسقط loadCore ⇒ طرد
+         الكاشير. الآن يعود بالمحمَّل مسبقاً (الكاش) بدل الانفجار. */
+      api('pos_locations',{qs:'?select=*&order=name.asc'}).catch(e=>{console.warn('مواقع غير متاحة — الكاش',e); return locations;}),
+      api('pos_supplier_balances',{qs:'?select=*&order=name.asc'}).catch(e=>{console.warn('أرصدة الموردين غير متاحة — الكاش',e); return suppliers;}),
+      apiAll('pos_user_roles','?select=*&order=identifier.asc').catch(e=>{console.warn('user roles not setup yet',e); return userRoles;}),
+      apiAll('pos_product_stock_summary','?select=*&order=code.asc').catch(e=>{console.warn('products not imported yet', e); return products;}),
+      apiAll('pos_stock','?select=*&order=updated_at.desc,id.asc').catch(e=>{console.warn('مخزون غير متاح — الكاش',e); return stock;}),
       Promise.resolve(finAcc||[]),   /* جُلب أعلاه بالتوازي — لا تكرار */
-      apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return []}),
-      apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc').catch(e=>{return []}),
+      apiAll('pos_expense_categories','?select=*&order=name.asc').catch(e=>{console.warn('expense categories not setup yet',e); return expenseCategories;}),
+      apiAll('pos_composite_items','?select=*&order=created_at.asc,id.asc').catch(e=>{return compositeItems;}),
     ]);
     legacyCostRows=await apiAll('pos_product_legacy_cost','?select=code,cost,cost_source,purchases,qty_as_of,last_price,last_purchase,as_of&order=code.asc')
       .catch(e=>{console.warn('قاعدة التكلفة غير مُنصَّبة — شغّل SQL 0060',e); return legacyCostRows;});
+    }catch(e){
+      /* (0164) حزام أمان: أي فشل غير متوقع هنا كان يُسقط loadCore كله ويطرد
+         الكاشير خارج النظام. نبقى على المحفوظ محلياً ونكمل. */
+      console.warn('تعذّر تحديث النواة من الخادم — نبقى على البيانات المحفوظة', e);
+    }
   }
   buildProductSearchIndex();
   applyCostReference();
@@ -1246,6 +1274,11 @@ async function loadHeavy(){
      22 جدولاً كاملة في نداء واحد تتجاوز مهلة الجملة على الخادم دائماً، ومحاولة القسمة
      تدفع ثمن المهلة مرتين قبل السقوط — قِسناها 76 ثانية مقابل 70 بالنمط الكلاسيكي.
      تبقى كلاسيكية بنوافذها الزمنية (limit / 60-90 يوماً) حتى يُقسَّم الـRPC في الخادم. */
+  if(navigator.onLine===false || window.__netDown){
+    console.warn('لا اتصال — لا نحدّث السجل الكامل');
+    applyCostReference(); markAllTabsDirty(); renderTab(activeTabId(), true);
+    return;
+  }
   const bs=await tryBulk(HEAVY_SALES);
   const br=null;
   if(bs){
@@ -1268,6 +1301,7 @@ async function loadHeavy(){
     purchaseReturns=br.pos_purchase_returns||[]; purchaseReturnItems=br.pos_purchase_return_items||[];
     stockWaste=br.pos_stock_waste||[]; stockWasteItems=br.pos_stock_waste_items||[];
   } else {
+    try{
     [ledger,payments,purchases,purchaseItems,transfers,proformas,proformaItems,saleReturns,saleReturnItems,stockCounts,stockMovements,customers,customerLedger,financeMovements,dailyCashClosings,expenses,employees,salaryPayments,purchaseReturns,purchaseReturnItems,stockWaste,stockWasteItems]=await Promise.all([
       api('pos_supplier_ledger',{qs:'?select=*&order=entry_date.desc,created_at.desc'}),
       api('pos_supplier_payments',{qs:'?select=*&order=payment_date.desc,created_at.desc&limit=50'}),
@@ -1292,6 +1326,11 @@ async function loadHeavy(){
       apiAll('pos_stock_waste','?select=*&order=waste_date.desc,created_at.desc,id.asc').catch(e=>{console.warn('stock waste not setup yet — شغّل SQL 0074',e); return []}),
       apiAll('pos_stock_waste_items','?select=*&order=created_at.desc,id.asc').catch(e=>{console.warn('stock waste items not setup yet — شغّل SQL 0074',e); return []}),
     ]);
+    }catch(e){
+      /* (0164) دون إنترنت كان أول نداء محاسبي بلا معالجة فشل يُسقط loadHeavy
+         كله. نبقى على المحمَّل ونكمل — الشاشة تعمل بما لديها. */
+      console.warn('تعذّر تحميل السجل الكامل — نبقى على المحمَّل', e);
+    }
   }
   /* (0138) مستندات التحويل المالي — آخر 100 (الجدول لا يوجد قبل تشغيل 0138 فنُلطّف الفشل) */
   api('pos_treasury_transfers',{qs:'?select=*&order=transfer_date.desc,created_at.desc,id.asc&limit=100'}).then(r=>{if(r){treasuryTransfers=r;treasuryTransfersLoaded=true;}}).catch(e=>{console.warn('treasury transfers not setup yet — شغّل SQL 0138',e);});
@@ -1315,7 +1354,7 @@ async function loadAll(){
     await loadCore();
     await loadHeavy();
     markAllTabsDirty();
-    renderAll();
+    renderAllProgressive();
   }catch(e){ console.error(e); const used=applyEssentialCache(loadEssentialCache()); if(used) toast('الاتصال ضعيف: تم استعمال آخر بيانات محفوظة','warn'); else toast('خطأ: '+e.message+' - لا توجد بيانات محفوظة محليًا'); reapplyOfflineQueueLocally().then(()=>{try{renderAll()}catch(_e){}}).catch(()=>{}); }
   finally{showLoading(false);window.__busy=false}
 }
@@ -1706,6 +1745,23 @@ function renderAll(){
   renderProductDatalist(); fillSupplierSelects(); renderStatusBar(); applyPermissions();
   markAllTabsDirty();
   Object.keys(TAB_RENDERERS).forEach(t=>renderTab(t,true));
+}
+/* (0164) رسم متدرّج: الشاشة المفتوحة أولاً ثم البقية بين مهام المتصفح،
+   فتُطلى الشاشة قبل أن يكتمل رسم الـ٢١ تبويباً. النتيجة النهائية واحدة. */
+function renderAllProgressive(){
+  renderProductDatalist(); fillSupplierSelects(); renderStatusBar(); applyPermissions();
+  markAllTabsDirty();
+  let active=null;
+  try{ active=activeTabId(); }catch(_e){}
+  if(active && TAB_RENDERERS[active]) renderTab(active,true);
+  const rest=Object.keys(TAB_RENDERERS).filter(t=>t!==active);
+  const step=()=>{
+    const t=rest.shift();
+    if(!t) return;
+    try{ renderTab(t,true); }catch(e){ console.error('render tab '+t,e); }
+    setTimeout(step,0);
+  };
+  setTimeout(step,0);
 }
 
 /* ══════ (0077) تحديث مُوجَّه بعد الحفظ — بديل loadAll الكامل ══════
@@ -3697,7 +3753,9 @@ function renderCustomers(){
   }
 }
 async function openCustomerLedger(id){openTab('customers'); q('customerLedgerCustomer').value=id;
-  try{ const rows=await api('pos_customer_ledger',{qs:`?select=*&customer_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(customerLedger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) customerLedger.push(r); }); }catch(e){ console.warn('ledger history fetch failed — using loaded rows',e); }
+  /* (0164) api بلا تصفيح يقف عند سقف الخادم (١٠٠٠ صف) — والكشف يُجمَّع محلياً
+     فيظهر رصيد الكشف أقل من رصيد قائمة الزبائن. apiAll يصفّح بمُرجِّح فريد. */
+  try{ const rows=await apiAll('pos_customer_ledger',`?select=*&customer_id=eq.${id}&order=entry_date.asc,created_at.asc,id.asc`); const seen=new Set(customerLedger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) customerLedger.push(r); }); }catch(e){ console.warn('ledger history fetch failed — using loaded rows',e); }
   renderCustomerLedger(); }
 function renderCustomerLedger(){
   const cid=q('customerLedgerCustomer')?.value||'';
@@ -3965,7 +4023,9 @@ function fillSupplierSelects(){
   if(q('saleCardAccount')) q('saleCardAccount').innerHTML=financeAccountOptionsFor('card','اختر حساب البطاقة');
 }
 async function openLedger(id){openTab('ledger'); q('ledgerSupplier').value=id;
-  try{ const rows=await api('pos_supplier_ledger',{qs:`?select=*&supplier_id=eq.${id}&order=entry_date.asc,created_at.asc`}); const seen=new Set(ledger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) ledger.push(r); }); }catch(e){ console.warn('supplier ledger history fetch failed — using loaded rows',e); }
+  /* (0164) كان `api` بلا تصفيح ⇒ سقف الخادم (١٠٠٠ صف) يقطع بقية كشف المورد
+     بصمت فيظهر رصيد الكشف أقل من رصيد قائمة الموردين. apiAll يصفّح بمُرجِّح فريد. */
+  try{ const rows=await apiAll('pos_supplier_ledger',`?select=*&supplier_id=eq.${id}&order=entry_date.asc,created_at.asc,id.asc`); const seen=new Set(ledger.map(x=>x.id)); (rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)) ledger.push(r); }); }catch(e){ console.warn('supplier ledger history fetch failed — using loaded rows',e); }
   renderLedger(); }
 function renderLedger(){
   const sid=q('ledgerSupplier').value;
@@ -4910,12 +4970,20 @@ function saleSearchText(sl){
   const prodText=rows.map(it=>{const p=productByCode(it.product_code); return [it.product_code,it.product_name,p?.barcode,p?.sku,p?.model,p?.brand].filter(Boolean).join(' ')}).join(' ');
   return [sl.invoice_no,sl.id,sl.sale_date,c?.name,c?.phone,l?.name,sl.payment_method,sl.status,sl.notes,prodText].filter(Boolean).join(' ');
 }
-function saleMatchesFilters(sl){
+function saleMatchesFilters(sl, neg){
   const scope=sellerBranchScope(); if(scope && sl.location_id!==scope) return false;
   const term=(q('saleListSearch')?.value||'').trim(); if(term && !smartMatch(term,saleSearchText(sl))) return false;
   const from=q('saleFilterFrom')?.value||'', to=q('saleFilterTo')?.value||'', month=q('saleFilterMonth')?.value||'', year=(q('saleFilterYear')?.value||'').trim();
   const d=sl.sale_date||''; if(from && d<from) return false; if(to && d>to) return false; if(month && !d.startsWith(month)) return false; if(year && !d.startsWith(year)) return false;
-  const typ=q('saleFilterType')?.value||''; const hasReturn=saleItems.some(it=>it.sale_id===sl.id && Number(it.qty||0)<0); if(typ==='sale' && hasReturn) return false; if(typ==='mixed_return' && !hasReturn) return false;
+  const typ=q('saleFilterType')?.value||'';
+  /* (0164) كان `saleItems.some(...)` يعمل لكل فاتورة ⇒ ١٢ ألف × ٤٠ ألف مقارنة
+     في كل رسمة للقائمة. والحاجة إليه لا تقع إلا مع فلتر النوع، فيُحسب حينها
+     فقط، من مجموعة تُبنى مرة واحدة في موضع النداء. الخرج لا يتغيّر. */
+  if(typ==='sale' || typ==='mixed_return'){
+    const hasReturn = neg ? neg.has(sl.id) : saleItems.some(it=>it.sale_id===sl.id && Number(it.qty||0)<0);
+    if(typ==='sale' && hasReturn) return false;
+    if(typ==='mixed_return' && !hasReturn) return false;
+  }
   const user=(q('saleFilterUser')?.value||'').trim(); if(user && !smartMatch(user,[sl.seller,sl.cashier,sl.created_by,sl.notes].filter(Boolean).join(' '))) return false;
   const cust=q('saleFilterCustomer')?.value||''; if(cust && sl.customer_id!==cust) return false;
   const branch=q('saleFilterBranch')?.value||''; if(branch && sl.location_id!==branch) return false;
@@ -5494,7 +5562,8 @@ function renderSales(){
   const costBySale=new Map();
   saleItems.forEach(it=>{costBySale.set(it.sale_id,(costBySale.get(it.sale_id)||0)+Number(it.qty||0)*saleLineCost(it));});
   window.__salesRenderCtx={saleIdx,custIdx,locIdx,recMap,payMap,costBySale};
-  const rows=typ==='return'?[]:sales.filter(saleMatchesFilters);
+  const negSet=salesWithReturnsSet();
+  const rows=typ==='return'?[]:sales.filter(sl=>saleMatchesFilters(sl, negSet));
   const rets=showReturns?saleReturns.filter(retListMatchesFilters):[];
   const entries=[...rows.map(sl=>({kind:'sale',date:String(sl.sale_date||''),key:String(sl.invoice_no||String(sl.id).slice(0,8)),sl})),
                  ...rets.map(r=>({kind:'ret',date:String(r.return_date||''),key:String(saleIdx.get(r.sale_id)?.invoice_no||String(r.id).slice(0,8)),r}))];
@@ -5572,7 +5641,7 @@ function salesFilterSummaryParts(){
   return parts;
 }
 function exportSalesListCsv(){
-  const rows=sales.filter(saleMatchesFilters);
+  const rows=sales.filter(sl=>saleMatchesFilters(sl, salesWithReturnsSet()));
   if(!rows.length){toast('لا توجد فواتير مطابقة للفلاتر','warn');return;}
   const head=['رقم الفاتورة','التاريخ','الفرع','الزبون','الهاتف','الحالة','طريقة الدفع','الإجمالي','المدفوع','الدين','ملاحظات'];
   const lines=rows.map(sl=>{
@@ -5587,7 +5656,7 @@ function exportSalesListCsv(){
   toast('تم تصدير '+rows.length+' فاتورة (Excel/CSV)','success');
 }
 function printSalesList(){
-  const rows=sales.filter(saleMatchesFilters);
+  const rows=sales.filter(sl=>saleMatchesFilters(sl, salesWithReturnsSet()));
   if(!rows.length){toast('لا توجد فواتير مطابقة للفلاتر','warn');return;}
   const w=window.open('','_blank'); if(!w){toast('المتصفح منع النافذة — اسمح بالنوافذ المنبثقة','warn');return;}
   const tot=rows.reduce((a,s)=>a+Number(s.total||0),0), paid=rows.reduce((a,s)=>a+Number(s.paid_amount||0),0), due=rows.reduce((a,s)=>a+Math.max(0,Number(s.balance_due||0)),0);
@@ -9816,7 +9885,7 @@ q('settingsForm')?.addEventListener('submit',e=>{
   e.preventDefault();
   Object.assign(APP_CONFIG,{businessName:q('settingsBusinessName').value.trim()||APP_CONFIG.businessName,tagline:q('settingsTagline').value.trim()||APP_CONFIG.tagline,currency:q('settingsCurrency').value.trim()||APP_CONFIG.currency,lowStockThreshold:Number(q('settingsLowStock').value||0),transferMinQtyDefault:Math.max(0,Number(q('settingsTransferMinQty')?.value||1)),marginRedBelow:Math.max(0,Number(q('settingsMarginRedBelow')?.value??5)),marginOrangeBelow:Math.max(0,Number(q('settingsMarginOrangeBelow')?.value??15)),marginYellowBelow:Math.max(0,Number(q('settingsMarginYellowBelow')?.value??30))});
   localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]}));
-  initBranding(); renderAll(); if(q('saleItemsBody')) updateSaleTotal(); /* الألوان تتبع العتبات فوراً بلا إعادة تحميل */ toast('تم حفظ الإعدادات');
+  initBranding(); renderAllProgressive(); if(q('saleItemsBody')) updateSaleTotal(); /* الألوان تتبع العتبات فوراً بلا إعادة تحميل */ toast('تم حفظ الإعدادات');
 });
 
 q('productOptionForm')?.addEventListener('submit',e=>{
@@ -10858,7 +10927,24 @@ function productCost(code){
 /* ══════ المرجعية الواحدة لتكلفة البيع: لا حساب تكلفة في أي كود آخر — يقضي على انجراف الربح بين التقرير والتفصيل والقائمة ══════
    التعريف الرسمي: تكلفة السطر = qty × (unit_cost_at_sale المحفوظ وقت البيع إن كان >0، وإلا productCost الحالية احتياطاً). */
 function saleLineCost(it){const c=Number(it?.unit_cost_at_sale||0); return c>0?c:productCost(it?.product_code);}
-function saleCost(sl){const id=typeof sl==='string'?sl:sl?.id; return (saleItems||[]).filter(x=>x.sale_id===id).reduce((a,it)=>a+Number(it.qty||0)*saleLineCost(it),0);}
+/* (0164) فهرسة سطور البيع بالفاتورة — تُبنى مرة لكل رسمة بدل مسح ٤٠ ألف سطر
+   لكل فاتورة. نفس الأرقام تماماً، بلا مسح متكرر. */
+function indexSaleItemsBySale(items){
+  const m=new Map();
+  for(const it of (items||[])){ const k=it.sale_id; let a=m.get(k); if(!a){a=[];m.set(k,a);} a.push(it); }
+  return m;
+}
+/* مجموعة الفواتير التي تحوي سطراً سالباً (مرتجع) — تُحسب مرة لكل رسمة */
+function salesWithReturnsSet(items){
+  const s=new Set();
+  for(const it of (items||saleItems||[])){ if(Number(it.qty||0)<0) s.add(it.sale_id); }
+  return s;
+}
+function saleCost(sl, idx){
+  const id=typeof sl==='string'?sl:sl?.id;
+  const rows=idx?idx.get(id):(saleItems||[]).filter(x=>x.sale_id===id);
+  return (rows||[]).reduce((a,it)=>a+Number(it.qty||0)*saleLineCost(it),0);
+}
 
 function marginValue(code, price){return Number(price||0)-productCost(code)}
 function marginPct(code, price){const cost=productCost(code); return cost?marginValue(code,price)/cost*100:0}
@@ -10892,9 +10978,11 @@ function itemProfitRows(){
 }
 function customerProfitRows(){
   const d=repScopeData(); const bySale={}; d.fItems.forEach(it=>{(bySale[it.sale_id]||(bySale[it.sale_id]=[])).push(it)}); const m={};
-  d.fSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const k=sl.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.count++; o.sales+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
+  /* (0164) خريطة الزبائن مرة واحدة بدل customers.find لكل فاتورة (١٢ ألف × ٨٠٠) */
+  const cById=new Map(customers.map(c=>[c.id,c]));
+  d.fSales.forEach(sl=>{const c=cById.get(sl.customer_id); const k=sl.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.count++; o.sales+=Number(sl.total||0); (bySale[sl.id]||[]).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
   const byRet={}; d.fRetItems.forEach(it=>{(byRet[it.return_id]||(byRet[it.return_id]=[])).push(it)});
-  d.fReturns.forEach(r=>{const c=customers.find(x=>x.id===r.customer_id); const k=r.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.sales-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));});
+  d.fReturns.forEach(r=>{const c=cById.get(r.customer_id); const k=r.customer_id||'cash'; const o=m[k]||(m[k]={id:k,name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,balance:Number(c?.balance||0)}); o.sales-=Number(r.total||0); (byRet[r.id]||[]).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));});
   return Object.values(m).map(r=>({...r,profit:r.sales-r.cost}));
 }
 function renderReports(){
@@ -10997,6 +11085,41 @@ function dailyCashSupplierNameForMovement(m){
   return sid?(suppliers.find(s=>s.id===sid)?.name||'مورد'):'';
 }
 const DAILY_METHOD_LABELS={cash:'نقدي',card:'بطاقة',bank_transfer:'تحويل مصرفي',bank:'تحويل مصرفي',credit:'آجل',credit_reduction:'تخفيض دين',none:'بدون',mixed:'مختلط'};
+/* (0164) نافذة الحركات المالية: كانت تُجلب آخر ٢٠٠ حركة فقط، فتقرير خزينة
+   ليوم أقدم من تلك النافذة يحسب دفعات زبائن/موردين = صفر بلا أي تحذير.
+   الآن: عند اختيار فترة لا تغطّيها النافذة المحمّلة، تُجلب حركات الفترة
+   وحدها (قراءة فقط) ثم يُعاد الرسم مرة واحدة. القاعدة المحاسبية لم تُمسّ. */
+const __dcMovRanges=new Set();
+let __dcMovArr=null;
+/* عند استبدال مصفوفة الحركات (تحديث من الخادم) يُنسى سجل الفترات المجلوبة
+   — وإلا ظنّ التقرير أنها ما زالت محمّلة وهي لم تعد كذلك. */
+function dcMovRangesFresh(){ if(__dcMovArr!==financeMovements){ __dcMovRanges.clear(); __dcMovArr=financeMovements; } }
+function dailyCashMovementsCover(fromDate){
+  if(!(financeMovements||[]).length) return false;
+  let oldest=null;
+  for(const m of financeMovements){ const d=String(m.movement_date||'').slice(0,10); if(d && (!oldest || d<oldest)) oldest=d; }
+  return !!oldest && fromDate >= oldest;
+}
+async function ensureDailyCashMovements(fromDate,toDate){
+  if(!fromDate || !toDate) return false;
+  dcMovRangesFresh();
+  if(dailyCashMovementsCover(fromDate)) return false;
+  const key=fromDate+'|'+toDate;
+  if(__dcMovRanges.has(key)) return false;
+  __dcMovRanges.add(key);
+  try{
+    const rows=await apiAll('pos_finance_movements',
+      `?select=*&movement_date=gte.${fromDate}&movement_date=lte.${toDate}&order=movement_date.desc,created_at.desc,id.asc`);
+    if(!Array.isArray(rows) || !rows.length) return false;
+    const seen=new Set((financeMovements||[]).map(m=>m.id));
+    let added=0;
+    for(const m of rows){ if(m && m.id && !seen.has(m.id)){ financeMovements.push(m); seen.add(m.id); added++; } }
+    return added>0;
+  }catch(e){
+    __dcMovRanges.delete(key);   /* فشل الشبكة لا يُقفل الفترة — تُعاد المحاولة في الرسم التالي */
+    console.warn('جلب حركات الخزينة للفترة فشل — الأرقام من النافذة المحمّلة', e); return false;
+  }
+}
 function getDailyCashData(opts={}){
   if(!opts.date && !opts.dateFrom && !opts.dateTo) fillDailyCashBranches();
   const today=new Date().toISOString().slice(0,10);
@@ -11154,6 +11277,13 @@ function dailyCashTableRows(d){
   return row('المبيعات',d.salesPay)+row('المصاريف',d.expensesPay)+row('دفعات الزبائن',d.customerPay)+row('دفعات الموردين',d.supplierPay)+row('المرتجعات / الاسترداد',d.refundsPay);
 }
 function renderDailyCashReport(){
+  /* (0164) اكتمال نافذة الحركات للفترة المختارة — ثم إعادة رسم واحدة */
+  try{
+    const __f=(q('dailyCashDateFrom')?.value)||new Date().toISOString().slice(0,10);
+    const __t=(q('dailyCashDateTo')?.value)||__f;
+    /* __dcMovRanges يمنع تكرار جلب نفس الفترة ⇒ لا حلقة رسم */
+    ensureDailyCashMovements(__f,__t).then(changed=>{ if(changed){ try{ renderDailyCashReport(); }catch(e){ console.warn(e); } } });
+  }catch(_e){}
   if(!q('dailyCashReportBody')) return;
   const d=getDailyCashData();
   const M=DAILY_METHOD_LABELS, cur=APP_CONFIG.currency;
@@ -11545,6 +11675,12 @@ function aggregateItemProfit(items, returnItems=[]){
   return Object.values(map);
 }
 function renderReportsDetail(){
+  /* (0164) فهارس الرسم: كان كل صف فاتورة يمسح سطور البيع كلها (١٢ ألف × ٤٠ ألف)
+     وكل زبون في قائمة (١٢ ألف × ٨٠٠). الخرج مطابق حرفياً — البرهان في
+     tests/reports-render-index.test.js بمقارنة HTML قبل/بعد. */
+  const __itemsBySale=indexSaleItemsBySale(saleItems);
+  const __custById=new Map(customers.map(c=>[c.id,c]));
+  const __locById=new Map(locations.map(l=>[l.id,l]));
   if(q('repHistCustomer') && !q('repHistCustomer').dataset.ready){q('repHistCustomer').innerHTML='<option value="">اختر الزبون</option>'+customers.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''); q('repHistCustomer').dataset.ready='1';}
   const ctx=reportContext();
   const salesTotal=ctx.filteredSales.reduce((a,s)=>a+Number(s.total||0),0);
@@ -11561,15 +11697,15 @@ function renderReportsDetail(){
   const term=(q('repItemSearch')?.value||'').trim().toLowerCase();
   if(q('repItemProfitBody')) q('repItemProfitBody').innerHTML=itemAgg.filter(r=>!term||[r.code,r.name].join(' ').toLowerCase().includes(term)).sort((a,b)=>b.profit-a.profit).slice(0,200).map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td><td>${money(r.qty)}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="${r.profit>=0?'profit-positive':'profit-negative'}">${money(r.profit)}</td><td>${money(r.margin)}%</td></tr>`).join('')||'<tr><td colspan="7">لا توجد بيانات.</td></tr>';
   const byCustomer={};
-  ctx.filteredSales.forEach(sl=>{const c=customers.find(x=>x.id===sl.customer_id); const key=sl.customer_id||'cash'; if(!byCustomer[key])byCustomer[key]={name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,profit:0,balance:Number(c?.balance||0)}; byCustomer[key].count++; byCustomer[key].sales+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>byCustomer[key].cost+=Number(it.qty||0)*saleLineCost(it));});
+  ctx.filteredSales.forEach(sl=>{const c=__custById.get(sl.customer_id); const key=sl.customer_id||'cash'; if(!byCustomer[key])byCustomer[key]={name:c?.name||'زبون نقدي',count:0,sales:0,cost:0,profit:0,balance:Number(c?.balance||0)}; byCustomer[key].count++; byCustomer[key].sales+=Number(sl.total||0); (__itemsBySale.get(sl.id)||[]).forEach(it=>byCustomer[key].cost+=Number(it.qty||0)*saleLineCost(it));});
   Object.values(byCustomer).forEach(r=>r.profit=r.sales-r.cost);
   if(q('repCustomerProfitBody')) q('repCustomerProfitBody').innerHTML=Object.values(byCustomer).sort((a,b)=>b.sales-a.sales).map(r=>`<tr><td>${esc(r.name)}</td><td>${r.count}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="${r.profit>=0?'profit-positive':'profit-negative'}">${money(r.profit)}</td><td>${money(r.balance)}</td></tr>`).join('')||'<tr><td colspan="6">لا توجد بيانات.</td></tr>';
-  if(q('repInvoiceProfitBody')) q('repInvoiceProfitBody').innerHTML=ctx.filteredSales.map(sl=>{const l=locations.find(x=>x.id===sl.location_id), c=customers.find(x=>x.id===sl.customer_id); const cost=saleCost(sl); const profit=Number(sl.total||0)-cost; const margin=Number(sl.total||0)?profit/Number(sl.total||0)*100:0; return `<tr><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span></td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</td><td>${money(sl.total)}</td><td>${money(cost)}</td><td class="${profit>=0?'profit-positive':'profit-negative'}">${money(profit)}</td><td>${money(margin)}%</td></tr>`}).join('')||'<tr><td colspan="7">لا توجد فواتير.</td></tr>';
+  if(q('repInvoiceProfitBody')) q('repInvoiceProfitBody').innerHTML=ctx.filteredSales.map(sl=>{const l=__locById.get(sl.location_id), c=__custById.get(sl.customer_id); const cost=saleCost(sl,__itemsBySale); const profit=Number(sl.total||0)-cost; const margin=Number(sl.total||0)?profit/Number(sl.total||0)*100:0; return `<tr><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span></td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</td><td>${money(sl.total)}</td><td>${money(cost)}</td><td class="${profit>=0?'profit-positive':'profit-negative'}">${money(profit)}</td><td>${money(margin)}%</td></tr>`}).join('')||'<tr><td colspan="7">لا توجد فواتير.</td></tr>';
   if(q('repExpenseTotal')){q('repExpenseTotal').textContent=money(expenseTotal); q('repSalaryTotal').textContent=money(salaryTotal); q('repExpenseSalaryTotal').textContent=money(expenseTotal+salaryTotal)}
   if(q('repExpensesBody')) q('repExpensesBody').innerHTML=[...ctx.filteredExpenses.map(e=>({date:e.expense_date,type:'مصروف',title:e.title,account:e.account_id,amount:e.amount})),...ctx.filteredSalaries.map(e=>({date:e.payment_date,type:'مرتب',title:e.period||'مرتب',account:e.account_id,amount:e.amount}))].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.type)}</td><td>${esc(r.title)}</td><td>${esc(financeAccountName(r.account))}</td><td>${money(r.amount)}</td></tr>`).join('')||'<tr><td colspan="5">لا توجد مصاريف أو مرتبات.</td></tr>';
   const months={};
   const mInit=m=>{if(!months[m])months[m]={sales:0,returns:0,cost:0,expenses:0,waste:0};};
-  ctx.filteredSales.forEach(s=>{const m=(s.sale_date||'').slice(0,7); mInit(m); months[m].sales+=Number(s.total||0); saleItems.filter(it=>it.sale_id===s.id).forEach(it=>months[m].cost+=Number(it.qty||0)*saleLineCost(it));});
+  ctx.filteredSales.forEach(s=>{const m=(s.sale_date||'').slice(0,7); mInit(m); months[m].sales+=Number(s.total||0); (__itemsBySale.get(s.id)||[]).forEach(it=>months[m].cost+=Number(it.qty||0)*saleLineCost(it));});
   ctx.filteredReturns.forEach(r=>{const m=(r.return_date||'').slice(0,7); mInit(m); months[m].returns+=Number(r.total||0);});
   ctx.filteredExpenses.forEach(e=>{const m=(e.expense_date||'').slice(0,7); mInit(m); months[m].expenses+=Number(e.amount||0);});
   ctx.filteredSalaries.forEach(e=>{const m=(e.payment_date||'').slice(0,7); mInit(m); months[m].expenses+=Number(e.amount||0);});
@@ -11650,7 +11786,7 @@ function renderReportsDetail(){
   }
   if(currentReport==='compare' && q('repCompareBody')){
     const period=q('repComparePeriod')?.value||'month'; const m={}; const ensure=k=>m[k]||(m[k]={k,count:0,rev:0,cost:0,expenses:0,waste:0});
-    d.fSales.forEach(sl=>{const k=bucketKey(sl.sale_date,period), o=ensure(k); o.count++; o.rev+=Number(sl.total||0); saleItems.filter(it=>it.sale_id===sl.id).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
+    d.fSales.forEach(sl=>{const k=bucketKey(sl.sale_date,period), o=ensure(k); o.count++; o.rev+=Number(sl.total||0); (__itemsBySale.get(sl.id)||[]).forEach(it=>o.cost+=Number(it.qty||0)*saleLineCost(it));});
     d.fReturns.forEach(r=>{const k=bucketKey(r.return_date,period), o=ensure(k); o.rev-=Number(r.total||0); saleReturnItems.filter(it=>it.return_id===r.id).forEach(it=>o.cost-=Number(it.qty||0)*saleLineCost(it));});
     d.fExpenses.forEach(e=>ensure(bucketKey(e.expense_date,period)).expenses+=Number(e.amount||0)); d.fSalaries.forEach(e=>ensure(bucketKey(e.payment_date,period)).expenses+=Number(e.amount||0));
     (d.fWaste||[]).forEach(w=>ensure(bucketKey(w.waste_date,period)).waste+=Number(w.total_value||0));
