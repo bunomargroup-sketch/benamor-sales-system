@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261028-1458">
+<link rel="stylesheet" href="app.css?v=20261028-1733">
 </head>
 <body class="auth-locked">
   <header>
@@ -980,14 +980,67 @@
             <div><label>التاريخ</label><input id="salaryPaymentDate" type="date" required></div>
             <div><label>الفترة</label><input id="salaryPeriod" placeholder="مثال: 2026-06"></div>
             <div><label>المبلغ</label><input id="salaryAmount" type="text" inputmode="decimal" required></div>
+            <!-- (0162) النوع: قار أو نسبة — يُظهره التطبيق فقط بعد تشغيل 0162
+                 على قاعدة البيانات (حتى لا يُرسَل حقل غير موجود فيُرفض الحفظ) -->
+            <div id="salaryKindWrap" class="hidden"><label>نوع الدفعة</label><select id="salaryKind"><option value="fixed">مرتب قار</option><option value="commission">نسبة مبيعات</option></select><div class="mini">قار = راتب شهري ثابت · نسبة = عمولة على المبيعات</div></div>
             <div style="grid-column:1/-1"><label>ملاحظات</label><input id="salaryNotes" placeholder="اختياري"></div>
             <button class="btn" type="submit">دفع مرتب</button>
           </form>
           </div>
           <!-- (20261007c) قبل هذا الإصلاح لم يكن للموظفين أي ظهور بعد الحفظ:
                القائمة المنسدلة وحدها كانت تعرفهم ولا تُحدَّث إلا مع رأس الموردين -->
-          <div class="table-scroll"><table><thead><tr><th>الموظف</th><th>الهاتف</th><th>الوظيفة</th><th>المرتب الشهري</th><th>مدفوع هذا الشهر</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="employeesBody"></tbody></table></div>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>الفترة</th><th>المبلغ</th><th>الحساب</th></tr></thead><tbody id="salaryPaymentsBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>الموظف</th><th class="hidden" id="empSheetTh" title="الاسم كما يُكتب في عمود J بشيت SmartBalance — الإرسال يرفض من لا اسم له">اسم الشيت</th><th>الهاتف</th><th>الوظيفة</th><th>المرتب الشهري</th><th>مدفوع هذا الشهر</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="employeesBody"></tbody></table></div>
+          <!-- (0162) سجل المرتبات — نسخة من سجل المصاريف: فلترة خادمية، إجمالي
+               محسوب على كل المطابق، تحديد سطر وشريط أدوات، عمود «في الشيت»،
+               وزر إرسال للمدير. الأزرار التي تحتاج 0162 تُخفى حتى تُشغَّل. -->
+          <div class="row" style="justify-content:space-between;align-items:center;gap:8px;margin-top:20px">
+            <h3 style="margin:0">سجل المرتبات</h3>
+            <button class="btn secondary hidden" type="button" id="salariesSendSheetBtn" onclick="sendSalariesToSheet()" title="يُرسل ما أوّشّرته إلى شيت SmartBalance — للمدير والمبرمج">📤 إرسال للجدول</button>
+          </div>
+          <div class="mini muted" id="salaryCapsNote" style="margin-top:6px"></div>
+          <div class="sal-filters">
+            <div class="sal-range" role="group" aria-label="الفترة">
+              <button type="button" class="sal-range-chip active" data-range="month" onclick="setSalaryRange('month')" title="من أول الشهر الحالي إلى اليوم">هذا الشهر</button>
+              <button type="button" class="sal-range-chip" data-range="30d" onclick="setSalaryRange('30d')" title="آخر 30 يوماً">30 يوماً</button>
+              <button type="button" class="sal-range-chip" data-range="year" onclick="setSalaryRange('year')" title="من أول السنة الحالية إلى اليوم">السنة</button>
+              <button type="button" class="sal-range-chip" data-range="all" onclick="setSalaryRange('all')" title="بدون قيود تاريخ — كل السجلات">الكل</button>
+            </div>
+            <button class="btn secondary sal-reset" type="button" onclick="resetSalaryFilters()" title="إعادة الفلاتر الافتراضية">إعادة تعيين</button>
+          </div>
+          <div class="sal-filters sal-filters-2">
+            <label class="sal-f-label" for="salaryListFrom">من</label><input id="salaryListFrom" type="date" onchange="fetchSalaryPaymentsList()">
+            <label class="sal-f-label" for="salaryListTo">إلى</label><input id="salaryListTo" type="date" onchange="fetchSalaryPaymentsList()">
+            <select id="salaryListEmployee" onchange="fetchSalaryPaymentsList()"></select>
+            <select id="salaryListAccount" onchange="fetchSalaryPaymentsList()"></select>
+            <select id="salaryListKind" class="hidden" onchange="fetchSalaryPaymentsList()" title="مرتب قار أو نسبة مبيعات">
+              <option value="">كل الأنواع</option><option value="fixed">مرتب قار</option><option value="commission">نسبة مبيعات</option>
+            </select>
+            <input id="salaryListSearch" type="search" placeholder="بحث في الفترة والملاحظات…" oninput="debouncedSalarySearch()">
+          </div>
+          <div id="salaryTotalsBar" style="display:none;margin-top:10px"></div>
+          <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn secondary" type="button" id="salariesViewBtn" onclick="salaryToolbarAction('view')" disabled>👁 مشاهدة</button>
+            <button class="btn secondary hidden" type="button" id="salariesEditBtn" onclick="salaryToolbarAction('edit')" disabled title="المدير والمبرمج والمحاسب — أو مَن سجّل الدفعة في نفس يومها">✏️ تعديل</button>
+            <button class="btn danger hidden" type="button" id="salariesDeleteBtn" onclick="salaryToolbarAction('delete')" disabled title="المدير والمبرمج">🗑️ حذف</button>
+            <span class="mini muted" id="salariesSelInfo">اضغط على سطر لتحديده (نقرتان = مشاهدة)</span>
+          </div>
+          <div class="table-scroll">
+            <table class="salaries-table">
+              <thead><tr>
+                <th>التاريخ</th><th>الموظف</th>
+                <th class="hidden" id="salKindTh">النوع</th>
+                <th>الفترة</th><th>المبلغ</th><th>الحساب</th><th>مَن سجّل</th>
+                <th class="hidden" id="salSheetTh" title="حالة الإرسال إلى شيت SmartBalance — ✓ = مؤكد، ☐ = أوّشّر للإرسال">في الشيت</th>
+                <th>إجراءات</th>
+              </tr></thead>
+              <tbody id="salaryPaymentsBody"></tbody>
+              <tfoot id="salaryTotalFoot"><tr><td colspan="9" class="mini">—</td></tr></tfoot>
+            </table>
+          </div>
+          <div class="row" style="justify-content:space-between;margin-top:8px">
+            <span class="mini" id="salariesListInfo"></span>
+            <button class="btn secondary hidden" type="button" id="salariesMoreBtn" onclick="salariesLoadMore()">تحميل المزيد</button>
+          </div>
         </div>
 
         <div class="panel">
@@ -1411,6 +1464,32 @@
         <div><label>الخزينة / الحساب</label><select id="expenseEditAccount" required></select></div>
         <div style="grid-column:1/-1"><label>البيان</label><input id="expenseEditTitle" required></div>
         <div style="grid-column:1/-1"><label>ملاحظات</label><input id="expenseEditNotes" placeholder="اختياري"></div>
+        <button class="btn" type="submit">حفظ التعديل</button>
+      </form>
+    </div>
+  </div>
+  <!-- (0162) نافذتا المرتب: مشاهدة وتعديل -->
+  <div class="modal" id="salaryViewModal">
+    <div class="modal-card" style="max-width:460px">
+      <div class="modal-head"><div><h2 style="margin:0">👁 تفاصيل دفعة المرتب</h2><div class="mini" id="salViewSub">—</div></div><button class="btn secondary" type="button" onclick="q('salaryViewModal').classList.remove('show')">إغلاق</button></div>
+      <div id="salViewBody" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:12px;gap:8px">
+        <button class="btn secondary hidden" type="button" id="salViewEditBtn" onclick="q('salaryViewModal').classList.remove('show');salaryToolbarAction('edit')">✏️ تعديل</button>
+        <button class="btn danger hidden" type="button" id="salViewDeleteBtn" onclick="q('salaryViewModal').classList.remove('show');salaryToolbarAction('delete')">🗑️ حذف</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="salaryEditModal">
+    <div class="modal-card" style="max-width:540px">
+      <div class="modal-head"><div><h2 style="margin:0">تعديل دفعة المرتب</h2><div class="mini">الحركة المالية في الخزينة تُحدَّث في نفس المعاملة مع أي تغيير في المبلغ أو الحساب أو التاريخ</div></div><button class="btn secondary" type="button" onclick="q('salaryEditModal').classList.remove('show')">إغلاق</button></div>
+      <form id="salaryEditForm" class="form">
+        <div><label>الموظف</label><select id="salaryEditEmployee" required></select></div>
+        <div><label>الخزينة / الحساب</label><select id="salaryEditAccount" required></select></div>
+        <div><label>التاريخ</label><input id="salaryEditDate" type="date" required></div>
+        <div><label>المبلغ</label><input id="salaryEditAmount" type="text" inputmode="decimal" required></div>
+        <div id="salaryEditKindWrap" class="hidden"><label>نوع الدفعة</label><select id="salaryEditKind"><option value="fixed">مرتب قار</option><option value="commission">نسبة مبيعات</option></select></div>
+        <div><label>الفترة</label><input id="salaryEditPeriod" placeholder="مثال: 2026-10"></div>
+        <div style="grid-column:1/-1"><label>ملاحظات</label><input id="salaryEditNotes" placeholder="اختياري"></div>
         <button class="btn" type="submit">حفظ التعديل</button>
       </form>
     </div>
@@ -2025,6 +2104,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261028-1458"></script>
+<script src="app.js?v=20261028-1733"></script>
 </body>
 </html>

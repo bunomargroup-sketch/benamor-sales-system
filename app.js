@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261028-1458';
+const APP_BUILD='b20261028-1733';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -9300,16 +9300,18 @@ function renderFinance(){
     q('employeesBody').innerHTML=employees.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ar')).map(e=>{
       const paid=salaryPayments.filter(p=>p.employee_id===e.id&&String(p.payment_date||'').startsWith(month)).reduce((t,p)=>t+Number(p.amount||0),0);
       const stopped=e.active===false;
-      return `<tr><td><b>${esc(e.name)}</b></td><td class="ltr">${esc(e.phone||'—')}</td><td>${esc(e.position||'—')}</td><td>${money(e.monthly_salary)}</td><td>${money(paid)}</td><td>${stopped?'<span class="muted">موقوف</span>':'نشط'}</td><td>${canWriteSalary?`<button class="btn secondary" type="button" onclick="editEmployee('${e.id}')">تعديل</button> <button class="btn secondary" type="button" onclick="toggleEmployeeActive('${e.id}')">${stopped?'تنشيط':'تعطيل'}</button>`:'—'}</td></tr>`;
-    }).join('')||'<tr><td colspan="7">لا يوجد موظفون بعد — أضف أول موظف من النموذج أعلاه.</td></tr>';
+      /* (0162) اسم الشيت: الإرسال يرفض من لا اسم له — فيُملأ من هنا لا بـSQL */
+      const sheetName = salaryCaps.applied
+        ? (canWriteSalary
+            ? `<td><input class="emp-sheet-inp" value="${esc(e.sheet_employee_name||'')}" placeholder="اسمه في الشيت" title="كما هو مكتوب في عمود J — يُملأ مرة واحدة" onchange="saveEmployeeSheetName('${e.id}',this.value)"></td>`
+            : `<td>${esc(e.sheet_employee_name||'—')}</td>`)
+        : '';
+      return `<tr><td><b>${esc(e.name)}</b></td>${sheetName}<td class="ltr">${esc(e.phone||'—')}</td><td>${esc(e.position||'—')}</td><td>${money(e.monthly_salary)}</td><td>${money(paid)}</td><td>${stopped?'<span class="muted">موقوف</span>':'نشط'}</td><td>${canWriteSalary?`<button class="btn secondary" type="button" onclick="editEmployee('${e.id}')">تعديل</button> <button class="btn secondary" type="button" onclick="toggleEmployeeActive('${e.id}')">${stopped?'تنشيط':'تعطيل'}</button>`:'—'}</td></tr>`;
+    }).join('')||`<tr><td colspan="${salaryCaps.applied?8:7}">لا يوجد موظفون بعد — أضف أول موظف من النموذج أعلاه.</td></tr>`;
   }
-  /* (20261007c) آخر دفعات المرتبات مرئية في النافذة نفسها */
-  if(q('salaryPaymentsBody')){
-    q('salaryPaymentsBody').innerHTML=salaryPayments.slice(0,30).map(p=>{
-      const emp=employees.find(e=>e.id===p.employee_id);
-      return `<tr><td>${esc(p.payment_date)}</td><td>${esc(emp?.name||'—')}</td><td>${esc(p.period||'—')}</td><td><b>${money(p.amount)}</b></td><td>${esc(financeAccountName(p.account_id))}</td></tr>`;
-    }).join('')||'<tr><td colspan="5">لا توجد دفعات مرتبات بعد.</td></tr>';
-  }
+  /* (0162) سجل المرتبات الكامل: فلترة خادمية + إجمالي + تحديد + إرسال للشيت
+     — كان هنا «آخر 30 دفعة» بلا فلترة ولا مجموعة، فلا يُرى مرتب قديم */
+  onSalaryRegisterRender();
 }
 
 /* (20261007c) إدارة الموظفين من نافذة المرتبات */
@@ -9992,10 +9994,540 @@ function mirrorExpenseDeletedLocally(x){
   const j=expenses.findIndex(e=>e.id===x.id); if(j>-1) expenses.splice(j,1);
   renderExpensesList(); fetchExpensesTotal(true); /* (0169) */ refreshAfterLocalUpdate();
 }
+/* ═══════════════════════════════════════════════════════════════════════
+   (0162) سجل المرتبات — قائمة كاملة بدل «آخر 30 دفعة» بلا فلترة
+
+   الشاشة القديمة كانت تعرض 30 سطراً فقط بلا فلترة ولا تحديد ولا إجمالي،
+   فالمرتب القديم لا يُرى، ومجموع الشهر لا يُعرف إلا بالحساب اليدوي.
+   هنا نسخةٌ من سجل المصاريف (التي يعرفها المالك): فلترة خادمية، إجمالي
+   يُحسب على **كل** المطابق لا على المعروض، تحديد سطر وشريط أدوات، عمود
+   «في الشيت»، وزر إرسال للمدير.
+
+   ⚠️ أزرار التعديل/الحذف/الإرسال تحتاج كائنات 0162 في القاعدة. لذلك
+   يفحص التطبيق وجودها مرة واحدة (salaryCaps) ويُخفي ما لا يعمل بدل أن
+   يعرض زراً ميتاً؛ وحتى تُشغَّل الهجرة تبقى الشاشة **قائمة قراءة** بتسمية
+   صريحة في أعلى السجل.
+   ═══════════════════════════════════════════════════════════════════════ */
+let salaryListCache=[], salaryListLimit=500, salaryListInit=false, salarySearchTimer=null;
+let salaryListDirty=true, salaryListLoaded=false;
+let selectedSalaryId=null, __lastSalaryRowClick={id:null,t:0}, editingSalaryId=null;
+let salaryTotalsState={sig:null,sum:0,fixed:null,comm:null,ok:false,loading:false};
+let salaryAggSupported=null;                 /* null=لم يُجرَّب · true · false */
+let salaryCaps={applied:null};               /* null=لم يُفحص · true=0162 مُشغَّلة */
+let salarySheetSentMap=new Map(), salarySheetPending=new Set(), salarySheetSel=new Set();
+
+function salaryRangeDates(kind){
+  const iso=new Date().toISOString();
+  if(kind==='month') return [iso.slice(0,8)+'01', iso.slice(0,10)];
+  if(kind==='30d')   return [new Date(Date.now()-29*864e5).toISOString().slice(0,10), iso.slice(0,10)];
+  if(kind==='year')  return [iso.slice(0,5)+'01-01', iso.slice(0,10)];
+  return ['', ''];
+}
+function initSalaryFilters(){
+  if(salaryListInit) return; salaryListInit=true;
+  const [f,t]=salaryRangeDates('month');
+  if(q('salaryListFrom')) q('salaryListFrom').value=f;
+  if(q('salaryListTo'))   q('salaryListTo').value=t;
+  fillSalaryFilterOptions();
+  updateSalaryRangeChips();
+}
+function fillSalaryFilterOptions(){
+  const sel=q('salaryListEmployee');
+  if(sel){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">كل الموظفين</option>'+(employees||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ar')).map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    if(cur && [...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  }
+  const acc=q('salaryListAccount');
+  if(acc){
+    const cur=acc.value;
+    acc.innerHTML='<option value="">كل الحسابات</option>'+(financeAccounts||[]).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+    if(cur && [...acc.options].some(o=>o.value===cur)) acc.value=cur;
+  }
+}
+function updateSalaryRangeChips(){
+  const from=q('salaryListFrom')?.value, to=q('salaryListTo')?.value;
+  let active='';
+  for(const k of ['month','30d','year','all']){ const [f,t]=salaryRangeDates(k); if(f===from && t===to){ active=k; break; } }
+  document.querySelectorAll('.sal-range-chip').forEach(b=>b.classList.toggle('active', b.dataset.range===active));
+}
+function setSalaryRange(kind){
+  const [f,t]=salaryRangeDates(kind);
+  if(q('salaryListFrom')) q('salaryListFrom').value=f;
+  if(q('salaryListTo'))   q('salaryListTo').value=t;
+  updateSalaryRangeChips();
+  fetchSalaryPaymentsList();
+}
+function resetSalaryFilters(){
+  const [f,t]=salaryRangeDates('month');
+  if(q('salaryListFrom')) q('salaryListFrom').value=f;
+  if(q('salaryListTo'))   q('salaryListTo').value=t;
+  if(q('salaryListEmployee')) q('salaryListEmployee').value='';
+  if(q('salaryListAccount'))  q('salaryListAccount').value='';
+  if(q('salaryListKind'))     q('salaryListKind').value='';
+  if(q('salaryListSearch'))   q('salaryListSearch').value='';
+  salaryAggSupported=null;      /* إعادة تعيين = محاولة جمع جديدة */
+  updateSalaryRangeChips();
+  fetchSalaryPaymentsList();
+}
+function debouncedSalarySearch(){ clearTimeout(salarySearchTimer); salarySearchTimer=setTimeout(fetchSalaryPaymentsList,250); }
+/* سلسلة الفلترة في مكان واحد: القائمة والإجمالي يستخدمانها حرفياً */
+function salaryFilterParts(){
+  const parts=[];
+  const from=q('salaryListFrom')?.value, to=q('salaryListTo')?.value;
+  const emp=q('salaryListEmployee')?.value, acc=q('salaryListAccount')?.value;
+  const kind=q('salaryListKind')?.value, sr=q('salaryListSearch')?.value?.trim();
+  if(from) parts.push('payment_date=gte.'+from);
+  if(to)   parts.push('payment_date=lte.'+to);
+  if(emp)  parts.push('employee_id=eq.'+emp);
+  if(acc)  parts.push('account_id=eq.'+acc);
+  /* حقل النوع لا يُطلَب قبل وجوده — وإلا رفض الخادم الطلب كلّه */
+  if(kind && salaryCaps.applied) parts.push('kind=eq.'+kind);
+  if(sr){
+    const enc=encodeURIComponent(sr);
+    parts.push('or=(notes.ilike.*'+enc+'*,period.ilike.*'+enc+'*)');
+  }
+  return parts;
+}
+function salaryFilterSignature(){ return salaryFilterParts().join('&'); }
+async function fetchSalaryPaymentsList(){
+  initSalaryFilters();
+  /* القدرات أولاً: فلتر النوع لا يُرسَل قبل وجود العمود، والعمود لا يُرسم
+     قبل التأكد — وإلا وصل طلب فيه kind لجدول لا يعرفه الخادم فيُرفض كلّه */
+  await ensureSalaryCaps();
+  fillSalaryFilterOptions();          /* الفروع/الحسابات قد تصل بعد فتح التبويب */
+  const qs=['select=*&order=payment_date.desc,created_at.desc,id.asc',...salaryFilterParts(),'limit='+salaryListLimit];
+  fetchSalaryTotals();                /* متوازٍ — لا يعطّل القائمة */
+  try{
+    salaryListCache=await api('pos_salary_payments',{qs:'?'+qs.join('&')})||[];
+    salaryListLoaded=true;
+    await loadSalarySheetStatus();
+    renderSalaryPaymentsList();
+  }catch(err){
+    console.warn('فشل جلب سجل المرتبات — تُعرض آخر قائمة متاحة',err);
+    if(q('salariesListInfo')) q('salariesListInfo').textContent='⚠ تعذّر الجلب — تُعرض آخر نتيجة متاحة';
+  }
+}
+function salariesLoadMore(){ salaryListLimit+=500; fetchSalaryPaymentsList(); }
+
+/* ── الإجمالي على كل المطابق (نفس مبدأ 0169) ───────────────────────────
+   القائمة تُصفَّح، فمجموعها «إجمالي المعروض» فقط. رقم أعلى الشاشة يُقرأ
+   كأنه الحقيقة ⇒ إن تعذّر جمع الخادم نقولها في الشريط نفسه ولا نخترع رقماً.
+   والنوعان (قار/نسبة) يُجمعان على الخادم أيضاً — وهما غاية السجل. */
+function salaryLoadedTotal(){ return salaryListCache.reduce((a,x)=>a+Number(x.amount||0),0); }
+function salaryLoadedSplit(){
+  return salaryListCache.reduce((acc,x)=>{
+    if(String(x.kind||'fixed')==='commission') acc.comm+=Number(x.amount||0);
+    else acc.fixed+=Number(x.amount||0);
+    return acc;
+  },{fixed:0,comm:0});
+}
+async function fetchSalaryTotals(force){
+  const sig=salaryFilterSignature();
+  if(!force && salaryTotalsState.sig===sig && !salaryTotalsState.loading) return;
+  if(salaryAggSupported===false && !force){
+    salaryTotalsState={sig,sum:0,fixed:null,comm:null,ok:false,loading:false};
+    renderSalaryTotalsBar(); return;
+  }
+  salaryTotalsState={...salaryTotalsState,sig,loading:true};
+  renderSalaryTotalsBar();
+  const base=salaryFilterParts().join('&');
+  const sumQs=(kind)=>['select=amount.sum()',base,kind?'kind=eq.'+kind:''].filter(Boolean).join('&');
+  try{
+    if(salaryCaps.applied){
+      const [a,b]=await Promise.all([
+        api('pos_salary_payments',{qs:'?'+sumQs('fixed')}),
+        api('pos_salary_payments',{qs:'?'+sumQs('commission')})
+      ]);
+      const fx=Number((a&&a[0]&&a[0].sum)??0), cm=Number((b&&b[0]&&b[0].sum)??0);
+      salaryAggSupported=true;
+      salaryTotalsState={sig,sum:(Number.isFinite(fx)?fx:0)+(Number.isFinite(cm)?cm:0),
+                         fixed:Number.isFinite(fx)?fx:0, comm:Number.isFinite(cm)?cm:0,
+                         ok:true,loading:false};
+    }else{
+      const rows=await api('pos_salary_payments',{qs:'?select=amount.sum()'+(base?'&'+base:'')});
+      const v=Number((rows&&rows[0]&&rows[0].sum)??0);
+      salaryAggSupported=true;
+      salaryTotalsState={sig,sum:Number.isFinite(v)?v:0,fixed:null,comm:null,ok:true,loading:false};
+    }
+  }catch(err){
+    /* «الخادم لا يجمع» ⇒ نحفظه فلا نكرّر الطلب. انقطاع الشبكة عابر ⇒ لا. */
+    if(!window.__netDown) salaryAggSupported=false;
+    salaryTotalsState={sig,sum:0,fixed:null,comm:null,ok:false,loading:false};
+    console.warn('[salary] جمع الإجمالي على الخادم غير متاح',err);
+  }
+  renderSalaryTotalsBar();
+}
+function renderSalaryTotalsBar(){
+  const bar=q('salaryTotalsBar'); if(!bar) return;
+  const cur=esc(APP_CONFIG.currency);
+  const st=salaryTotalsState;
+  const live=salaryFilterSignature();
+  const n=salaryListCache.length, more=n>=salaryListLimit;
+  const chip=(lbl,val)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--card)"><div class="mini">${lbl}</div><b style="font-size:15px">${val}</b></div>`;
+  const grid=(inner)=>`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">${inner}</div>`;
+  bar.style.display='';
+  if(st.sig!==live || st.loading){
+    bar.innerHTML=grid(chip('🧾 إجمالي المرتبات (حسب الفلترة)','…'))
+      +'<div class="mini" style="margin-top:4px">جارٍ حساب الإجمالي على الخادم من كل الصفوف المطابقة…</div>';
+    return;
+  }
+  if(st.ok){
+    const split = (st.fixed==null)
+      ? ''
+      : `<div class="mini" style="margin-top:4px">الفصل: مرتب قار ${money(st.fixed)} · نسبة مبيعات ${money(st.comm)} ${cur} — مجموعان محسوبان على الخادم من كل المطابق.</div>`;
+    bar.innerHTML=grid(chip('🧾 إجمالي المرتبات (حسب الفلترة)',money(st.sum)+' '+cur)
+        + (st.fixed==null?'':chip('💵 مرتب قار',money(st.fixed)+' '+cur)+chip('📈 نسبة مبيعات',money(st.comm)+' '+cur)))
+      +`<div class="mini" style="margin-top:4px">محسوب على الخادم من <b>كل</b> الصفوف المطابقة للفلترة — لا من المعروض وحده${more?` (المعروض ${n} صفاً والمزيد موجود)`:''}.${split}</div>`;
+    return;
+  }
+  const sp=salaryLoadedSplit();
+  bar.innerHTML=grid(chip('🧾 إجمالي المعروض (ليس إجمالي الفلترة)',money(salaryLoadedTotal())+' '+cur)
+      + (salaryCaps.applied?chip('💵 قار (من المعروض)',money(sp.fixed)+' '+cur)+chip('📈 نسبة (من المعروض)',money(sp.comm)+' '+cur):''))
+    +`<div class="mini" style="margin-top:4px">⚠ هذا مجموع الصفوف المحمَّلة فقط (${n}${more?'+':''}) — والخادم لا يوفّر جمعاً كاملاً الآن، فقد يكون أقل من الحقيقة. تحقّق قبل أن تبني عليه قراراً.</div>`;
+}
+
+/* ── فحص قدرات القاعدة (0162) — مرة واحدة، ويفشل مغلقاً ─────────────── */
+async function ensureSalaryCaps(force){
+  if(salaryCaps.applied!==null && !force) return salaryCaps;
+  try{
+    await api('pos_sheet_salary_sent',{qs:'?select=payment_id&limit=1'});
+    salaryCaps={applied:true};
+  }catch(err){
+    const msg=String(err&&err.message||err);
+    /* جدول غائب ⇒ 0162 لم تُشغَّل (نُخفي الأزرار). خطأ شبكة ⇒ لا نستنتج
+       شيئاً ونتيح محاولة أخرى عند الفتح القادم بدل إخفاء ما يعمل. */
+    if(/does not exist|PGRST205|42P01|schema cache|Could not find the table/i.test(msg)) salaryCaps={applied:false};
+    else { console.warn('[salary] تعذّر فحص قدرات 0162',err); return salaryCaps; }
+  }
+  applySalaryCapabilitiesUi();
+  return salaryCaps;
+}
+function applySalaryCapabilitiesUi(){
+  const on=!!salaryCaps.applied;
+  q('salaryKindWrap')?.classList.toggle('hidden',!on);
+  q('salaryEditKindWrap')?.classList.toggle('hidden',!on);
+  q('salaryListKind')?.classList.toggle('hidden',!on);
+  q('salKindTh')?.classList.toggle('hidden',!on);
+  q('empSheetTh')?.classList.toggle('hidden',!on);
+  q('salariesEditBtn')?.classList.toggle('hidden',!on);
+  q('salariesDeleteBtn')?.classList.toggle('hidden',!on);
+  q('salariesSendSheetBtn')?.classList.toggle('hidden',!(on && isManager()));
+  const note=q('salaryCapsNote');
+  if(note){
+    const role=String(currentRole?.role||'');
+    if(on) note.textContent='';
+    else if(['admin','programmer','accountant'].includes(role))
+      note.textContent='التعديل والحذف والإرسال للشيت تُفعَّل بعد تشغيل ملف 0162 على قاعدة البيانات — حتى ذلك الحين هذا السجل للقراءة فقط.';
+    else note.textContent='';
+  }
+  if(q('salaryPaymentsBody')) renderSalaryPaymentsList();
+}
+
+/* ── حالة «في الشيت» ────────────────────────────────────────────────── */
+async function loadSalarySheetStatus(){
+  if(!canSeeSheetColumn() || !salaryCaps.applied){ salarySheetSentMap=new Map(); salarySheetPending=new Set(); return; }
+  try{
+    const rows=await api('pos_sheet_salary_sent',{qs:'?select=payment_id,sent_at&limit=10000'});
+    salarySheetSentMap=new Map((rows||[]).map(r=>[r.payment_id,String(r.sent_at)]));
+  }catch(e){ salarySheetSentMap=new Map(); }
+  try{
+    const p=await api('pos_sheet_salary_outbox',{qs:'?select=payment_id&limit=10000'});
+    salarySheetPending=new Set((p||[]).map(r=>r.payment_id));
+  }catch(e){ salarySheetPending=new Set(); }
+}
+function salarySheetToggle(cb){
+  const id=cb?.dataset?.salpayid; if(!id) return;
+  if(cb.checked) salarySheetSel.add(id); else salarySheetSel.delete(id);
+}
+async function sendSalariesToSheet(){
+  if(!isManager()){ toast('هذه العملية للمدير والمبرمج','warn'); return; }
+  if(!salaryCaps.applied){ toast('الإرسال إلى الشيت يُفعَّل بعد تشغيل ملف 0162 على قاعدة البيانات','warn'); return; }
+  const ids=[...salarySheetSel];
+  if(!ids.length){ toast('أوّلاً اوّشّر المرتبات المراد إرسالها (المربّعات في عمود «في الشيت»)','warn'); return; }
+  const btn=q('salariesSendSheetBtn'); if(btn) btn.disabled=true;
+  try{
+    const res=await rpc('pos_sheet_salary_send',{p_ids:ids});
+    if(res&&res.ok){
+      ids.forEach(id=>{ salarySheetPending.add(id); salarySheetSel.delete(id); });
+      renderSalaryPaymentsList();
+      const skipped=(res.skipped||[]).length;
+      toast(`أُرسل ${res.queued} دفعة — التأكيد النهائي في الدورة الساعية${skipped?` · تُخطّي ${skipped}`:''}`, skipped?'warn':'success');
+      if(skipped) showSalarySkipped(res.skipped);
+    }else{
+      toast((res&&res.error)||'تعذّر الإرسال','error');
+      if(res&&res.skipped&&res.skipped.length) showSalarySkipped(res.skipped);
+    }
+  }catch(err){ console.error(err); toast('تعذّر الإرسال: '+friendlyError(err),'error'); }
+  finally{ if(btn) btn.disabled=false; }
+}
+function showSalarySkipped(list){
+  const lines=[...new Set((list||[]).map(s=>`${s.employee||'—'} — ${s.reason||''}`))];
+  if(lines.length) alert('لم يُرسَل شيء لهؤلاء:\n'+lines.join('\n')+'\n\nاملأ «اسم الشيت» من جدول الموظفين (كما هو مكتوب في عمود J) ثم أعد المحاولة. لا يُخمَّن الاسم أبداً.');
+}
+
+/* ── الصلاحيات: نفس قواعد المصاريف، والخادم يتحقق مرة أخرى ─────────── */
+function canEditSalaryRow(x){
+  if(!salaryCaps.applied || !x) return false;
+  const role=String(currentRole?.role||'');
+  if(['admin','programmer','accountant'].includes(role)) return true;   /* 0158: صريحة لا رتبة */
+  if(!x.created_by || String(x.created_by)!==String(appUser?.identifier||'')) return false;
+  return String(x.created_at||'').slice(0,10)===expenseTodayUTC();     /* created_at لا payment_date */
+}
+function canDeleteSalaryRow(){ return !!salaryCaps.applied && isManager(); }  /* admin/programmer */
+
+/* ── الرسم ──────────────────────────────────────────────────────────── */
+function salaryKindLabel(k){ return String(k||'fixed')==='commission' ? 'نسبة مبيعات' : 'مرتب قار'; }
+function renderSalaryPaymentsList(){
+  const body=q('salaryPaymentsBody'); if(!body) return;
+  renderSalaryTotalsBar();
+  const empMap=new Map((employees||[]).map(e=>[e.id,e.name]));
+  const accMap=new Map((financeAccounts||[]).map(a=>[a.id,a.name]));
+  const showKind=!!salaryCaps.applied;
+  const showSheet=canSeeSheetColumn();
+  const isAdmin=isManager();
+  q('salKindTh')?.classList.toggle('hidden',!showKind);
+  q('salSheetTh')?.classList.toggle('hidden',!showSheet);
+  q('salaryListKind')?.classList.toggle('hidden',!showKind);
+  q('salariesSendSheetBtn')?.classList.toggle('hidden',!(isAdmin&&salaryCaps.applied));
+  q('salariesEditBtn')?.classList.toggle('hidden',!salaryCaps.applied);
+  q('salariesDeleteBtn')?.classList.toggle('hidden',!(salaryCaps.applied&&isAdmin));
+  const cols=7+(showKind?1:0)+(showSheet?1:0);
+  /* (0162) قبل وصول الجلب الأول (أو بلا اتصال) نعرض ما في الذاكرة —
+     جدول فارغ لثانية يُقرأ «لا مرتبات»، وذاكرةٌ عندها الدفعات كلها */
+  if(!salaryListCache.length && !salaryListLoaded && (salaryPayments||[]).length)
+    salaryListCache=(salaryPayments||[]).slice(0, salaryListLimit);
+  const rangeAll = q('salaryListFrom')?.value==='' && q('salaryListTo')?.value==='';
+  if(!salaryListCache.length){
+    const role=String(currentRole?.role||'');
+    const hint = (!rangeAll && !isAdmin && ['accountant'].includes(role))
+      ? 'قراءة المرتبات في القاعدة للمدير والمبرمج والمحاسب فقط — وربما لم تُوسَّع السياسة بعد (0162).'
+      : (!rangeAll && (salaryPayments||[]).length)
+        ? `لا دفعات في الفترة المحددة — عندك ${salaryPayments.length} دفعة في سجلات أخرى. اضغط «الكل».`
+        : 'لا توجد دفعات مرتبات مطابقة.';
+    body.innerHTML=`<tr><td colspan="${cols}">${esc(hint)}</td></tr>`;
+    if(q('salaryTotalFoot')) q('salaryTotalFoot').innerHTML=`<tr><td colspan="${cols}" class="mini">—</td></tr>`;
+    if(q('salariesListInfo')) q('salariesListInfo').textContent='النتائج: 0';
+    q('salariesMoreBtn')?.classList.add('hidden');
+    if(selectedSalaryId) selectedSalaryId=null;
+    updateSalaryToolbar();
+    return;
+  }
+  const total=salaryLoadedTotal();
+  const sp=salaryLoadedSplit();
+  body.innerHTML=salaryListCache.map(x=>{
+    const safe=String(x.id).replace(/'/g,"\\'");
+    const canEdit=canEditSalaryRow(x), canDel=canDeleteSalaryRow();
+    const emp=empMap.get(x.employee_id);
+    const sentAt=salarySheetSentMap.get(x.id), pending=salarySheetPending.has(x.id);
+    const sheetCell = sentAt
+      ? `<span class="exp-sent-ok" title="في شيت SmartBalance منذ ${esc(sentAt)}">✓ ${esc(String(sentAt).slice(0,10))}</span>`
+      : pending
+      ? `<span class="exp-sent-pend" title="أُرسل — التأكيد النهائي في الدورة الساعية">🕓 قيد التأكيد</span>`
+      : (isAdmin && salaryCaps.applied
+        ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-salpayid="${x.id}" ${salarySheetSel.has(x.id)?'checked':''} onchange="salarySheetToggle(this)"></label><span class="muted">—</span>`
+        : '<span class="muted">—</span>');
+    const sheetTd = showSheet?`<td class="exp-sheet">${sheetCell}</td>`:'';
+    const kindTd = showKind?`<td><span class="chip" title="نوع الدفعة كما سيُكتب في عمود K بالشيت">${esc(salaryKindLabel(x.kind))}</span></td>`:'';
+    const acts=[
+      canEdit?`<button class="ibtn" type="button" title="تعديل" onclick="event.stopPropagation();editSalaryPayment('${safe}')"><i class="ti ti-pencil"></i></button>`:'',
+      canDel?`<button class="ibtn ibtn-danger" type="button" title="حذف" onclick="event.stopPropagation();deleteSalaryPayment('${safe}')"><i class="ti ti-trash"></i></button>`:''
+    ].join('');
+    return `<tr data-id="${safe}" class="${selectedSalaryId===x.id?'selected-row':''}" onclick="selectSalaryRow('${safe}')" title="نقرة: تحديد · نقرتان: مشاهدة">`
+      +`<td class="sal-date">${esc(x.payment_date)}</td>`
+      +`<td><b>${esc(emp||'—')}</b>${x.notes?`<div class="mini exp-sub">${esc(x.notes)}</div>`:''}</td>`
+      +kindTd
+      +`<td>${esc(x.period||'—')}</td>`
+      +`<td class="sal-amt"><b>${money(x.amount)}</b></td>`
+      +`<td>${esc(accMap.get(x.account_id)||'—')}</td>`
+      +`<td class="sal-by">${esc(x.created_by||'—')}</td>`
+      +sheetTd
+      +`<td class="sal-act">${acts}</td></tr>`;
+  }).join('');
+  const foot=salaryCaps.applied
+    ? `<tr><td colspan="2"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="${cols-3}" class="mini">قار ${money(sp.fixed)} · نسبة ${money(sp.comm)} — ${salaryListCache.length} دفعة</td></tr>`
+    : `<tr><td colspan="2"><b>إجمالي المعروض</b></td><td><b>${money(total)} ${APP_CONFIG.currency}</b></td><td colspan="${cols-3}" class="mini">${salaryListCache.length} دفعة</td></tr>`;
+  if(q('salaryTotalFoot')) q('salaryTotalFoot').innerHTML=foot;
+  if(q('salariesListInfo')) q('salariesListInfo').textContent=`النتائج: ${salaryListCache.length}${salaryListCache.length>=salaryListLimit?'+ (يوجد المزيد)':''}`;
+  q('salariesMoreBtn')?.classList.toggle('hidden', salaryListCache.length<salaryListLimit);
+  updateSalaryToolbar();
+}
+
+/* ── التحديد وشريط الأدوات (نفس سلوك المصاريف) ─────────────────────── */
+function selectSalaryRow(id){
+  const now=Date.now();
+  if(__lastSalaryRowClick.id===id && now-__lastSalaryRowClick.t<600){
+    __lastSalaryRowClick={id:null,t:0};
+    selectedSalaryId=id; markSalaryRowSelectedUi(); updateSalaryToolbar();
+    viewSalaryPayment(id);
+    return;
+  }
+  __lastSalaryRowClick={id, t:now};
+  selectedSalaryId=(selectedSalaryId===id)?null:id;
+  markSalaryRowSelectedUi(); updateSalaryToolbar();
+}
+function markSalaryRowSelectedUi(){
+  const body=q('salaryPaymentsBody'); if(!body||!body.querySelectorAll) return;
+  [...body.querySelectorAll('tr[data-id]')].forEach(tr=>tr.classList.toggle('selected-row', String(tr.dataset.id)===String(selectedSalaryId)));
+}
+function selectedSalaryObj(){
+  return selectedSalaryId ? (salaryListCache.find(x=>x.id===selectedSalaryId)||(salaryPayments||[]).find(x=>x.id===selectedSalaryId)||null) : null;
+}
+function salaryToolbarAction(kind){
+  const x=selectedSalaryObj();
+  if(!x){ toast('حدد دفعة من السجل أولاً','warn'); return; }
+  if(kind==='view'){ viewSalaryPayment(x.id); return; }
+  if(kind==='edit'){
+    if(!canEditSalaryRow(x)){ toast('لا يمكنك تعديل هذه الدفعة — المدير والمبرمج والمحاسب، أو مَن سجّلها في نفس يومها فقط','warn'); return; }
+    editSalaryPayment(x.id); return;
+  }
+  if(kind==='delete'){
+    if(!canDeleteSalaryRow()){ toast('الحذف للمدير والمبرمج','warn'); return; }
+    deleteSalaryPayment(x.id); return;
+  }
+}
+function updateSalaryToolbar(){
+  const x=selectedSalaryObj();
+  const vb=q('salariesViewBtn'), eb=q('salariesEditBtn'), db=q('salariesDeleteBtn'), info=q('salariesSelInfo');
+  if(vb) vb.disabled=!x;
+  if(eb) eb.disabled=!(x&&canEditSalaryRow(x));
+  if(db) db.disabled=!(x&&canDeleteSalaryRow());
+  if(info) info.textContent=x?`المحدد: ${(employees||[]).find(e=>e.id===x.employee_id)?.name||'—'} · ${money(x.amount)}`:'اضغط على سطر لتحديده (نقرتان = مشاهدة)';
+}
+function viewSalaryPayment(id){
+  const x=salaryListCache.find(e=>e.id===id)||(salaryPayments||[]).find(e=>e.id===id);
+  if(!x){ toast('لم يتم العثور على الدفعة','warn'); return; }
+  const emp=(employees||[]).find(e=>e.id===x.employee_id);
+  const acc=(financeAccounts||[]).find(a=>a.id===x.account_id);
+  const sentAt=salarySheetSentMap.get(x.id), pending=salarySheetPending.has(x.id);
+  const sheetState=sentAt?`✓ في الشيت منذ ${String(sentAt).slice(0,10)}`:(pending?'🕓 قيد التأكيد':'غير مُرسَل');
+  const row=(k,v)=>`<div class="row" style="justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="muted" style="white-space:nowrap">${k}</span><b style="text-align:left">${v}</b></div>`;
+  if(q('salViewSub')) q('salViewSub').textContent=`${emp?.name||'—'} · ${x.payment_date||''}`;
+  if(q('salViewBody')) q('salViewBody').innerHTML=[
+    row('التاريخ', esc(x.payment_date||'—')),
+    row('الموظف', esc(emp?.name||'—')),
+    row('اسمه في الشيت', esc(emp?.sheet_employee_name||'— (غير مربوط)')),
+    salaryCaps.applied?row('نوع الدفعة', esc(salaryKindLabel(x.kind))):'',
+    row('المبلغ', money(x.amount)+' '+APP_CONFIG.currency),
+    row('الخزينة / الحساب', esc(acc?.name||'—')),
+    row('الفترة', esc(x.period||'—')),
+    row('مَن سجّل', esc(x.created_by||'—')),
+    row('وقت التسجيل', esc(String(x.created_at||'').replace('T',' ').slice(0,19))),
+    canSeeSheetColumn()?row('شيت SmartBalance', esc(sheetState)):'',
+    x.notes?row('ملاحظات', esc(x.notes)):''
+  ].filter(Boolean).join('');
+  q('salViewEditBtn')?.classList.toggle('hidden', !canEditSalaryRow(x));
+  q('salViewDeleteBtn')?.classList.toggle('hidden', !canDeleteSalaryRow());
+  q('salaryViewModal')?.classList.add('show');
+}
+function editSalaryPayment(id){
+  const x=salaryListCache.find(e=>e.id===id)||(salaryPayments||[]).find(e=>e.id===id);
+  if(!x){ toast('لم يتم العثور على الدفعة','warn'); return; }
+  if(!canEditSalaryRow(x)){ toast('لا يمكنك تعديل هذه الدفعة','warn'); return; }
+  editingSalaryId=id;
+  if(q('salaryEditEmployee')) q('salaryEditEmployee').innerHTML=(employees||[]).map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('');
+  if(q('salaryEditAccount'))  q('salaryEditAccount').innerHTML=(financeAccounts||[]).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  if(q('salaryEditDate'))   q('salaryEditDate').value=x.payment_date||'';
+  if(q('salaryEditAmount')) q('salaryEditAmount').value=Number(x.amount||0);
+  if(q('salaryEditEmployee')) q('salaryEditEmployee').value=x.employee_id||'';
+  if(q('salaryEditAccount'))  q('salaryEditAccount').value=x.account_id||'';
+  if(q('salaryEditPeriod')) q('salaryEditPeriod').value=x.period||'';
+  if(q('salaryEditNotes'))  q('salaryEditNotes').value=x.notes||'';
+  q('salaryEditKindWrap')?.classList.toggle('hidden',!salaryCaps.applied);
+  if(q('salaryEditKind')) q('salaryEditKind').value=String(x.kind||'fixed');
+  q('salaryEditModal')?.classList.add('show');
+}
+function mirrorSalaryMovementSwap(oldRow,newRow){
+  const oldAcc=financeAccounts.find(a=>a.id===oldRow.account_id);
+  if(oldAcc) oldAcc.balance=Number(oldAcc.balance||0)+Number(oldRow.amount||0);
+  for(let i=financeMovements.length-1;i>=0;i--)
+    if(financeMovements[i].reference_table==='pos_salary_payments' && financeMovements[i].reference_id===oldRow.id) financeMovements.splice(i,1);
+  localMovement(newRow.account_id,'out','salary',newRow.amount,newRow.payment_date,'pos_salary_payments',newRow.id,'مرتب');
+}
+function mirrorSalaryUpdatedLocally(updated){
+  const old=salaryListCache.find(e=>e.id===updated.id)||(salaryPayments||[]).find(e=>e.id===updated.id);
+  if(old) mirrorSalaryMovementSwap(old,updated);
+  [salaryPayments,salaryListCache].forEach(arr=>{ const i=arr.findIndex(e=>e.id===updated.id); if(i>-1) arr[i]={...arr[i],...updated}; });
+  renderSalaryPaymentsList(); fetchSalaryTotals(true); refreshAfterLocalUpdate();
+}
+function mirrorSalaryDeletedLocally(x){
+  const acc=financeAccounts.find(a=>a.id===x.account_id);
+  if(acc) acc.balance=Number(acc.balance||0)+Number(x.amount||0);
+  for(let i=financeMovements.length-1;i>=0;i--)
+    if(financeMovements[i].reference_table==='pos_salary_payments' && financeMovements[i].reference_id===x.id) financeMovements.splice(i,1);
+  salaryListCache=salaryListCache.filter(e=>e.id!==x.id);
+  const j=(salaryPayments||[]).findIndex(e=>e.id===x.id); if(j>-1) salaryPayments.splice(j,1);
+  if(selectedSalaryId===x.id) selectedSalaryId=null;
+  renderSalaryPaymentsList(); fetchSalaryTotals(true); refreshAfterLocalUpdate();
+}
+async function deleteSalaryPayment(id){
+  if(!canDeleteSalaryRow()){ toast('الحذف للمدير والمبرمج','warn'); return; }
+  const x=salaryListCache.find(e=>e.id===id)||(salaryPayments||[]).find(e=>e.id===id);
+  if(!x){ toast('لم يتم العثور على الدفعة','warn'); return; }
+  const emp=(employees||[]).find(e=>e.id===x.employee_id)?.name||'موظف';
+  if(!confirm(`حذف دفعة مرتب ${emp} بمبلغ ${money(x.amount)} ${APP_CONFIG.currency}؟\nستُحذف مع حركتها المالية في نفس المعاملة فيعود المبلغ لرصيد الخزينة، ويُحذف سطرها من الشيت في الدورة الساعية.`)) return;
+  if(window.__busy) return; window.__busy=true;
+  try{
+    showLoading(true);
+    await rpc('pos_delete_salary_payment',{p_payment_id:id});
+    logAction('salary_delete','pos_salary_payments',id,`حذف مرتب: ${emp} - ${money(x.amount)} ${APP_CONFIG.currency} - بواسطة ${appUser?.identifier||''}`);
+    mirrorSalaryDeletedLocally(x);
+    toast('تم حذف الدفعة وإرجاع المبلغ لرصيد الخزينة','success');
+  }catch(err){ console.error(err); toast('خطأ في حذف المرتب: '+friendlyError(err),'error'); }
+  finally{ showLoading(false); window.__busy=false; }
+}
+/* ── نافذة فتح التبويب: فحص القدرات + جلب عند الحاجة فقط ───────────── */
+function onSalaryRegisterRender(){
+  ensureSalaryCaps();
+  initSalaryFilters();
+  renderSalaryPaymentsList();
+  if(!salaryListLoaded || salaryListDirty){ salaryListDirty=false; salaryListLoaded=true; fetchSalaryPaymentsList(); }
+}
+/* ── حفظ تعديل الدفعة: دالة definer واحدة تحدّث الدفعة وحركتها معاً ──── */
+q('salaryEditForm')?.addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(!editingSalaryId || window.__busy) return;
+  window.__busy=true;
+  try{
+    showLoading(true);
+    const patch={
+      employee_id: q('salaryEditEmployee').value,
+      account_id:  q('salaryEditAccount').value,
+      payment_date:q('salaryEditDate').value,
+      amount:      moneyVal(q('salaryEditAmount').value),
+      period:      q('salaryEditPeriod').value.trim()||null,
+      notes:       q('salaryEditNotes').value.trim()||null
+    };
+    if(salaryCaps.applied) patch.kind=(q('salaryEditKind')?.value==='commission'?'commission':'fixed');
+    validateAccountingOutflow('salary', patch.amount);
+    const updated=await rpc('pos_update_salary_payment',{p_payment_id:editingSalaryId,p_payment:patch});
+    const emp=(employees||[]).find(x=>x.id===updated.employee_id)?.name||'موظف';
+    logAction('salary_edit','pos_salary_payments',editingSalaryId,`تعديل مرتب: ${emp} - ${money(updated.amount)} ${APP_CONFIG.currency} - بواسطة ${appUser?.identifier||''}`);
+    mirrorSalaryUpdatedLocally(updated);
+    q('salaryEditModal')?.classList.remove('show'); editingSalaryId=null;
+    toast('تم تعديل الدفعة وتحديث الحركة المالية','success');
+  }catch(err){ console.error(err); toast('خطأ في تعديل المرتب: '+friendlyError(err),'error'); }
+  finally{ showLoading(false); window.__busy=false; }
+});
+
+/* ── ربط اسم الموظف باسم الشيت (يُملأ من الشاشة — لا SQL يدوي) ──────── */
+async function saveEmployeeSheetName(id,value){
+  if(!isManager()){ toast('هذا الحقل للمدير والمبرمج','warn'); return; }
+  const name=String(value||'').trim();
+  try{
+    await api('pos_employees',{method:'PATCH',qs:`?id=eq.${id}`,body:{sheet_employee_name:name||null,updated_at:new Date().toISOString()}});
+    const e=(employees||[]).find(x=>x.id===id); if(e) e.sheet_employee_name=name||null;
+    toast(name?`اسم الشيت: ${name}`:'أُفرغ اسم الشيت — لن تُرسل دفعاته','success');
+    renderFinance();
+  }catch(err){ console.error(err); toast('تعذّر الحفظ: '+friendlyError(err),'error'); }
+}
+
 /* (20261007c) إضافة/تعديل موظف — وبعدها يظهر فوراً في جدول النافذة
    والقائمة المنسدلة (renderFinance يعيد ملأهما عبر fillSalarySelects) */
 q('employeeForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={name:q('employeeName').value.trim(),phone:q('employeePhone').value.trim()||null,position:q('employeePosition').value.trim()||null,monthly_salary:moneyVal(q('employeeMonthlySalary').value)};if(!body.name)throw new Error('اكتب اسم الموظف');if(!(body.monthly_salary>=0))throw new Error('المرتب الشهري لا يمكن أن يكون سالباً');if(editingEmployeeId){await api('pos_employees',{method:'PATCH',qs:`?id=eq.${editingEmployeeId}`,body:{...body,updated_at:new Date().toISOString()}});await logAction('employee_edit','pos_employees',editingEmployeeId,body.name);toast('تم تعديل الموظف');}else{const r=await api('pos_employees',{method:'POST',body});if(r&&r[0]&&!employees.some(x=>x.id===r[0].id)) employees.push(r[0]);await logAction('employee_add','pos_employees',(r&&r[0])?r[0].id:'',body.name);toast('تم حفظ الموظف');}resetEmployeeForm();await refreshParts(['employees']);}catch(err){console.error(err);toast('خطأ في حفظ الموظف: '+err.message+' — إن تكرّر: شغّل SQL 0124 (ضمان نافذة المرتبات)')}finally{showLoading(false);window.__busy=false}});
-q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:moneyVal(q('salaryAmount').value),notes:q('salaryNotes').value.trim()||null};if(!body.employee_id)throw new Error('اختر الموظف');if(!body.account_id)throw new Error('اختر الحساب المدفوع منه');validateAccountingOutflow('salary',body.amount);const r=await api('pos_salary_payments',{method:'POST',body});const empName=(employees.find(x=>x.id===body.employee_id)?.name)||'موظف';await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب '+empName);await logAction('salary_payment','pos_salary_payments',r[0].id,`${empName} - ${money(body.amount)} ${APP_CONFIG.currency}${body.period?' · فترة '+body.period:''}`);e.target.reset();setToday();toast('تم دفع المرتب');await refreshParts(['salaryPayments','financeAccounts','financeMovements']);}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('salaryPaymentForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const body={employee_id:q('salaryEmployee').value,account_id:q('salaryAccount').value,payment_date:q('salaryPaymentDate').value,period:q('salaryPeriod').value.trim()||null,amount:moneyVal(q('salaryAmount').value),notes:q('salaryNotes').value.trim()||null};
+    /* (0162) النوع يُرسَل فقط إن كان العمود موجوداً — وإلا رُفض الإدراج كلّه */
+    if(salaryCaps.applied) body.kind=(q('salaryKind')?.value==='commission'?'commission':'fixed');if(!body.employee_id)throw new Error('اختر الموظف');if(!body.account_id)throw new Error('اختر الحساب المدفوع منه');validateAccountingOutflow('salary',body.amount);const r=await api('pos_salary_payments',{method:'POST',body});const empName=(employees.find(x=>x.id===body.employee_id)?.name)||'موظف';await addFinanceMovement(body.account_id,'out','salary',body.amount,body.payment_date,'pos_salary_payments',r[0].id,'مرتب '+empName);await logAction('salary_payment','pos_salary_payments',r[0].id,`${empName} - ${money(body.amount)} ${APP_CONFIG.currency}${body.period?' · فترة '+body.period:''}`);e.target.reset();setToday();toast('تم دفع المرتب');salaryListDirty=true;await refreshParts(['salaryPayments','financeAccounts','financeMovements']);}catch(err){console.error(err);toast('خطأ في دفع المرتب: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 q('settingsForm')?.addEventListener('submit',e=>{
   e.preventDefault();
@@ -12558,6 +13090,7 @@ const AUDIT_ACTION_LABELS={
   settle_shortage:'تسوية عجز جرد', settle_surplus:'تسوية زيادة جرد',
   stock_orphan_cleanup:'تنظيف حركات يتيمة', pos_stock:'تصحيح مخزون',
   expense:'مصروف', expense_edit:'تعديل مصروف', expense_delete:'حذف مصروف',
+  salary_edit:'تعديل مرتب', salary_delete:'حذف مرتب',
   closing_update:'تعديل إقفال يوم',
   customer_add_quick:'إضافة زبون', customer_edit:'تعديل زبون',
   customer_delete:'حذف زبون', customer_deactivate:'تعطيل زبون',
