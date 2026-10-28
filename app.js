@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261025-1514';
+const APP_BUILD='b20261028-1233';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -9540,13 +9540,18 @@ q('financeRegisterForm')?.addEventListener('submit',e=>{e.preventDefault();loadF
 q('regMoreBtn')?.addEventListener('click',()=>loadFinanceRegister(false));
 q('regExportBtn')?.addEventListener('click',()=>exportFinanceRegisterCSV());
 q('regPrintBtn')?.addEventListener('click',()=>printFinanceRegister());
-q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const method=q('expensePaymentMethod')?.value||'cash'; if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; if(method==='cash') selectDefaultExpenseAccount(); const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null,created_by:appUser?.identifier||''}; if(!body.location_id)throw new Error('لا يوجد فرع مرتبط بالمستخدم'); if(!body.account_id)throw new Error('اختر الخزينة / الحساب'); validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await logAction('expense','pos_expenses',r[0].id,`${body.title} - ${money(body.amount)} ${APP_CONFIG.currency}`);await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset(); if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; selectDefaultExpenseAccount(); setToday();toast('تم حفظ المصروف'); expenses.unshift(r[0]); if(expensesListInit && expenseMatchesListFilters(r[0])){ expensesListCache.unshift(r[0]); renderExpensesList(); } localMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title); refreshAfterLocalUpdate();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
+q('expenseForm')?.addEventListener('submit',async e=>{e.preventDefault();if(window.__busy)return;window.__busy=true;try{showLoading(true);const method=q('expensePaymentMethod')?.value||'cash'; if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; if(method==='cash') selectDefaultExpenseAccount(); const body={expense_date:q('expenseDate').value,location_id:q('expenseLocation')?.value||appUser?.branch_id||null,account_id:q('expenseAccount').value,category_id:q('expenseCategory').value||null,title:q('expenseTitle').value.trim(),amount:moneyVal(q('expenseAmount').value),notes:q('expenseNotes').value.trim()||null,created_by:appUser?.identifier||''}; if(!body.location_id)throw new Error('لا يوجد فرع مرتبط بالمستخدم'); if(!body.account_id)throw new Error('اختر الخزينة / الحساب'); validateAccountingOutflow('expense',body.amount);const r=await api('pos_expenses',{method:'POST',body});await logAction('expense','pos_expenses',r[0].id,`${body.title} - ${money(body.amount)} ${APP_CONFIG.currency}`);await addFinanceMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title);e.target.reset(); if(q('expenseLocation')&&appUser?.branch_id) q('expenseLocation').value=appUser.branch_id; selectDefaultExpenseAccount(); setToday();toast('تم حفظ المصروف'); expenses.unshift(r[0]); if(expensesListInit && expenseMatchesListFilters(r[0])){ expensesListCache.unshift(r[0]); renderExpensesList(); fetchExpensesTotal(true); } localMovement(body.account_id,'out','expense',body.amount,body.expense_date,'pos_expenses',r[0].id,body.title); refreshAfterLocalUpdate();}catch(err){console.error(err);toast('خطأ في حفظ المصروف: '+err.message)}finally{showLoading(false);window.__busy=false}});
 
 /* ═════════════ سجل المصاريف: قائمة + فلاتر + تعديل/حذف ذرّي عبر RPC ═════════════
    القاعدة: من سجّل المصروف يعدّله في نفس يوم تسجيله فقط — والمدير يعدّل ويحذف الكل،
    والمحاسب يعدّله مطلقاً (0158).
    العبرة بـ created_at (وقت التسجيل) لا expense_date. الحذف لغير المدير ممنوع. */
 let expensesListCache=[], expensesListLimit=500, expensesListInit=false, expensesSearchTimer=null, editingExpenseId=null;
+/* (0169) إجمالي المصاريف حسب الفلترة — حالة منفصلة عن القائمة.
+   القائمة تُصفَّح (limit=500 ثم +500)، فمجموعها «إجمالي المعروض» فقط.
+   والرقم أعلى الشاشة يُقرأ كأنه الحقيقة — فلا يجوز أن ينقص بلا أن يقول. */
+let expensesTotalState={sig:null,sum:0,ok:false,loading:false};
+let expensesAggSupported=null; /* null=لم يُجرَّب · true=الخادم يجمع · false=لا يجمع */
 /* (0103) المصاريف → شيت SmartBalance: خريطة المؤكَّد (expense_id→sent_at) + المعلق محلياً + الاختيار */
 let expensesSheetSentMap=new Map(), expensesSheetPending=new Set(), expenseSheetSel=new Set();
 function expenseTodayUTC(){ return new Date().toISOString().slice(0,10); } /* مطابق لـ current_date بتوقيت الخادم */
@@ -9631,23 +9636,82 @@ function resetExpenseListFilters(){
   updateExpenseRangeChips();
   fetchExpensesList();
 }
+/* (0169) سلسلة الفلترة في مكان واحد: القائمة والإجمالي يستخدمانها حرفياً.
+   نسختان من نفس الشروط كانتا ستبتعدان مع أول تعديل — فيظهر إجمالي لفلتر آخر. */
+function expenseFilterParts(){
+  const parts=[];
+  const from=q('expenseListFrom')?.value, to=q('expenseListTo')?.value, cat=q('expenseListCategory')?.value, br=q('expenseListBranch')?.value, sr=q('expenseListSearch')?.value?.trim();
+  if(from) parts.push('expense_date=gte.'+from);
+  if(to) parts.push('expense_date=lte.'+to);
+  if(cat) parts.push('category_id=eq.'+cat);
+  if(br==='__no_branch__') parts.push('location_id=is.null');
+  else if(br) parts.push('location_id=eq.'+br);
+  if(sr) parts.push('title=ilike.*'+encodeURIComponent(sr)+'*');
+  return parts;
+}
+function expenseFilterSignature(){ return expenseFilterParts().join('&'); }
 async function fetchExpensesList(){
   initExpensesListTab();
   syncExpenseFilterOptions(); /* (1973) إن وصلت الفروع بعد فتح التبويب — الخيارات متاحة دائماً */
-  const qs=['select=*&order=expense_date.desc,created_at.desc,id.asc'];
-  const from=q('expenseListFrom')?.value, to=q('expenseListTo')?.value, cat=q('expenseListCategory')?.value, br=q('expenseListBranch')?.value, sr=q('expenseListSearch')?.value?.trim();
-  if(from) qs.push('expense_date=gte.'+from);
-  if(to) qs.push('expense_date=lte.'+to);
-  if(cat) qs.push('category_id=eq.'+cat);
-  if(br==='__no_branch__') qs.push('location_id=is.null');
-  else if(br) qs.push('location_id=eq.'+br);
-  if(sr) qs.push('title=ilike.*'+encodeURIComponent(sr)+'*');
-  qs.push('limit='+expensesListLimit);
+  const qs=['select=*&order=expense_date.desc,created_at.desc,id.asc',...expenseFilterParts(),'limit='+expensesListLimit];
+  fetchExpensesTotal(); /* (0169) متوازٍ ولا يعطّل القائمة — ولا يزامن إلا عند تغيّر الفلترة */
   try{
     expensesListCache=await api('pos_expenses',{qs:'?'+qs.join('&')})||[];
     await loadExpensesSheetStatus(); /* (0103) حالة «في الشيت» لكل صف */
     renderExpensesList();
   }catch(err){ console.warn('فشل جلب قائمة المصاريف — تُعرض آخر قائمة متاحة',err); if(q('expensesListInfo')) q('expensesListInfo').textContent='⚠ تعذّر الجلب — تُعرض آخر نتيجة متاحة'; }
+}
+
+/* ═══ (0169) الإجمالي الحقيقي: يُحسب على الخادم على كل الصفوف المطابقة ═══
+   المسار الأول: PostgREST aggregates — ‎select=amount.sum()‎ بنفس سلسلة
+   الفلترة. لا تغيير في المخطَّط، فيُنشر الآن.
+   إن كان الجمع معطّلاً على المشروع (PGRST123) أو فشل الطلب، **لا نخترع
+   رقماً**: نرجع إلى «إجمالي المعروض» ونكتب عليها أنها كذلك. رقم ناقص بلا
+   تحذير أسوأ من غيابه. */
+function expensesLoadedTotal(){ return expensesListCache.reduce((a,x)=>a+Number(x.amount||0),0); }
+async function fetchExpensesTotal(force){
+  const sig=expenseFilterSignature();
+  if(!force && expensesTotalState.sig===sig && !expensesTotalState.loading) return;
+  if(expensesAggSupported===false && !force){ expensesTotalState={sig,sum:0,ok:false,loading:false}; renderExpensesTotalsBar(); return; }
+  expensesTotalState={sig,sum:expensesTotalState.sum,ok:expensesTotalState.ok,loading:true};
+  renderExpensesTotalsBar();
+  try{
+    const rows=await api('pos_expenses',{qs:'?select=amount.sum()'+(sig?'&'+sig:'')});
+    const raw=Array.isArray(rows)&&rows.length?rows[0].sum:0;
+    const v=Number(raw==null?0:raw);
+    expensesAggSupported=true;
+    expensesTotalState={sig,sum:Number.isFinite(v)?v:0,ok:true,loading:false};
+  }catch(err){
+    /* «الخادم لا يجمع» دائم ⇒ نحفظه فلا نُكرّر الطلب. «انقطع النت» عابر ⇒
+       لا نحفظه فتُعاد المحاولة عند أول تغيير فلتر أو تحديث. */
+    if(!window.__netDown) expensesAggSupported=false;
+    expensesTotalState={sig,sum:0,ok:false,loading:false};
+    console.warn('[expenses] جمع الإجمالي على الخادم غير متاح (PostgREST aggregates)',err);
+  }
+  renderExpensesTotalsBar();
+}
+/* رسم الشريط — بلا جلب: يُرسم في كل تحديث فلتر وفي كل تحديث قائمة */
+function renderExpensesTotalsBar(){
+  const bar=q('expensesTotalsBar'); if(!bar) return;
+  const cur=esc(APP_CONFIG.currency);
+  const st=expensesTotalState;
+  const live=expenseFilterSignature();
+  const n=expensesListCache.length, more=n>=expensesListLimit;
+  const chip=(lbl,val)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--card)"><div class="mini">${lbl}</div><b style="font-size:15px">${val}</b></div>`;
+  const grid=(inner)=>`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">${inner}</div>`;
+  bar.style.display='';
+  if(st.sig!==live || st.loading){
+    bar.innerHTML=grid(chip('🧾 إجمالي المصاريف (حسب الفلترة)','…'))
+      +'<div class="mini" style="margin-top:4px">جارٍ حساب الإجمالي على الخادم من كل الصفوف المطابقة…</div>';
+    return;
+  }
+  if(st.ok){
+    bar.innerHTML=grid(chip('🧾 إجمالي المصاريف (حسب الفلترة)',money(st.sum)+' '+cur))
+      +`<div class="mini" style="margin-top:4px">محسوب على الخادم من <b>كل</b> الصفوف المطابقة للفلترة — لا من المعروض وحده${more?` (المعروض ${n} صفاً والمزيد موجود)`:''}. التفصيل أعلاه، وإجمالي المحمَّل في أسفل الجدول.</div>`;
+    return;
+  }
+  bar.innerHTML=grid(chip('🧾 إجمالي المعروض (ليس إجمالي الفلترة)',money(expensesLoadedTotal())+' '+cur))
+    +`<div class="mini" style="margin-top:4px">⚠ هذا مجموع الصفوف المحمَّلة فقط (${n}${more?'+':''}) — والخادم لا يوفّر جمعاً كاملاً الآن، فقد يكون أقل من الحقيقة. تحقّق قبل أن تبني عليه قراراً.</div>`;
 }
 function onExpensesTabOpen(){ initExpensesListTab(); renderExpensesList(); fetchExpensesList(); }
 function expensesLoadMore(){ expensesListLimit+=500; fetchExpensesList(); }
@@ -9770,6 +9834,7 @@ function viewExpense(id){
 }
 function renderExpensesList(){
   const body=q('expensesBody'); if(!body) return;
+  renderExpensesTotalsBar(); /* (0169) الشريط يتبع الفلترة — حتى في حالة «لا نتائج» */
   /* خرائط مسبقة — لا بحث خطي داخل map (درس أداء منتقي المنتجات) */
   const locMap=new Map(locations.map(l=>[l.id,l.name]));
   const accMap=new Map(financeAccounts.map(a=>[a.id,a.name]));
@@ -9875,7 +9940,7 @@ function mirrorExpenseUpdatedLocally(updated){
   const old=expensesListCache.find(e=>e.id===updated.id)||expenses.find(e=>e.id===updated.id);
   if(old) mirrorExpenseMovementSwap(old,updated);
   [expenses,expensesListCache].forEach(arr=>{ const i=arr.findIndex(e=>e.id===updated.id); if(i>-1) arr[i]={...arr[i],...updated}; });
-  renderExpensesList(); refreshAfterLocalUpdate();
+  renderExpensesList(); fetchExpensesTotal(true); /* (0169) الإجمالي يتغيّر مع المبلغ */ refreshAfterLocalUpdate();
 }
 function mirrorExpenseDeletedLocally(x){
   const acc=financeAccounts.find(a=>a.id===x.account_id);
@@ -9883,7 +9948,7 @@ function mirrorExpenseDeletedLocally(x){
   for(let i=financeMovements.length-1;i>=0;i--) if(financeMovements[i].reference_table==='pos_expenses'&&financeMovements[i].reference_id===x.id) financeMovements.splice(i,1);
   expensesListCache=expensesListCache.filter(e=>e.id!==x.id);
   const j=expenses.findIndex(e=>e.id===x.id); if(j>-1) expenses.splice(j,1);
-  renderExpensesList(); refreshAfterLocalUpdate();
+  renderExpensesList(); fetchExpensesTotal(true); /* (0169) */ refreshAfterLocalUpdate();
 }
 /* (20261007c) إضافة/تعديل موظف — وبعدها يظهر فوراً في جدول النافذة
    والقائمة المنسدلة (renderFinance يعيد ملأهما عبر fillSalarySelects) */

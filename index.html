@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261025-1514">
+<link rel="stylesheet" href="app.css?v=20261028-1233">
 </head>
 <body class="auth-locked">
   <header>
@@ -1019,6 +1019,10 @@
             <select id="expenseListCategory" onchange="fetchExpensesList()"></select>
             <input id="expenseListSearch" type="search" placeholder="بحث في البيان…" oninput="debouncedExpenseSearch()">
           </div>
+          <!-- (0169) شريط إجمالي المصاريف — فوق الجدول، يتبع الفلترة أعلاه.
+               الرقم يأتي من الخادم على كل الصفوف المطابقة؛ وإن تعذّر الجمع
+               الكامل يتحوّل الشريط إلى «إجمالي المعروض» مكتوباً عليها. -->
+          <div id="expensesTotalsBar" style="display:none;margin-top:10px"></div>
           <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
             <button class="btn secondary" type="button" id="expensesViewBtn" onclick="expenseToolbarAction('view')" disabled>👁 مشاهدة</button>
             <button class="btn secondary" type="button" id="expensesEditBtn" onclick="expenseToolbarAction('edit')" disabled title="المدير أو المحاسب — أو مَن سجّل المصروف في نفس يوم تسجيله">✏️ تعديل</button>
@@ -2008,6 +2012,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261025-1514"></script>
+<script src="app.js?v=20261028-1233"></script>
 </body>
 </html>
