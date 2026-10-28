@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261028-1233';
+const APP_BUILD='b20261028-1458';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2968,7 +2968,33 @@ function updateProductFormMargin(){
 
 function buildProductSearchIndex(){ for(const p of products){ if(!p) continue; if(p._hay===undefined) p._hay=normText(productSearchFields(p).join(' ')); if(p._cost===undefined){ const c=productCost(p.code); p._cost=c; p._mv=Number(p.retail_price||0)-c; p._mp=marginOf(p.retail_price,c); } } }
 let _renderProductsTimer=null;
+/* (0170) عرض قائمة المنتجات كان مقصوصاً على 100 صف ساكتاً: من يبحث عن صنف
+   يقع بعد المئة يظنّ أنه غير موجود. الآن: عدد معروض + «إظهار المزيد» +
+   حجم الدفعة، ويُعاد الضبط تلقائياً عند كل تغيير في البحث أو الفلترة. */
+let productListLimit=100, productPageSize=100, _productViewSig=null;
+const PRODUCT_PAGE_SIZES=[100,250,500]; /* سقف الرسم الواحد — 500 صف ≈ 8.5 ألف خانة */
 function debounceRenderProducts(){ clearTimeout(_renderProductsTimer); _renderProductsTimer=setTimeout(renderProducts,180); }
+/* (0170) بصمة العرض: تغيّر أي منها = مجموعة نتائج جديدة ⇒ يُعاد العدّ من
+   أول صفحة. اختيار صف أو إعادة رسم لا يغيّر البصمة فلا يُفقد ما أظهره المستخدم. */
+function productViewSignature(){
+  return [q('productSearch')?.value||'', q('productCategoryFilter')?.value||'',
+          q('productBrandFilter')?.value||'', q('productColorFilter')?.value||'',
+          q('productSupplierFilter')?.value||'', extraSearchTerms('productExtraSearch').join('|'),
+          productSortKey||'', productSortDir||''].join('\u0001');
+}
+function setProductPageSize(v){
+  const n=Number(v)||100;
+  productPageSize=PRODUCT_PAGE_SIZES.includes(n)?n:100;
+  productListLimit=productPageSize;
+  renderProducts();
+}
+function showMoreProducts(){
+  productListLimit+=productPageSize;
+  const sc=document.querySelector('#products .product-table-scroll');
+  const top=sc?sc.scrollTop:0;
+  renderProducts();
+  if(sc) sc.scrollTop=top; /* القائمة تُعاد بالكامل — نُبقي مكان القارئ */
+}
 /* (0143) «الأصناف حسب تاريخ الحركات»: كل حركة مخزون تلمس صف pos_stock
    الخاص بموقعها وتحدّث updated_at (0022–0026 ترفقه مع كل تعديل)، فأقصى
    updated_at لأصفار الصنف عبر المواقع هو تاريخ آخر حركة عليه. خريطة واحدة
@@ -3132,7 +3158,10 @@ function renderProducts(){
   if(extraLines.length) rows=rows.filter(p=>extraLines.every(t=>smartMatch(t,productSearchFields(p))));
   /* (0157) فرز بمفتاح العمود على نسخة — الافتراضي (بلا عمود) آخر حركة أولاً */
   rows=sortProductsForView(rows, productSortKey, productSortDir);
-  const shown=rows.slice(0,100);
+  /* (0170) إعادة العدّ عند تغيّر البحث/الفلترة/الترتيب فقط */
+  const viewSig=productViewSignature();
+  if(viewSig!==_productViewSig){ _productViewSig=viewSig; productListLimit=productPageSize; }
+  const shown=rows.slice(0,productListLimit);
   applyProductColVisibility(shown, smartParsed);
   try{ initResizableTables(); }catch(e){ console.warn('col-resize init',e); } /* (20261006h) الجدول أُعيد بناؤه بالكامل */
   setTimeout(setupTableSorting,0); /* (0157) إعادة بناء الرأس تُسقط قائمة الأعمدة بالزر الأيمن — نُعيد ربطها */
@@ -3143,7 +3172,20 @@ function renderProducts(){
   const sortTxt=productSortKey
     ? ` · مرتب: ${productSortLabel(productSortKey)} ${productSortDir==='asc'?'▲':'▼'}`
     : ' · آخر حركة أولاً';
-  q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج` + (rows.length>100 ? ' - اكتب في البحث لتضييق النتائج' : '') + sortTxt;
+  const hiddenCount=Math.max(0,rows.length-shown.length);
+  q('productsInfo').textContent = `عرض ${shown.length} من ${rows.length} منتج`
+    + (hiddenCount ? ` — تبقّى ${hiddenCount} (اضغط «إظهار المزيد» أسفل الجدول)` : '')
+    + sortTxt;
+  /* (0170) شريط أسفل الجدول: زر المزيد وحجم الدفعة */
+  const moreBtn=q('productMoreBtn'), moreInfo=q('productMoreInfo'), sizeSel=q('productPageSize');
+  if(sizeSel && !sizeSel.value) sizeSel.value=String(productPageSize);
+  if(moreBtn){
+    moreBtn.classList.toggle('hidden', hiddenCount<=0);
+    moreBtn.textContent=`⬇ إظهار المزيد (+${Math.min(productPageSize,hiddenCount)})`;
+  }
+  if(moreInfo) moreInfo.textContent = hiddenCount
+    ? `المعروض ${shown.length} من ${rows.length} — تبقّى ${hiddenCount}`
+    : `كل النتائج معروضة (${rows.length})`;
   const resetBtn=q('productSortResetBtn'); if(resetBtn) resetBtn.classList.toggle('hidden',!productSortKey);
   try{ markProductSortHeaders(); }catch(e){}
 }

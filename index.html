@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261028-1233">
+<link rel="stylesheet" href="app.css?v=20261028-1458">
 </head>
 <body class="auth-locked">
   <header>
@@ -206,6 +206,19 @@
                 </table>
               </div>
             </div>
+          </div>
+          <!-- (0170) شريط أسفل قائمة المنتجات: العدد المعروض + حجم الدفعة + زر المزيد.
+               قبله كان العرض مقصوصاً على 100 صف بلا أي طريق لرؤية الباقي. -->
+          <div class="product-bottom-bar" id="productMoreBar">
+            <span class="mini" id="productMoreInfo" style="font-weight:700"></span>
+            <span class="grow"></span>
+            <label class="mini" for="productPageSize" style="margin:0">يُضاف في كل مرة</label>
+            <select id="productPageSize" onchange="setProductPageSize(this.value)" title="كم صفاً يُضاف في كل ضغطة على «إظهار المزيد»">
+              <option value="100" selected>100</option>
+              <option value="250">250</option>
+              <option value="500">500</option>
+            </select>
+            <button class="btn" type="button" id="productMoreBtn" onclick="showMoreProducts()">⬇ إظهار المزيد</button>
           </div>
         </div>
       </section>
@@ -2012,6 +2025,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261028-1233"></script>
+<script src="app.js?v=20261028-1458"></script>
 </body>
 </html>
