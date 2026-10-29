@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261029-1303';
+const APP_BUILD='b20261029-1344';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -9303,7 +9303,7 @@ function renderFinance(){
       /* (0162) اسم الشيت: الإرسال يرفض من لا اسم له — فيُملأ من هنا لا بـSQL */
       const sheetName = salaryCaps.applied
         ? (canWriteSalary
-            ? `<td><input class="emp-sheet-inp" value="${esc(e.sheet_employee_name||'')}" placeholder="اسمه في الشيت" title="كما هو مكتوب في عمود J — يُملأ مرة واحدة" onchange="saveEmployeeSheetName('${e.id}',this.value)"></td>`
+            ? `<td><input class="emp-sheet-inp" list="sheetEmpNames" value="${esc(e.sheet_employee_name||'')}" placeholder="اسمه في الشيت" title="كما هو مكتوب في عمود J — يُملأ مرة واحدة" onchange="saveEmployeeSheetName('${e.id}',this.value)"></td>`
             : `<td>${esc(e.sheet_employee_name||'—')}</td>`)
         : '';
       return `<tr><td><b>${esc(e.name)}</b></td>${sheetName}<td class="ltr">${esc(e.phone||'—')}</td><td>${esc(e.position||'—')}</td><td>${money(e.monthly_salary)}</td><td>${money(paid)}</td><td>${stopped?'<span class="muted">موقوف</span>':'نشط'}</td><td>${canWriteSalary?`<button class="btn secondary" type="button" onclick="editEmployee('${e.id}')">تعديل</button> <button class="btn secondary" type="button" onclick="toggleEmployeeActive('${e.id}')">${stopped?'تنشيط':'تعطيل'}</button>`:'—'}</td></tr>`;
@@ -9315,11 +9315,18 @@ function renderFinance(){
     const note=q('empSheetNote');
     if(!salaryCaps.applied){ note.classList.add('hidden'); note.textContent=''; }
     else{
+      fillSheetNameDatalist();
       const list=(employees||[]).filter(e=>e.active!==false);
       const missing=list.filter(e=>!String(e.sheet_employee_name||'').trim());
+      const odd=list.filter(e=>String(e.sheet_employee_name||'').trim() && !sheetNameIsCanonical(e.sheet_employee_name));
+      const dups=duplicateSheetNames(list);
       note.classList.remove('hidden');
       note.innerHTML = missing.length
         ? `⚠ <b>${missing.length}</b> من <b>${list.length}</b> موظفاً بلا «اسم شيت» — لن تُرسل دفعاتهم حتى يُملأ: <b>${missing.map(e=>esc(e.name)).join(' · ')}</b>`
+        : dups.length
+        ? `⛔ اسم شيت واحد لموظفَين — سيُدمج سطراهما في جدول المرتبات: <b>${dups.map(([n,arr])=>esc(n)+' ('+arr.map(e=>esc(e.name)).join(' · ')+')').join(' | ')}</b> — صحّح قبل أي إرسال.`
+        : odd.length
+        ? `⚠ <b>${odd.length}</b> منها ليس من أسماء الشيت المعروفة وقد يظهر كموظف منفصل: <b>${odd.map(e=>esc(e.sheet_employee_name)+' ('+esc(e.name)+')'+(suggestSheetName(e.sheet_employee_name)?` <button class="btn secondary" type="button" style="padding:2px 8px;font-size:11.5px" onclick="saveEmployeeSheetName('${e.id}','${esc(suggestSheetName(e.sheet_employee_name))}')">صحّح إلى «${esc(suggestSheetName(e.sheet_employee_name))}»</button>`:'')).join(' · ')}</b>`
         : `✓ كل الموظفين النشطين (${list.length}) لهم اسم في الشيت — الإرسال جاهز.`;
     }
   }
@@ -10528,14 +10535,89 @@ q('salaryEditForm')?.addEventListener('submit', async e=>{
   finally{ showLoading(false); window.__busy=false; }
 });
 
+/* ── الأسماء القانونية في الشيت: مفاتيح EMPLOYEES في code.gs ──────────
+   مصدر الشيت لا يعرف معرّفاتنا ولا الهواتف — يعرف **هذه الأسماء** في عمود J.
+   أي اسم خارجها يفتح سطراً جديداً في جدول المرتبات لا ينتمي لأحد.
+   القائمة هنا للتنبيه والاقتراح فقط: لا نمنع الكتابة، لأن الشيت قد يستقبل
+   موظفاً جديداً قبل أن نُحدّث هذه القائمة — لكن نقولها صريحة عند الحفظ.
+   (نفس الأسماء في برومبت المبرمج الأول، وفي supabase/diagnostics/0162_*) */
+const SHEET_EMPLOYEE_NAMES=['عماد','أحمد محمد الفاندي','أحمد عبد المجيد الفاندي',
+  'عبد الوهاب أبوراص','سليم','عبد الله يعقوب أبو مصعب','عبد الله النيجر',
+  'جعفر النيجر','مصعب الفاندي'];
+function sheetNameIsCanonical(name){
+  return SHEET_EMPLOYEE_NAMES.includes(String(name||'').trim());
+}
+/* الأسماء البديلة — منقولة حرفياً من EMPLOYEES في code.gs. الشيت يستعملها
+   للتعرّف على الاسم من نص البيان؛ ونستعملها هنا لسبب واحد: ألّا يبقى
+   «عماد بعزيز» اسماً في عمود J فينشطر عماد إلى شخصين. */
+const SHEET_NAME_ALIASES={
+  'عماد':['عماد','عمدة','بعزيز'],
+  'أحمد محمد الفاندي':['احمد محمد','أحمد محمد'],
+  'أحمد عبد المجيد الفاندي':['احمد عبد المجيد','أحمد عبد المجيد','عبد المجيد','عبدالمجيد'],
+  'عبد الوهاب أبوراص':['ابوراص','أبوراص','عبد الوهاب','عبدالوهاب'],
+  'سليم':['سليم'],
+  'عبد الله يعقوب أبو مصعب':['ابو مصعب','أبو مصعب','ابومصعب','عبد الله يعقوب','عبدالله يعقوب','يعقوب'],
+  'عبد الله النيجر':['عبد الله النيجر','عبدالله النيجر'],
+  'جعفر النيجر':['جعفر'],
+  'مصعب الفاندي':['مصعب الفاندي']
+};
+/* تطبيع عربي للبحث فقط (لا للكتابة): همزات الألف و ة و ى والتشكيل والمسافات */
+function normSheetName(v){
+  return String(v||'')
+    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
+    .replace(/[\u064B-\u0652\u0670\u06D6-\u06ED]/g,'')
+    .replace(/\s+/g,' ').trim();
+}
+/* اقتراح الاسم القانوني لِما كتبه المالك — بلا تخمين:
+   نطابق **حرفياً** أسماء الشيت أو أسماءها البديلة داخل الاسم المكتوب،
+   وإن دلّ على أكثر من موظف واحد لا نقترح شيئاً (الغموض يُعرض لا يُحلّ). */
+function suggestSheetName(name){
+  const n=normSheetName(name);
+  if(!n || SHEET_EMPLOYEE_NAMES.includes(String(name||'').trim())) return null;
+  const hits=new Set();
+  for(const [canon,aliases] of Object.entries(SHEET_NAME_ALIASES)){
+    const cands=[canon,...aliases].map(normSheetName).filter(Boolean);
+    if(cands.some(c=>n===c || n.split(' ').join(' ').includes(c))) hits.add(canon);
+  }
+  return hits.size===1 ? [...hits][0] : null;
+}
+/* اسم شيت واحد لموظفَين = دمج سطرَيهما في جدول المرتبات (رجل واحد بأجر
+   رجلين) — أخطر من الاسم الغريب، فالكشف عنه يسبق كل تنبيه آخر. */
+function duplicateSheetNames(list){
+  const seen=new Map();
+  (list||[]).forEach(e=>{
+    const n=String(e.sheet_employee_name||'').trim();
+    if(!n) return;
+    if(!seen.has(n)) seen.set(n,[]);
+    seen.get(n).push(e);
+  });
+  return [...seen.entries()].filter(([,arr])=>arr.length>1);
+}
+function fillSheetNameDatalist(){
+  const dl=q('sheetEmpNames');
+  if(dl) dl.innerHTML=SHEET_EMPLOYEE_NAMES.map(n=>`<option value="${esc(n)}"></option>`).join('');
+}
+
 /* ── ربط اسم الموظف باسم الشيت (يُملأ من الشاشة — لا SQL يدوي) ──────── */
 async function saveEmployeeSheetName(id,value){
   if(!isManager()){ toast('هذا الحقل للمدير والمبرمج','warn'); return; }
-  const name=String(value||'').trim();
+  const typed=String(value||'').trim();
+  let name=typed;
+  /* «عماد بعزيز» اسم بديل لعماد في الشيت — لا نكتبه في عمود J لأنه يشطر
+     عماد إلى شخصين. نكتب القانوني ونقول للمالك ماذا فعلنا ولماذا. */
+  const aliasFix=suggestSheetName(name);
+  if(name && aliasFix){ name=aliasFix; }
   try{
     await api('pos_employees',{method:'PATCH',qs:`?id=eq.${id}`,body:{sheet_employee_name:name||null,updated_at:new Date().toISOString()}});
     const e=(employees||[]).find(x=>x.id===id); if(e) e.sheet_employee_name=name||null;
-    toast(name?`اسم الشيت: ${name}`:'أُفرغ اسم الشيت — لن تُرسل دفعاته','success');
+    const other=(employees||[]).find(x=>x.id!==id && x.active!==false && String(x.sheet_employee_name||'').trim()===name && name);
+    if(other)
+      toast(`حُفظ «${name}»${aliasFix?` — و«${typed}» اسم بديل له في الشيت`:''} — وهو مستعمل أيضاً لـ«${other.name}»: سيُدمج سطراكما في جدول المرتبات حتى تصحّح أحدهما`,'error');
+    else if(aliasFix)
+      toast(`حُفظ «${name}» — و«${typed}» اسم بديل له في الشيت، والبديل يشطر الموظف إلى سطرين`,'success');
+    else if(name && !sheetNameIsCanonical(name))
+      toast(`حُفظ «${name}» — لكنه ليس من أسماء الشيت المعروفة، فقد يظهر كموظف منفصل في جدول المرتبات`,'warn');
+    else toast(name?`اسم الشيت: ${name}`:'أُفرغ اسم الشيت — لن تُرسل دفعاته','success');
     renderFinance();
   }catch(err){ console.error(err); toast('تعذّر الحفظ: '+friendlyError(err),'error'); }
 }
