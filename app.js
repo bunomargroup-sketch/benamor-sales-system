@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261028-1733';
+const APP_BUILD='b20261029-1303';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -9309,6 +9309,20 @@ function renderFinance(){
       return `<tr><td><b>${esc(e.name)}</b></td>${sheetName}<td class="ltr">${esc(e.phone||'—')}</td><td>${esc(e.position||'—')}</td><td>${money(e.monthly_salary)}</td><td>${money(paid)}</td><td>${stopped?'<span class="muted">موقوف</span>':'نشط'}</td><td>${canWriteSalary?`<button class="btn secondary" type="button" onclick="editEmployee('${e.id}')">تعديل</button> <button class="btn secondary" type="button" onclick="toggleEmployeeActive('${e.id}')">${stopped?'تنشيط':'تعطيل'}</button>`:'—'}</td></tr>`;
     }).join('')||`<tr><td colspan="${salaryCaps.applied?8:7}">لا يوجد موظفون بعد — أضف أول موظف من النموذج أعلاه.</td></tr>`;
   }
+  /* (0162) حالة ربط أسماء الموظفين بأسماء الشيت — أهم خطوة قبل أول إرسال:
+     من لا اسم له لا تُرسل دفعته، والاسم الخاطئ يشطر الموظف إلى سطرين */
+  if(q('empSheetNote')){
+    const note=q('empSheetNote');
+    if(!salaryCaps.applied){ note.classList.add('hidden'); note.textContent=''; }
+    else{
+      const list=(employees||[]).filter(e=>e.active!==false);
+      const missing=list.filter(e=>!String(e.sheet_employee_name||'').trim());
+      note.classList.remove('hidden');
+      note.innerHTML = missing.length
+        ? `⚠ <b>${missing.length}</b> من <b>${list.length}</b> موظفاً بلا «اسم شيت» — لن تُرسل دفعاتهم حتى يُملأ: <b>${missing.map(e=>esc(e.name)).join(' · ')}</b>`
+        : `✓ كل الموظفين النشطين (${list.length}) لهم اسم في الشيت — الإرسال جاهز.`;
+    }
+  }
   /* (0162) سجل المرتبات الكامل: فلترة خادمية + إجمالي + تحديد + إرسال للشيت
      — كان هنا «آخر 30 دفعة» بلا فلترة ولا مجموعة، فلا يُرى مرتب قديم */
   onSalaryRegisterRender();
@@ -10281,6 +10295,10 @@ function salaryKindLabel(k){ return String(k||'fixed')==='commission' ? 'نسب�
 function renderSalaryPaymentsList(){
   const body=q('salaryPaymentsBody'); if(!body) return;
   renderSalaryTotalsBar();
+  /* (0162) خيارات الموظف/الحساب تُملأ مع **كل رسم** لا مع الجلب وحده:
+     من أضاف موظفاً بعد فتح الشاشة لم يجد اسمه في الفلتر حتى يغيّر فلتراً،
+     فيظنّ أن الحفظ لم يصل. (المنتقيان يحفظان الاختيار الحالي) */
+  fillSalaryFilterOptions();
   const empMap=new Map((employees||[]).map(e=>[e.id,e.name]));
   const accMap=new Map((financeAccounts||[]).map(a=>[a.id,a.name]));
   const showKind=!!salaryCaps.applied;

@@ -20,7 +20,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261028-1733">
+<link rel="stylesheet" href="app.css?v=20261029-1303">
 </head>
 <body class="auth-locked">
   <header>
@@ -990,6 +990,8 @@
           <!-- (20261007c) قبل هذا الإصلاح لم يكن للموظفين أي ظهور بعد الحفظ:
                القائمة المنسدلة وحدها كانت تعرفهم ولا تُحدَّث إلا مع رأس الموردين -->
           <div class="table-scroll"><table><thead><tr><th>الموظف</th><th class="hidden" id="empSheetTh" title="الاسم كما يُكتب في عمود J بشيت SmartBalance — الإرسال يرفض من لا اسم له">اسم الشيت</th><th>الهاتف</th><th>الوظيفة</th><th>المرتب الشهري</th><th>مدفوع هذا الشهر</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="employeesBody"></tbody></table></div>
+          <!-- (0162) من لا «اسم شيت» له لا تُرسل دفعته — العدد والأسماء هنا -->
+          <div class="mini hidden" id="empSheetNote" style="margin-top:6px"></div>
           <!-- (0162) سجل المرتبات — نسخة من سجل المصاريف: فلترة خادمية، إجمالي
                محسوب على كل المطابق، تحديد سطر وشريط أدوات، عمود «في الشيت»،
                وزر إرسال للمدير. الأزرار التي تحتاج 0162 تُخفى حتى تُشغَّل. -->
@@ -2104,6 +2106,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261028-1733"></script>
+<script src="app.js?v=20261029-1303"></script>
 </body>
 </html>
