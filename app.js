@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261029-1344';
+const APP_BUILD='b20261029-1853';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -10568,18 +10568,43 @@ function normSheetName(v){
     .replace(/[\u064B-\u0652\u0670\u06D6-\u06ED]/g,'')
     .replace(/\s+/g,' ').trim();
 }
+/* «أل» التعريف تُحذف للمقارنة فقط: «عبد الله نيجر» و«عبد الله النيجر» اسم
+   واحد في الشيت. ولا تُحذف من كلمة قصيرة مثل «الله» (الحدّ: أربعة أحرف
+   فأكثر بعد «ال») حتى لا تتغيّر أسماء أخرى. */
+function stripArabicArticle(w){
+  const s=String(w||'');
+  return (s.length>4 && s.startsWith('ال')) ? s.slice(2) : s;
+}
+function sheetNameWords(v){
+  return normSheetName(v).split(' ').filter(Boolean).map(stripArabicArticle);
+}
 /* اقتراح الاسم القانوني لِما كتبه المالك — بلا تخمين:
-   نطابق **حرفياً** أسماء الشيت أو أسماءها البديلة داخل الاسم المكتوب،
-   وإن دلّ على أكثر من موظف واحد لا نقترح شيئاً (الغموض يُعرض لا يُحلّ). */
+   نطابق **كلمات** الاسم المكتوب على مفردات الشيت (الاسم القانوني + بدائله
+   الحرفية من EMPLOYEES). الكلمة المفردة لا تُقبل إلا إن كانت بديلاً صريحاً،
+   فلا يصير «محمد» اقتراحاً لـ«أحمد محمد الفاندي»، ولا «عماد الدين» اقتراحاً
+   لـ«عماد» (الدين ليست بديلاً له). وإن دلّ على أكثر من واحد: لا اقتراح. */
 function suggestSheetName(name){
-  const n=normSheetName(name);
-  if(!n || SHEET_EMPLOYEE_NAMES.includes(String(name||'').trim())) return null;
-  const hits=new Set();
-  for(const [canon,aliases] of Object.entries(SHEET_NAME_ALIASES)){
-    const cands=[canon,...aliases].map(normSheetName).filter(Boolean);
-    if(cands.some(c=>n===c || n.split(' ').join(' ').includes(c))) hits.add(canon);
+  const typed=String(name||'').trim();
+  if(!typed || SHEET_EMPLOYEE_NAMES.includes(typed)) return null;
+  const tw=sheetNameWords(typed);
+  if(!tw.length) return null;
+  const hits=[];
+  for(const canon of SHEET_EMPLOYEE_NAMES){
+    const aliases=SHEET_NAME_ALIASES[canon]||[];
+    const vocab=new Set([canon,...aliases].flatMap(a=>sheetNameWords(a)));
+    if(!tw.every(w=>vocab.has(w))) continue;             /* كلمة غريبة ⇒ ليس هذا الشخص */
+    if(tw.length===1){
+      const canonWords=sheetNameWords(canon);
+      const isCanonSingle=canonWords.length===1 && canonWords[0]===tw[0];
+      if(isCanonSingle) continue;                        /* هو الاسم القانوني نفسه */
+      const isAliasSingle=aliases.some(a=>{
+        const w=sheetNameWords(a); return w.length===1 && w[0]===tw[0];
+      });
+      if(!isAliasSingle) continue;                       /* كلمة من الاسم لا تُعرّفه وحده */
+    }
+    hits.push(canon);
   }
-  return hits.size===1 ? [...hits][0] : null;
+  return hits.length===1 ? hits[0] : null;
 }
 /* اسم شيت واحد لموظفَين = دمج سطرَيهما في جدول المرتبات (رجل واحد بأجر
    رجلين) — أخطر من الاسم الغريب، فالكشف عنه يسبق كل تنبيه آخر. */
