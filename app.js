@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261102-1154';
+const APP_BUILD='b20261102-1607';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -311,6 +311,13 @@ function friendlyError(err){
   if(/COMPOSITE_CONVERSION_BLOCKED/.test(m)) return m.replace(/^[\s\S]*?COMPOSITE_CONVERSION_BLOCKED:\s*/,'').trim();
   if(/COMPOSITE_IN_PURCHASE_NOT_ALLOWED/.test(m)) return m.replace(/^[\s\S]*?COMPOSITE_IN_PURCHASE_NOT_ALLOWED:\s*/,'').trim();
   if(/COMPOSITE_IN_TRANSFER_NOT_ALLOWED/.test(m)) return m.replace(/^[\s\S]*?COMPOSITE_IN_TRANSFER_NOT_ALLOWED:\s*/,'').trim();
+  /* (0171) حرّاس توزيع دفعات الموردين — الخادم يرفض والواجهة تترجم */
+  if(/ALLOCATION_EXCEEDS_PURCHASE/.test(m)) return 'المبلغ أكبر من المتبقي على إحدى الفواتير — راجع عمود «متبقٍّ»';
+  if(/ALLOCATION_EXCEEDS_PAYMENT/.test(m)) return 'مجموع التوزيع أكبر من مبلغ الدفعة';
+  if(/PURCHASE_OTHER_SUPPLIER/.test(m)) return 'إحدى الفواتير لمورد آخر — لا تُوزَّع عليها هذه الدفعة';
+  if(/PURCHASE_CANCELLED/.test(m)) return 'إحدى الفواتير ملغاة — لا يُوزَّع عليها';
+  if(/ALLOCATION_MUST_BE_POSITIVE/.test(m)) return 'كل سطر توزيع يجب أن يكون أكبر من صفر';
+  if(/DUPLICATE_PURCHASE_IN_ALLOCATION/.test(m)) return 'الفاتورة مكرّرة في التوزيع — سطر واحد لكل فاتورة';
   return m||'حدث خطأ غير متوقع';
 }
 function badgeStatus(balance){balance=Number(balance||0); if(balance>0) return `<span class="badge red">علينا للمورد</span>`; if(balance<0) return `<span class="badge green">لنا عند المورد</span>`; return `<span class="badge gray">متوازن</span>`}
@@ -4180,6 +4187,8 @@ async function deleteCustomerPaymentAdmin(paymentId){
    المفتاح معرّف الحركة = عمود L في الشيت — هوية واحدة من المنظومة إلى
    الشيت. الفلاتر (تاريخ/مورد/فرع/بحث) كما كانت. ═══ */
 let spListLimit=200, spListInit=false, spSearchTimer=null, spMovements=[], spSheetSel=new Set();
+/* (0171) توزيعات كل دفعة: payment_id ⇒ {sum, rows[]} — تُجلب مع القائمة */
+let spAllocsByPayment=new Map();
 function initSupplierPaymentsListTab(){
   if(spListInit) return; spListInit=true;
   const now=new Date(), f=now.toISOString().slice(0,8)+'01', t=now.toISOString().slice(0,10);
@@ -4226,6 +4235,17 @@ async function fetchSupplierPaymentsList(){
     spMovements=await rpc('pos_supplier_payment_movements',
       {p_from:from||null,p_to:to||null,p_supplier:sup||null,p_search:sr||null,p_limit:spListLimit})||[];
   }catch(err){ console.warn('فشل جلب حركات الدفع',err); spMovements=[]; if(q('spListInfo')) q('spListInfo').textContent='⚠ تعذّر الجلب — تُعرض آخر نتيجة متاحة'; }
+  /* (0171) توزيعات الموردين: تُجلب مع القائمة لتظهر سطور «موزَّع · على
+     الحساب» بلا نداء لكل صف. فشل الجلب لا يُسقط القائمة — تُعرض بلا وسوم. */
+  try{
+    const al=await api('pos_supplier_payment_allocations',{qs:'?select=payment_id,purchase_id,amount&order=payment_id.asc&limit=5000'})||[];
+    spAllocsByPayment=new Map();
+    (al||[]).forEach(a=>{
+      const cur=spAllocsByPayment.get(a.payment_id)||{sum:0,rows:[]};
+      cur.sum=spaRound(cur.sum+Number(a.amount||0)); cur.rows.push(a);
+      spAllocsByPayment.set(a.payment_id,cur);
+    });
+  }catch(err){ console.warn('فشل جلب توزيعات دفعات الموردين',err); spAllocsByPayment=new Map(); }
   renderPayments();
 }
 function onPaymentsTabOpen(){ initSupplierPaymentsListTab(); renderPayments(); fetchSupplierPaymentsList(); }
@@ -4274,16 +4294,25 @@ function renderPayments(){
       : (isAdmin && m.sendable
         ? `<label class="exp-sent-lb" title="اوّشّر للإرسال إلى الشيت" onclick="event.stopPropagation()"><input type="checkbox" data-sppmid="${m.movement_id}" ${spSheetSel.has(m.movement_id)?'checked':''} onchange="supplierPaymentSheetToggle(this)"></label><span class="muted">—</span>`
         : `<span class="muted" title="${m.sendable?'':'قبل تاريخ الحدّ — لا يُرسَل'}">—</span>`);
+    /* (0171) سطر المال: كم من الدفعة وُزِّع على فواتير، وكم بقي «على الحساب».
+       الدفعة غير الموزَّعة لا تُوسم بخطأ — «على الحساب» حالة طبيعية (سلفة). */
+    const al=spAllocsByPayment.get(m.payment_id);
+    const alSum=al?spaRound(al.sum):0;
+    const alRest=spaRound(Number(m.amount||0)-alSum);
+    const allocCell=!m.payment_id?'' : alSum>0
+      ? `<div class="mini" title="التوزيع ورقة داخلية: لا يحرّك مالاً — القيد والحركة وسطر الشيت كما هي"><span style="color:#059669">موزَّع ${money(alSum)}</span>${alRest>0.004?` · <span style="color:#b45309">على الحساب ${money(alRest)}</span>`:''}</div>`
+      : `<div class="mini muted">على الحساب</div>`;
     /* (0145) المضمَّنة: ✏️ يفتح فاتورة الشراء (صلاحية التعديل نفسها) —
        لا نموذج دفعة يوهم أنها مستقلة؛ 🗑 للمدير يصفّرها بعكس أثرها كاملاً */
     const tools=embedded
       ?`<button class="btn secondary" type="button" style="padding:2px 8px" title="الدفعة مسجّلة داخل فاتورة الشراء — يُفتح المستند الأصلي" onclick="event.stopPropagation();openPurchaseForEdit('${m.purchase_id}')">✏️ الفاتورة</button>`
        +(isAdmin?` <button class="btn danger" type="button" style="padding:2px 8px" title="تصفير هذه الدفعة المضمَّنة وعكس كل آثارها — مدير فقط" onclick="event.stopPropagation();revertPurchaseEmbeddedPayment('${m.purchase_id}',${Number(m.amount||0)},'${String(m.doc_no||'').replace(/'/g,"\\'")}')">🗑</button>`:'')
       :m.payment_id
-      ?(isAdmin?`<button class="btn secondary" type="button" style="padding:2px 8px" onclick="openSupplierPaymentEdit('${m.payment_id}')">✏️</button>
+      ?(isAdmin?`<button class="btn secondary" type="button" style="padding:2px 8px" title="توزيع هذه الدفعة على فواتير المورد — بيدك، بلا توزيع تلقائي" onclick="event.stopPropagation();openSupplierPaymentAllocate('${m.payment_id}')">🧾 توزيع</button>
+        <button class="btn secondary" type="button" style="padding:2px 8px" onclick="openSupplierPaymentEdit('${m.payment_id}')">✏️</button>
         <button class="btn danger" type="button" style="padding:2px 8px" onclick="deleteSupplierPaymentAdmin('${m.payment_id}')">🗑</button>`:'')
       :'';
-    return `<tr><td>${esc(m.payment_date)}</td><td>${esc(m.supplier_name||'')}</td><td class="ltr">${esc(m.doc_no||'—')}${kindChip}</td><td><b>${money(m.amount)}</b></td><td>${esc(m.payment_method?typeLabel(m.payment_method):'—')}</td><td>${esc(m.notes||'')}</td><td class="exp-sheet">${sheetCell}</td><td style="white-space:nowrap">${tools}</td></tr>`}).join('') || '<tr><td colspan="8">لا توجد دفعات مطابقة للفلاتر.</td></tr>';
+    return `<tr><td>${esc(m.payment_date)}</td><td>${esc(m.supplier_name||'')}</td><td class="ltr">${esc(m.doc_no||'—')}${kindChip}</td><td><b>${money(m.amount)}</b>${allocCell}</td><td>${esc(m.payment_method?typeLabel(m.payment_method):'—')}</td><td>${esc(m.notes||'')}</td><td class="exp-sheet">${sheetCell}</td><td style="white-space:nowrap">${tools}</td></tr>`}).join('') || '<tr><td colspan="8">لا توجد دفعات مطابقة للفلاتر.</td></tr>';
   if(q('spListInfo')) q('spListInfo').textContent=`${rows.length} دفعة معروضة`;
   const more=(spMovements||[]).length>=spListLimit;
   if(q('spListMoreBtn')) q('spListMoreBtn').classList.toggle('hidden',!more);
@@ -4370,6 +4399,122 @@ async function deleteSupplierPaymentAdmin(paymentId){
     toast('حُذفت الدفعة وعُكسَت آثارها','success');
     await refreshParts(['suppliers','supplierPayments','supplierLedger','financeMovements','financeAccounts']); renderPayments();
   }catch(e){console.error(e);toast('خطأ: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
+}
+
+/* ═══ (0171) توزيع دفعة مورد على فواتير الشراء — يدوي بالكامل ═══
+   المال خرج مرة واحدة (صف دفعة + قيد كشف + حركة خزينة + سطر شيت)،
+   والتوزيع **ورقة داخلية** تقول أي فواتير غطّاها هذا المال: لا يحرّك
+   ديناراً ولا يمسّ الخزينة ولا الشيت ولا رصيد المورد.
+   لا يوجد — ولن يوجد — زر «توزيع تلقائي» (قرار المالك 2026-11-02:
+   «لا أريد توزيعاً تلقائياً»): كل سطر يكتبه الإنسان بيده.
+   والخادم هو الحارس: يرفض تجاوز مبلغ الدفعة أو متبقّي الفاتورة أو
+   فاتورة مورد آخر أو فاتورة ملغاة — الشاشة تُنبّه فقط. ═══ */
+let spaPayId=null, spaPayAmount=0, spaPaySupplierId=null, spaRows=[], spaOpenInvoicesTruncated=false;
+function spaRound(n){ return Math.round((Number(n)||0)*100)/100; }
+function ensureSupplierAllocModal(){
+  if(q('supplierAllocModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='supplierAllocModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:780px">
+    <div class="modal-head"><div><h2 style="margin:0">🧾 توزيع دفعة على فواتير الشراء</h2><div class="mini" id="spaSub">—</div></div><button class="btn secondary" type="button" onclick="q('supplierAllocModal').classList.remove('show')">إغلاق</button></div>
+    <div class="mini" style="margin:6px 0">اكتب أمام كل فاتورة المبلغ الذي غطّته هذه الدفعة. <b>ما لا تكتبه يبقى على الحساب</b> — لا يضيع، ولا يُوزَّع عنك أحد.</div>
+    <div class="table-scroll" style="max-height:50vh"><table><thead><tr><th>التاريخ</th><th>المستند</th><th>الإجمالي</th><th>مدفوع</th><th>متبقٍّ</th><th>من هذه الدفعة</th></tr></thead><tbody id="spaBody"></tbody></table></div>
+    <div id="spaFoot" class="mini" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" type="button" onclick="saveSupplierPaymentAllocate()">💾 حفظ التوزيع</button>
+      <button class="btn secondary" type="button" onclick="spaClearInputs()">إفراغ — كل المال على الحساب</button>
+      <button class="btn secondary" type="button" onclick="q('supplierAllocModal').classList.remove('show')">إلغاء</button>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
+async function openSupplierPaymentAllocate(paymentId){
+  if(!isManager()){toast('التوزيع للمدير فقط','warn');return;}
+  let p=(payments||[]).find(x=>x.id===paymentId);
+  if(!p){ /* الصف قد يأتي من حركات الدفع لا من جدول الدفعات (بحث بالاسم) — نجلبها بالمعرّف */
+    try{ p=((await api('pos_supplier_payments',{qs:'?select=*&id=eq.'+paymentId}))||[])[0]; }catch(_e){}
+  }
+  if(!p){toast('الدفعة غير موجودة — حدّث القائمة وأعد المحاولة','warn');return;}
+  const s=suppliers.find(x=>x.id===p.supplier_id);
+  try{
+    showLoading(true);
+    spaPayId=paymentId; spaPayAmount=spaRound(p.amount); spaPaySupplierId=p.supplier_id;
+    const [mine,pus]=await Promise.all([
+      api('pos_supplier_payment_allocations',{qs:'?select=purchase_id,amount&payment_id=eq.'+paymentId})||[],
+      api('pos_purchases',{qs:'?select=id,purchase_no,invoice_no,purchase_date,total,paid_amount,status&supplier_id=eq.'+p.supplier_id+'&status=neq.cancelled&order=purchase_date.asc,id.asc&limit=500'})||[]
+    ]);
+    const mineBy=new Map((mine||[]).map(a=>[a.purchase_id,spaRound(a.amount)]));
+    spaOpenInvoicesTruncated=(pus||[]).length>=500;
+    /* المتبقي لهذه الدفعة = إجمالي − مدفوع (مرآة الخادم) + ما وزّعته هذه
+       الدفعة نفسها، لأن الحفظ يستبدل توزيعها كاملاً لا يضيف عليه. */
+    spaRows=(pus||[]).map(pu=>{
+      const mineAmt=mineBy.get(pu.id)||0;
+      const total=spaRound(pu.total), paid=spaRound(pu.paid_amount);
+      return {id:pu.id, no:pu.purchase_no||pu.invoice_no||'', date:pu.purchase_date||'',
+              total, paid, mine:mineAmt, room:spaRound(total-paid+mineAmt)};
+    }).filter(r=>r.room>0.004||r.mine>0);
+    ensureSupplierAllocModal();
+    q('spaSub').innerHTML=`${esc(s?.name||'مورد')} — دفعة <b>${money(spaPayAmount)}</b> بتاريخ ${esc(p.payment_date||'')}${p.notes?' — '+esc(p.notes):''}`;
+    q('spaBody').innerHTML=spaRows.map((r,i)=>`<tr>
+        <td class="mini">${esc(r.date)}</td>
+        <td class="ltr">${esc(r.no||'—')}</td>
+        <td>${money(r.total)}</td>
+        <td class="mini">${money(r.paid)}</td>
+        <td><b>${money(r.room)}</b></td>
+        <td><input type="text" inputmode="decimal" class="ltr spa-amt" data-i="${i}" value="${r.mine>0?r.mine:''}" placeholder="0" style="width:120px;text-align:center" oninput="spaRecalc()"></td>
+      </tr>`).join('') || `<tr><td colspan="6">لا فواتير مفتوحة لهذا المورد — كل المال يبقى على الحساب.</td></tr>`;
+    spaRecalc();
+    q('supplierAllocModal').classList.add('show'); modalToTop(q('supplierAllocModal'));
+  }catch(e){console.error(e);toast('تعذّر فتح التوزيع: '+friendlyError(e),'error');}
+  finally{showLoading(false);}
+}
+function spaClearInputs(){
+  q('spaBody')?.querySelectorAll('input.spa-amt').forEach(inp=>{inp.value='';});
+  spaRecalc();
+}
+function spaRecalc(){
+  let sum=0, over=[];
+  q('spaBody')?.querySelectorAll('input.spa-amt').forEach(inp=>{
+    const v=spaRound(moneyVal(inp.value));
+    const r=spaRows[Number(inp.dataset.i)];
+    if(v<=0){inp.style.borderColor=''; inp.title=''; return;}
+    sum=spaRound(sum+v);
+    if(r && v>r.room+0.005){
+      inp.style.borderColor='#dc2626';
+      inp.title=`المتبقي على هذه الفاتورة ${money(r.room)} فقط`;
+      over.push(r.no||('فاتورة '+String(inp.dataset.i)));
+    }else{inp.style.borderColor=''; inp.title='';}
+  });
+  const rest=spaRound(spaPayAmount-sum);
+  if(!q('spaFoot')) return;
+  let html=`<b>موزَّع ${money(sum)}</b> · `;
+  html += rest>0.004 ? `<span style="color:#b45309">على الحساب ${money(rest)}</span>`
+        : rest<-0.004 ? `<span style="color:#dc2626">يتجاوز الدفعة بـ ${money(-rest)} — لن يُقبل</span>`
+        : `<span style="color:#059669">الدفعة كلها موزَّعة</span>`;
+  if(over.length) html+=`<br><span style="color:#dc2626">المبلغ أكبر من المتبقي على: ${esc(over.join(' · '))}</span>`;
+  if(spaOpenInvoicesTruncated) html+=`<br><span class="muted">عُرضت أول 500 فاتورة لهذا المورد فقط — للباقي راجع قائمة الشراء.</span>`;
+  q('spaFoot').innerHTML=html;
+}
+async function saveSupplierPaymentAllocate(){
+  if(!isManager()){toast('التوزيع للمدير فقط','warn');return;}
+  const lines=[];
+  q('spaBody')?.querySelectorAll('input.spa-amt').forEach(inp=>{
+    const v=spaRound(moneyVal(inp.value));
+    if(v>0) lines.push({purchase_id:spaRows[Number(inp.dataset.i)].id, amount:v});
+  });
+  const sum=spaRound(lines.reduce((a,l)=>a+l.amount,0));
+  if(sum>spaPayAmount+0.005){toast(`التوزيع ${money(sum)} أكبر من مبلغ الدفعة ${money(spaPayAmount)}`,'warn');return;}
+  if(!lines.length && !confirm('لا سطر موزَّع: ستُفرَّغ توزيعات هذه الدفعة ويعود المال كله «على الحساب». متابعة؟')) return;
+  try{
+    showLoading(true);
+    const res=await rpc('pos_allocate_supplier_payment',{p_payment_id:spaPayId,p_lines:lines});
+    const r=(res&&res.ok)?res:(Array.isArray(res)?res[0]:res)||{};
+    q('supplierAllocModal').classList.remove('show');
+    toast(`تم التوزيع: ${money(Number(r.allocated!=null?r.allocated:sum))} على الفواتير · ${money(Number(r.unallocated!=null?r.unallocated:spaPayAmount-sum))} على الحساب`,'success');
+    /* كشف المورد لا يُحدَّث هنا عمداً: التوزيع لا يحرّك مالاً — القيد كما هو */
+    await refreshParts(['supplierPayments','purchases','suppliers']);
+    await fetchSupplierPaymentsList();
+  }catch(e){console.error(e);toast('تعذّر التوزيع: '+friendlyError(e),'error');}
   finally{showLoading(false);}
 }
 
