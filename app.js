@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261103-1132';
+const APP_BUILD='b20261105-1304';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -331,21 +331,96 @@ function modelChip(model){const m=String(model||'').trim();return m?` <span clas
 
 function staffEmail(id){return String(id||'').trim().toLowerCase()+'@bag.com'}
 function jwtExp(token){try{return JSON.parse(atob(String(token||'').split('.')[1]||''))?.exp||0;}catch(e){return 0}}
-function authExpiredSoon(){const exp=Number(authSession?.expires_at||jwtExp(authSession?.access_token)); return !exp || (Date.now()/1000) > (exp-90);}
+function authExpiredSoonOf(s){const exp=Number(s&&(s.expires_at||jwtExp(s.access_token))); return !exp || (Date.now()/1000) > (exp-90);}
+function authExpiredSoon(){ return authExpiredSoonOf(authSession); }
+
+/* ═══ (0175) تجديد الجلسة: طلب واحد لا عشرون ═══════════════════════════
+   العطب الذي رآه المالك: 429 على /auth/v1/token?grant_type=refresh_token.
+   السبب ليس الخادم: كل نداء بيانات يمرّ عبر ensureAuth()، ودورة التحديث
+   تُطلق Promise.all على نحو عشرين جدولاً. فحين يدخل الرمز آخر 90 ثانية،
+   ترى العشرون كلها «انتهى» في اللحظة نفسها ⇒ عشرون طلب تجديد متزامن.
+   وSupabase (أ) يحدّ معدّل الطلبات ⇒ 429، (ب) يبدّل رمز التجديد مع كل
+   استخدام ⇒ الطلبات المتزامنة تُبطل بعضها فيسقط بعضها 400 أيضاً.
+   وقد يتكرّر الهجوم كل دقيقة مع كل نبضة تحديث.
+
+   الحل أربعة أشياء لا أكثر:
+     ١) طلب واحد مشترك: كل من وصل وواحدٌ يعمل ينتظر نتيجته (single-flight).
+     ٢) تهدئة عند 429: ٢ث ← ٤ ← ٨ … حتى ٦٠ث، ولا طلب داخل التهدئة.
+     ٣) مشاركة بين التبويبات: تبويب جدّد ⇒ الآخر يتبنّى رمزه من التخزين
+        بدل طلب ثانٍ (سبب شائع للـ429: ثلاث تبويبات مفتوحة).
+     ٤) رمز تجديد ميت (400/401) ⇒ جلسة منتهية فعلاً ورسالة واحدة واضحة،
+        لا حلقة محاولات.
+   والرسالة للمستخدم عربية: «أعد المحاولة بعد N ثانية» بدل 429 صامت. */
+let __authRefreshPromise=null, __authCooldownUntil=0, __authFailStreak=0;
+const AUTH_COOLDOWN_MAX_MS=60000, AUTH_COOLDOWN_BASE_MS=2000;
+function authCooldownLeft(){ return Math.max(0, Math.ceil((__authCooldownUntil-Date.now())/1000)); }
+function authSessionSaved(){ try{ return JSON.parse(localStorage.getItem('posAuthSession')||'null'); }catch(e){ return null; } }
+function adoptAuthSession(s){
+  if(!s||!s.access_token) return false;
+  authSession=s; try{ localStorage.setItem('posAuthSession',JSON.stringify(authSession)); }catch(_e){}
+  return true;
+}
 async function refreshAuth(){
+  /* ١) طلب واحد للجميع */
+  if(__authRefreshPromise) return __authRefreshPromise;
+  /* ٢) لا طلب داخل التهدئة — نرمي فوراً بلا شبكة */
+  if(authCooldownLeft()>0) throw new Error('RETRY_LATER:'+authCooldownLeft());
+  /* ٣) تبويب آخر جدّد قبله: خُذ رمزه */
+  const saved=authSessionSaved();
+  if(saved?.access_token && saved.access_token!==authSession?.access_token && !authExpiredSoonOf(saved)){
+    adoptAuthSession(saved); return authSession;
+  }
   if(!authSession?.refresh_token) throw new Error('انتهت الجلسة. سجل الدخول مرة أخرى.');
-  const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:authSession.refresh_token})});
-  const data=await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(data.error_description||data.msg||data.message||'تعذر تحديث الجلسة');
-  authSession={...authSession,...data};
-  localStorage.setItem('posAuthSession',JSON.stringify(authSession));
-  return authSession;
+  __authRefreshPromise=(async()=>{
+    try{
+      const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,{
+        method:'POST', headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},
+        body:JSON.stringify({refresh_token:authSession.refresh_token})});
+      const data=await res.json().catch(()=>({}));
+      if(res.status===429){
+        __authFailStreak++;
+        const wait=Math.min(AUTH_COOLDOWN_MAX_MS, AUTH_COOLDOWN_BASE_MS*Math.pow(2, __authFailStreak-1));
+        __authCooldownUntil=Date.now()+wait;
+        throw new Error('RETRY_LATER:'+Math.ceil(wait/1000));
+      }
+      if(!res.ok){
+        const msg=String(data.error_description||data.msg||data.message||'');
+        if(res.status===400||res.status===401){
+          authSession=null; try{ localStorage.removeItem('posAuthSession'); }catch(_e){}
+          throw new Error('انتهت الجلسة. سجل الدخول مرة أخرى.');
+        }
+        throw new Error(msg||'تعذر تحديث الجلسة');
+      }
+      __authFailStreak=0; __authCooldownUntil=0;
+      const merged={...authSession,...data};
+      if(!merged.expires_at && data.expires_in) merged.expires_at=Math.floor(Date.now()/1000)+Number(data.expires_in);
+      adoptAuthSession(merged);
+      return authSession;
+    } finally { __authRefreshPromise=null; }
+  })();
+  return __authRefreshPromise;
 }
 async function ensureAuth(){
   if(!appUser?.id && !authSession?.access_token) return;
-  if(authExpiredSoon()) await refreshAuth();
+  if(!authExpiredSoon()) return;
+  try{ await refreshAuth(); }
+  catch(e){
+    /* التهدئة ليست عطباً: نكمل بالرمز الحالي فإن رفضه الخادم ظهرت رسالة
+       واحدة مفهومة — بدل عشرين محاولة تُغرق الخادم. */
+    if(/^RETRY_LATER:/.test(String(e&&e.message||''))) return;
+    throw e;
+  }
 }
-async function authSignIn(identifier,code){const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:staffEmail(identifier),password:code})}); const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error_description||data.msg||data.message||'auth failed'); authSession=data; localStorage.setItem('posAuthSession',JSON.stringify(authSession)); return data.user}
+/* تبويب آخر جدّد: نتبنّى جلسته فوراً (نفس المتصفح، نفس التخزين) */
+try{ window.addEventListener('storage', ev=>{ if(ev.key==='posAuthSession'&&ev.newValue){ try{ const s=JSON.parse(ev.newValue); if(s?.access_token) authSession=s; }catch(_e){} } }); }catch(_e){}
+async function authSignIn(identifier,code){
+  const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:staffEmail(identifier),password:code})});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data.error_description||data.msg||data.message||'auth failed');
+  /* تسجيل دخول جديد = بداية نظيفة: أصفِر التهدئة وعدّاد الفشل */
+  __authFailStreak=0; __authCooldownUntil=0;
+  if(!data.expires_at && data.expires_in) data.expires_at=Math.floor(Date.now()/1000)+Number(data.expires_in);
+  authSession=data; localStorage.setItem('posAuthSession',JSON.stringify(authSession)); return data.user}
 async function fetchWithAuthRetry(url, options={}, parseEmptyAs=null){
   await ensureAuth();
   let res;
@@ -358,7 +433,13 @@ async function fetchWithAuthRetry(url, options={}, parseEmptyAs=null){
   let text=await res.text(); let data=text?JSON.parse(text):parseEmptyAs;
   const msg=String(data?.message||text||'');
   if((res.status===401 || /JWT expired|PGRST303/i.test(msg)) && authSession?.refresh_token){
-    await refreshAuth();
+    try{ await refreshAuth(); }
+    catch(e){
+      const m=String(e&&e.message||'');
+      const wait=(m.match(/^RETRY_LATER:(\d+)/)||[])[1];
+      if(wait) throw new Error('الخادم يحدّ طلبات تحديث الجلسة — أعد المحاولة بعد '+wait+' ثانية');
+      throw e;
+    }
     res=await fetch(url, options);
     text=await res.text(); data=text?JSON.parse(text):parseEmptyAs;
   }
