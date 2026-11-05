@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261105-1946">
+<link rel="stylesheet" href="app.css?v=20261105-2045">
 </head>
 <body class="auth-locked">
   <header>
@@ -486,7 +486,7 @@
                 <button class="rail-btn" type="button" onclick="openQuickProductModal()"><i class="ti ti-plus"></i><span>إضافة صنف جديد</span></button>
                 <button class="rail-btn" type="button" onclick="openSaleProductPicker()"><i class="ti ti-search"></i><span>قائمة المنتجات F3</span></button>
                 <div class="rail-title">الفاتورة</div>
-                <button class="rail-btn" type="button" onclick="openSalesListFromSale()"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
+                <button class="rail-btn" type="button" onclick="openTab('salesList')"><i class="ti ti-receipt"></i><span>فواتير البيع</span></button>
                 <button class="rail-btn" type="button" onclick="openPriceCheckerCarts()"><i class="ti ti-basket"></i><span>سلات الباحث</span></button>
                 <div class="rail-title">أخرى</div>
                 <button class="rail-btn" type="button" onclick="applyDiscountCoupon()"><i class="ti ti-ticket"></i><span>كوبون خصم</span></button>
@@ -516,8 +516,7 @@
               <div class="finish-spacer"></div>
               <div class="finish-actions">
                 <button class="btn secondary hidden" id="saleFinishCancelEditBtn" type="button" onclick="resetSaleFormWithConfirm()">إلغاء التعديل</button>
-                <button class="btn secondary" type="button" onclick="parkCurrentSale()">تعليق</button>
-                <button class="btn secondary" type="button" id="saleParkedBtn" onclick="resumeParkedSale()">المعلقة</button>
+
                 <button class="btn secondary" type="button" onclick="resetSaleFormWithConfirm()">فاتورة جديدة</button>
                 <button class="btn" id="salePayBtn" type="button" onclick="openSalePaymentScreen()"><i class="ti ti-cash"></i> الدفع <b class="kbd">F6</b></button>
               </div>
@@ -2122,6 +2121,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261105-1946"></script>
+<script src="app.js?v=20261105-2045"></script>
 </body>
 </html>
