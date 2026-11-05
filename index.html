@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261105-1558">
+<link rel="stylesheet" href="app.css?v=20261105-1946">
 </head>
 <body class="auth-locked">
   <header>
@@ -421,6 +421,15 @@
       <section id="sales" class="section hide-margins">
         <div class="panel cashier-panel">
           <div id="saleEditAlert" class="edit-alert hidden">أنت الآن تعدّل فاتورة بيع قديمة — تأكد من حفظ التعديل أو إلغائه. <button class="btn secondary" type="button" style="padding:4px 10px;margin-inline-start:10px" onclick="resetSaleForm()">✖ إلغاء التعديل</button></div>
+          <div id="saleOpenTabs" class="sale-open-tabs" aria-label="فواتير البيع المفتوحة"></div>
+          <style>
+            .sale-open-tabs{display:flex;align-items:center;gap:7px;overflow-x:auto;padding:10px 12px;background:var(--panel,#fff);border-bottom:1px solid #cbd5e1;white-space:nowrap}
+            .sale-tabs-label{font-weight:700;flex:none}
+            .sale-open-tabs button{flex:none;border:1px solid #a8b7cb;border-radius:8px;padding:8px 12px;background:#f1f5f9;color:#1e293b;cursor:pointer;font-weight:600}
+            .sale-open-tabs .sale-tab.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8}
+            .sale-open-tabs .sale-tab-add{background:#e0f2fe;color:#075985;border-color:#7dd3fc}
+            .sale-open-tabs .sale-tab-close{background:#fff1f2;color:#9f1239;border-color:#fda4af}
+          </style>
           <form id="saleForm" class="pos-sales-shell" novalidate>
             <!-- [2] شريط الفاتورة المدمج -->
             <div class="sale-topbar">
@@ -2113,6 +2122,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261105-1558"></script>
+<script src="app.js?v=20261105-1946"></script>
 </body>
 </html>
