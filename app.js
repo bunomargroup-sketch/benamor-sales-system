@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261105-1429';
+const APP_BUILD='b20261105-1558';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -4831,7 +4831,10 @@ function fillPurchaseListFilterOptions(){
   const mf=q('purchaseFilterMonth');
   if(mf && !mf.dataset.once){ mf.dataset.once='1'; if(!mf.value) mf.value=new Date().toISOString().slice(0,7); /* افتراضي: فواتير الشهر الحالي — الأداء ليس تجميلاً */ }
 }
-function purchaseRemaining(p){ return Number(p.total||0)-Number(p.paid_amount||0); }
+/* (0178) «المتبقي» كان يتجاهل المرتجعات: فاتورة 1000 أُرجع منها 300 تبقى
+   تقول 1000 مستحقة، والمورد في كشفه مدين لنا أصلاً. المرتجع **إشعار خصم**
+   يبرئ ذمة الفاتورة بمقداره (نقداً أو على الحساب — الحساب واحد هنا). */
+function purchaseRemaining(p){ return Number(p.total||0)-Number(p.paid_amount||0)-purchaseReturnedTotal(p.id); }
 function purchasePaymentStatus(p){
   const rem=purchaseRemaining(p), paid=Number(p.paid_amount||0);
   if(rem<=0) return 'paid';
@@ -4869,7 +4872,7 @@ function renderPurchasesList(){
   q('purchasesBody').innerHTML=rows.slice(0,purchasesListLimit).map(p=>{
     const s=suppliers.find(x=>x.id===p.supplier_id), l=locations.find(x=>x.id===p.location_id);
     const rem=purchaseRemaining(p);
-    return `<tr data-id="${p.id}" class="${p.id===selectedPurchaseId?'selected-row':''}" onclick="selectPurchaseRow(this)" ondblclick="purchaseListAction('view')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${esc(p.purchase_date)}</td><td>${esc(s?.name||'')}</td><td>${esc(l?.name||'')}</td><td class="ltr">${esc(p.invoice_no||'')}</td><td><b>${money(p.total)}</b></td><td>${money(p.paid_amount)}</td><td class="${rem>0?'stock-negative':''}"><b>${money(rem)}</b></td><td><span class="badge ${p.status==='posted'?'green':(p.status==='cancelled'?'red':'')}">${typeLabel(p.status)}</span></td></tr>`;
+    return `<tr data-id="${p.id}" class="${p.id===selectedPurchaseId?'selected-row':''}" onclick="selectPurchaseRow(this)" ondblclick="purchaseListAction('view')" title="اضغط مرتين للمشاهدة"><td class="ltr"><b>${esc(p.purchase_no||p.id.slice(0,8))}</b></td><td>${esc(p.purchase_date)}</td><td>${esc(s?.name||'')}</td><td>${esc(l?.name||'')}</td><td class="ltr">${esc(p.invoice_no||'')}</td><td><b>${money(p.total)}</b></td><td>${money(p.paid_amount)}</td><td class="${rem>0?'stock-negative':''}"><b>${money(rem)}</b>${(()=>{const rt=purchaseReturnedTotal(p.id); return rt>0?`<div class="mini" style="color:var(--muted)">↩ مرتجع ${money(rt)}</div>`:'';})()}</td><td><span class="badge ${p.status==='posted'?'green':(p.status==='cancelled'?'red':'')}">${typeLabel(p.status)}</span></td></tr>`;
   }).join('')||'<tr><td colspan="9">لا توجد فواتير شراء مطابقة للفلاتر.</td></tr>';
   const olderPWrap=q('purchasesOlderWrap'); if(olderPWrap) olderPWrap.innerHTML=olderBtn;
   /* شريط الإجماليات تحت الجدول — ينعكس مع كل فلتر */
@@ -5043,7 +5046,7 @@ async function viewPurchaseDetails(id){
     q('pvdBody').innerHTML=`<table style="width:100%"><thead><tr>${info.map(x=>`<th>${x[0]}</th>`).join('')}</tr></thead><tbody><tr>${info.map(x=>`<td>${esc(String(x[1]))}</td>`).join('')}</tr></tbody></table>
       <table style="width:100%;margin-top:12px"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody>${
         (items||[]).map(it=>`<tr><td class="ltr">${esc(it.product_code||'')}</td><td>${esc(it.product_name||'')}</td><td>${money(it.qty)}</td><td>${money(it.unit_cost)}</td><td><b>${money(it.line_total)}</b></td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف.</td></tr>'
-      }</tbody></table>`;
+      }</tbody></table>${purchaseReturnsSectionHtml(id)}`;
     q('pvdModal').classList.add('show'); modalToTop(q('pvdModal'));
   }catch(e){toast('خطأ: '+friendlyError(e),'error');}
   finally{showLoading(false);}
@@ -9486,7 +9489,7 @@ const FINANCE_REGISTER_DOC_OPEN={
   'pos_sale_returns':id=>{const r=saleReturns.find(x=>x.id===id); r?viewSaleInvoice(r.sale_id):toast('افتح الفاتورة الأصلية من قائمة الفواتير','warn');},
   'pos_expenses':id=>editExpense(id),
   'pos_purchases':id=>viewPurchaseDetails(id),
-  'pos_purchase_returns':id=>{const pr=purchaseReturns.find(x=>x.id===id); pr?viewPurchaseDetails(pr.purchase_id):toast('افتح فاتورة الشراء الأصلية من قائمة المشتريات','warn');},
+  'pos_purchase_returns':id=>openPurchaseReturnDoc(id) /* (0178) صار له مستند يُفتح ويُطبع بدل تحويله إلى فاتورة الشراء */,
   'pos_customer_ledger':id=>{const l=customerLedger.find(x=>x.id===id); l?openCustomerLedger(l.customer_id):toast('افتح كشف حساب الزبون من تبويب الزبائن','warn');},
   'pos_treasury_transfers':id=>editTreasuryTransfer(id) /* (0138) التحويل مستند — فتح سطره من السجل يفتح تعديله */
 };
@@ -11691,6 +11694,213 @@ function applyPurchaseReturnLocally(ret, body, items, invNo){
   if(['cash','bank_transfer','card'].includes(body.settlement_method)&&body.account_id){
     localMovement(body.account_id,'in','supplier_refund',total,ret.return_date||body.return_date,'pos_purchase_returns',ret.id,'استرداد من مورد / مرتجع فاتورة شراء');
   }
+}
+
+/* ═══════════ (0178) مرتجعات المشتريات: كانت تُحفظ ولا تُرى في أي قائمة ═══════════
+   ما قاله المالك حرفياً: «سجّلت مرتجعاً ولم أجده في القائمة».
+   والحقيقة أن المستند كان يُحفظ في pos_purchase_returns (ويُخصم من المخزون
+   ويكتب سطراً في دفتر المورد وحركة استرداد في الخزينة) — لكن **لا شاشة
+   تعرضه ولا مستند يُطبع**. أثره الوحيد المرئي: سطر «مرتجع» في كشف حساب
+   المورد. المرتجع مستند كالفاتورة: له رقم مرجع وتاريخ وبنود وإجمالي.
+   هنا: قائمة كاملة + مستند مطبوع + قسم داخل فاتورة الشراء. */
+let __prTotals=null, __prTotalsLen=-1, __prListScope=null;
+function purchaseReturnTotalsMap(){
+  if(__prTotals && __prTotalsLen===purchaseReturns.length) return __prTotals;
+  const m=new Map();
+  for(const r of purchaseReturns){ const k=String(r.purchase_id||''); m.set(k,(m.get(k)||0)+Number(r.total||0)); }
+  __prTotals=m; __prTotalsLen=purchaseReturns.length; return m;
+}
+function purchaseReturnedTotal(purchaseId){ return purchaseReturnTotalsMap().get(String(purchaseId))||0; }
+function purchaseReturnsOn(purchaseId){
+  return purchaseReturns.filter(r=>String(r.purchase_id)===String(purchaseId))
+    .sort((a,b)=>String(b.return_date||'').localeCompare(String(a.return_date||''))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
+function prRef(r){ return String((r&&r.id)||'').slice(0,8); }
+function prMethodLabel(m){ return {credit:'على الحساب (خصم من ذمة المورد)',cash:'استرداد نقدي',bank_transfer:'استرداد مصرفي',card:'استرداد بطاقة'}[m]||typeLabel(m||'')||'—'; }
+function prItemsOf(r){ return purchaseReturnItems.filter(x=>String(x.return_id)===String(r&&r.id)); }
+function prPurchaseOf(r){ return purchases.find(p=>String(p.id)===String(r&&r.purchase_id))||null; }
+function prSupplierOf(r){ return suppliers.find(s=>String(s.id)===String(r&&r.supplier_id))||null; }
+function prLocationOf(r){ return locations.find(l=>String(l.id)===String(r&&r.location_id))||null; }
+function prPurchaseLabel(r){ const p=prPurchaseOf(r); return p?(p.purchase_no||String(p.id).slice(0,8)):String((r&&r.purchase_id)||'').slice(0,8); }
+
+/* قسم داخل نافذة «فاتورة شراء»: ما رجع من هذه الفاتورة */
+function purchaseReturnsSectionHtml(purchaseId){
+  const rets=purchaseReturnsOn(purchaseId);
+  if(!rets.length) return '<div class="mini" style="margin-top:12px">↩ لا مرتجعات على هذه الفاتورة.</div>';
+  const tot=rets.reduce((a,r)=>a+Number(r.total||0),0);
+  const rows=rets.map(r=>{
+    const items=prItemsOf(r);
+    return `<tr><td>${esc(r.return_date||'')}</td><td class="ltr">${esc(prRef(r))}</td><td><b>${money(r.total)}</b></td><td>${esc(prMethodLabel(r.settlement_method))}</td><td>${items.length}</td>
+      <td class="row" style="gap:6px;flex-wrap:wrap"><button class="btn secondary" type="button" onclick="printPurchaseReturn('${esc(r.id)}')">🖨 طباعة</button></td></tr>`;
+  }).join('');
+  return `<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:10px">
+    <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <b>↩ المرتجعات على هذه الفاتورة (${rets.length})</b>
+      <span class="mini">إجمالي المرتجع <b>${money(tot)} ${esc(APP_CONFIG.currency)}</b> — وقد خُصم من «المتبقي» أعلاه</span>
+    </div>
+    <div class="table-scroll" style="margin-top:8px"><table><thead><tr><th>التاريخ</th><th>المرجع</th><th>الإجمالي</th><th>طريقة التسوية</th><th>الأصناف</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+
+/* ─────────── قائمة مرتجعات المشتريات ─────────── */
+function ensurePurchaseReturnsModal(){
+  if(q('prListModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='prListModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(1150px,97vw)">
+    <div class="modal-head"><div><h2 style="margin:0">↩ مرتجعات المشتريات</h2><div class="mini" id="prListMeta"></div></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <button class="btn secondary" type="button" id="prListScopeBtn" onclick="clearPurchaseReturnsScope()" style="display:none">عرض كل المرتجعات</button>
+        <button class="btn secondary" type="button" onclick="printPurchaseReturnsList()">🖨 طباعة القائمة</button>
+        <button class="btn secondary" type="button" onclick="q('prListModal').classList.remove('show')">إغلاق</button>
+      </div></div>
+    <div class="grid" style="margin:10px 0;grid-template-columns:repeat(auto-fit,minmax(165px,1fr))">
+      <div><label>من تاريخ</label><input id="prListFrom" type="date" onchange="renderPurchaseReturnsList()"></div>
+      <div><label>إلى تاريخ</label><input id="prListTo" type="date" onchange="renderPurchaseReturnsList()"></div>
+      <div><label>المورد</label><select id="prListSupplier" onchange="renderPurchaseReturnsList()"><option value="">كل الموردين</option></select></div>
+      <div><label>بحث</label><input id="prListSearch" placeholder="رقم فاتورة الشراء أو صنف أو كود" oninput="renderPurchaseReturnsList()"></div>
+    </div>
+    <div class="table-scroll" style="max-height:62vh"><table>
+      <thead><tr><th>التاريخ</th><th>فاتورة الشراء</th><th>المورد</th><th>المكان</th><th>الإجمالي</th><th>طريقة التسوية</th><th>الأصناف</th><th>سجّله</th><th></th></tr></thead>
+      <tbody id="prListBody"></tbody><tfoot id="prListFoot"></tfoot></table></div>
+    <p class="mini" style="margin-top:8px">كل سطر هنا مستند مرتجع حقيقي: يخصم من مخزون المكان، ويبرئ ذمة المورد بمقداره، ويكتب سطراً في دفتر المورد — والمسترد نقداً/مصرفياً يظهر في الخزينة كحركة «استرداد من مورد».</p>
+  </div>`;
+  document.body.appendChild(d);
+}
+function purchaseReturnMatchesFilters(r){
+  const f=q('prListFrom')?.value||'', t=q('prListTo')?.value||'';
+  const sup=q('prListSupplier')?.value||'', term=(q('prListSearch')?.value||'').trim().toLowerCase();
+  if(__prListScope && String(r.purchase_id)!==String(__prListScope)) return false;
+  const d=String(r.return_date||'').slice(0,10);
+  if(f && d<f) return false;
+  if(t && d>t) return false;
+  if(sup && String(r.supplier_id||'')!==sup) return false;
+  if(term){
+    const p=prPurchaseOf(r);
+    const hay=[prRef(r),p?.purchase_no,p?.invoice_no,prSupplierOf(r)?.name,prLocationOf(r)?.name,
+               ...prItemsOf(r).map(i=>[i.product_code,i.product_name].join(' '))].filter(Boolean).join(' ').toLowerCase();
+    if(!hay.includes(term)) return false;
+  }
+  return true;
+}
+function purchaseReturnsFiltered(){ return purchaseReturns.filter(purchaseReturnMatchesFilters); }
+function renderPurchaseReturnsList(){
+  ensurePurchaseReturnsModal();
+  const sel=q('prListSupplier');
+  if(sel && sel.dataset.ready!=='1'){
+    sel.innerHTML='<option value="">كل الموردين</option>'+suppliers.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+    sel.dataset.ready='1';
+  }
+  const rows=purchaseReturnsFiltered()
+    .slice()
+    .sort((a,b)=>String(b.return_date||'').localeCompare(String(a.return_date||''))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  const body=q('prListBody');
+  if(body){
+    body.innerHTML=rows.map(r=>`<tr>
+      <td>${esc(r.return_date||'')}</td>
+      <td class="ltr"><b>${esc(prPurchaseLabel(r))}</b></td>
+      <td>${esc(prSupplierOf(r)?.name||'—')}</td>
+      <td>${esc(prLocationOf(r)?.name||'—')}</td>
+      <td><b>${money(r.total)}</b></td>
+      <td>${esc(prMethodLabel(r.settlement_method))}</td>
+      <td>${prItemsOf(r).length}</td>
+      <td class="mini">${esc(r.user_identifier||'—')}</td>
+      <td class="row" style="gap:6px;flex-wrap:wrap"><button class="btn secondary" type="button" onclick="printPurchaseReturn('${esc(r.id)}')">🖨 طباعة</button><button class="btn secondary" type="button" onclick="q('prListModal').classList.remove('show');viewPurchaseDetails('${esc(r.purchase_id)}')">📄 الفاتورة</button></td>
+    </tr>`).join('')||'<tr><td colspan="9">لا توجد مرتجعات مطابقة.</td></tr>';
+  }
+  const tot=rows.reduce((a,r)=>a+Number(r.total||0),0);
+  if(q('prListFoot')) q('prListFoot').innerHTML=rows.length
+    ? `<tr><td colspan="3"><b>الإجمالي</b></td><td colspan="2"><b>${money(tot)} ${esc(APP_CONFIG.currency)}</b></td><td colspan="4" class="mini">${rows.length} مستند مرتجع</td></tr>` : '';
+  if(q('prListMeta')){
+    const sc=__prListScope?prPurchaseOf(purchaseReturns.find(r=>String(r.purchase_id)===String(__prListScope))||{}):null;
+    q('prListMeta').textContent=(__prListScope?('مقصور على فاتورة الشراء '+(sc?.purchase_no||String(__prListScope).slice(0,8))+' — '):'')
+      +`${rows.length} مستنداً بإجمالي ${money(tot)} ${APP_CONFIG.currency}`;
+  }
+  const sb=q('prListScopeBtn'); if(sb) sb.style.display=__prListScope?'':'none';
+}
+function openPurchaseReturnsList(purchaseId){
+  ensurePurchaseReturnsModal();
+  __prListScope=purchaseId||null;
+  const reset=(id,val)=>{ const el=q(id); if(el) el.value=val; };
+  if(!purchaseId){ reset('prListFrom',''); reset('prListTo',''); reset('prListSupplier',''); reset('prListSearch',''); }
+  renderPurchaseReturnsList();
+  q('prListModal').classList.add('show'); try{ modalToTop(q('prListModal')); }catch(_e){}
+}
+function openPurchaseReturnDoc(id){
+  const r=purchaseReturns.find(x=>String(x.id)===String(id));
+  if(!r){ toast('لم يُعثر على مستند المرتجع — حدّث البيانات','warn'); return; }
+  openPurchaseReturnsList(r.purchase_id);
+}
+function clearPurchaseReturnsScope(){ __prListScope=null; renderPurchaseReturnsList(); }
+
+/* ─────────── مستند المرتجع المطبوع ─────────── */
+function purchaseReturnDocHtml(id){
+  const r=purchaseReturns.find(x=>String(x.id)===String(id));
+  if(!r) return null;
+  const p=prPurchaseOf(r), sup=prSupplierOf(r), loc=prLocationOf(r), items=prItemsOf(r);
+  const dp=String(r.return_date||'').split('-');
+  const dateDisp=(dp.length===3)?(dp[2]+'-'+dp[1]+'-'+dp[0]):String(r.return_date||'');
+  const rows=items.map((it,i)=>`<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(it.product_name)}</td><td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_cost)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`).join('')
+    ||'<tr><td colspan="6" class="n">لا بنود مسجَّلة لهذا المستند.</td></tr>';
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>مرتجع مشتريات ${esc(prRef(r))}</title><style>
+*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;margin:0;color:#0f172a;background:#f1f5f9;line-height:1.55}
+.bar{max-width:800px;margin:14px auto 0;display:flex;justify-content:flex-end;gap:8px;padding:0 4px}
+.pbtn{background:#1d4ed8;color:#fff;border:0;border-radius:8px;padding:9px 18px;font:inherit;font-weight:700;cursor:pointer}
+.pbtn.ghost{background:#fff;color:#1d4ed8;border:1px solid #c7d2fe}
+.sheet{max-width:800px;margin:14px auto 40px;background:#fff;padding:34px 38px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,.10)}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:12px}
+.brand h1{margin:0;color:#0f2a5f;font-size:25px;font-weight:800}.brand .sub{color:#64748b;font-size:13px;font-weight:600;margin-top:2px}
+.doc{text-align:left}.doc .title{font-size:26px;font-weight:800;color:#b45309}.doc .invno{direction:ltr;font-size:16px;font-weight:700;color:#1d4ed8;margin-top:4px}.doc .date{direction:ltr;color:#475569;font-size:13.5px;margin-top:2px}
+.badge{display:inline-block;border-radius:6px;padding:4px 11px;font-size:12.5px;font-weight:700;background:#fffbeb;color:#b45309;border:1px solid #fde68a;margin-top:8px}
+.brandline{height:3px;background:linear-gradient(90deg,#b45309,#f59e0b);border-radius:2px;margin-bottom:14px}
+.meta{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #eef1f6;padding:10px 0 12px;margin-bottom:16px}
+.meta .f{padding:0 14px}.meta .f+.f{border-right:1px solid #eef1f6}.meta .f:first-child{padding-right:0}
+.meta .lbl{color:#94a3b8;font-size:12px;font-weight:600;margin-bottom:1px}.meta .val{color:#0f172a;font-size:15px;font-weight:700}
+table.items{width:100%;border-collapse:collapse;margin:0 0 18px}.items thead th{background:#f4f6fa;color:#334155;font-size:13px;font-weight:700;padding:11px 10px;border-bottom:2px solid #dbe3ee;text-align:right}
+.items thead th.n{text-align:center}.items td{padding:11px 10px;border-bottom:1px solid #eef1f6;font-size:14.5px}
+.items .n{text-align:center;font-variant-numeric:tabular-nums;direction:ltr}.items .code{direction:ltr;text-align:center;color:#64748b;font-size:12.5px;font-family:ui-monospace,monospace}.items .name{font-weight:600}.items .ttl{font-weight:700}
+.totals{width:312px;margin-inline-start:auto;margin-bottom:16px}.totals .grand{display:flex;justify-content:space-between;padding:10px 12px;font-size:17px;font-weight:800;color:#b45309}
+.ft{margin-top:24px;border-top:1px solid #eef1f6;padding-top:11px;text-align:center;color:#0f2a5f;font-weight:700;font-size:13.5px}
+@media print{body{background:#fff}.bar{display:none}.sheet{box-shadow:none;margin:0;max-width:none;border-radius:0;padding:14mm 15mm}.items thead{display:table-header-group}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+@page{size:A4;margin:0}
+</style></head><body>
+<div class="bar"><button class="pbtn" onclick="window.print()">طباعة</button><button class="pbtn ghost" onclick="window.close()">إغلاق</button></div>
+<div class="sheet">
+  <div class="hd"><div class="brand"><h1>${esc(APP_CONFIG.businessName)}</h1><div class="sub">${esc(INVOICE_SUBTITLE)}</div></div>
+    <div class="doc"><div class="title">مرتجع مشتريات</div><div class="invno">${esc(prRef(r))}</div><div class="date">${esc(dateDisp)}</div><span class="badge">${esc(prMethodLabel(r.settlement_method))}</span></div></div>
+  <div class="brandline"></div>
+  <div class="meta">
+    <div class="f"><div class="lbl">المورد</div><div class="val">${esc(sup?.name||'—')}</div></div>
+    <div class="f"><div class="lbl">المكان</div><div class="val">${esc(loc?.name||'—')}</div></div>
+    <div class="f"><div class="lbl">فاتورة الشراء الأصلية</div><div class="val ltr">${esc(p?.purchase_no||String(r.purchase_id||'').slice(0,8))}</div></div>
+    <div class="f"><div class="lbl">رقم فاتورة المورد</div><div class="val ltr">${esc(p?.invoice_no||'—')}</div></div>
+  </div>
+  <table class="items"><thead><tr><th class="n">#</th><th>الكود</th><th>الصنف</th><th class="n">الكمية</th><th class="n">سعر الشراء</th><th class="n">الإجمالي</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="totals"><div class="grand"><span>إجمالي المرتجع</span><b>${money(r.total)} ${esc(APP_CONFIG.currency)}</b></div></div>
+  ${r.notes?`<div class="mini" style="margin-bottom:10px">ملاحظات: ${esc(r.notes)}</div>`:''}
+  <div class="ft">هذا المستند يخصم من مخزون المكان ويبرئ ذمة المورد بمقداره${['cash','bank_transfer','card'].includes(String(r.settlement_method))?' — والمبلغ مسترد إلى حساب الخزينة':''}.<br>سجّله: ${esc(r.user_identifier||'—')} · ${esc(APP_CONFIG.businessName)}</div>
+</div></body></html>`;
+}
+function printPurchaseReturn(id){
+  try{
+    const html=purchaseReturnDocHtml(id);
+    if(!html){ toast('لم يُعثر على مستند المرتجع','warn'); return; }
+    showInAppPrint(html);
+  }catch(err){ console.error(err); toast('خطأ في طباعة المرتجع: '+err.message,'error'); }
+}
+function printPurchaseReturnsList(){
+  const rows=purchaseReturnsFiltered();
+  if(!rows.length){ toast('لا توجد مرتجعات مطابقة للفلاتر','warn'); return; }
+  const tot=rows.reduce((a,r)=>a+Number(r.total||0),0);
+  const body=rows.map(r=>`<tr><td>${esc(r.return_date||'')}</td><td class="ltr">${esc(prPurchaseLabel(r))}</td><td>${esc(prSupplierOf(r)?.name||'—')}</td><td>${esc(prLocationOf(r)?.name||'—')}</td><td class="ltr">${money(r.total)}</td><td>${esc(prMethodLabel(r.settlement_method))}</td></tr>`).join('');
+  const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>مرتجعات المشتريات</title><style>
+body{font-family:Tahoma,Arial,sans-serif;margin:24px;color:#0f172a}h1{font-size:20px;color:#0f2a5f;margin:0 0 4px}.sub{color:#64748b;font-size:12.5px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e2e8f0;padding:7px 8px;font-size:13px;text-align:right}th{background:#f4f6fa}
+tfoot td{font-weight:800;border-top:2px solid #cbd5e1}@media print{body{margin:10mm}}
+</style></head><body><h1>${esc(APP_CONFIG.businessName)} — مرتجعات المشتريات</h1>
+<div class="sub">${rows.length} مستنداً · إجمالي ${money(tot)} ${esc(APP_CONFIG.currency)} · طُبعت ${new Date().toLocaleString('ar-LY')}</div>
+<table><thead><tr><th>التاريخ</th><th>فاتورة الشراء</th><th>المورد</th><th>المكان</th><th>الإجمالي</th><th>طريقة التسوية</th></tr></thead><tbody>${body}</tbody>
+<tfoot><tr><td colspan="4">الإجمالي</td><td class="ltr">${money(tot)}</td><td></td></tr></tfoot></table></body></html>`;
+  showInAppPrint(html);
 }
 
 /* ═══════════════ (0074) بضاعة تالفة / غير صالحة — تُخصم قيمتها من الأرباح ═══════════════ */

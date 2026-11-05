@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261105-1429">
+<link rel="stylesheet" href="app.css?v=20261105-1558">
 </head>
 <body class="auth-locked">
   <header>
@@ -727,6 +727,7 @@
             <button class="btn secondary" type="button" onclick="printSelectedPurchase()" title="طباعة الفاتورة المحددة">🖨 طباعة</button>
             <button class="btn secondary" type="button" onclick="purchaseListAction('pay')" title="تسجيل دفعة للمورد على الفاتورة المحددة — المتبقي مقترحاً">💵 دفعة للمورد</button>
             <button class="btn secondary" type="button" onclick="purchaseListAction('return')" title="إرجاع بضاعة للفاتورة المحددة إلى المورد">↩ إرجاع</button>
+            <button class="btn secondary" type="button" onclick="openPurchaseReturnsList()" title="كل مستندات مرتجعات المشتريات: التاريخ والمورد والإجمالي وطباعة المستند">📋 مرتجعات المشتريات</button>
             <button class="btn danger" type="button" onclick="purchaseListAction('delete')">🗑 حذف</button>
             <span class="mini" id="purchaseSelHint">حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها</span>
             <button class="btn secondary" type="button" onclick="resetTableColumns('purchasesList')" title="إعادة أعمدة الجدول إلى العرض الافتراضي">↔ الأعمدة</button>
@@ -2112,6 +2113,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261105-1429"></script>
+<script src="app.js?v=20261105-1558"></script>
 </body>
 </html>
