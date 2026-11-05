@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261105-1304';
+const APP_BUILD='b20261105-1330';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -332,28 +332,42 @@ function modelChip(model){const m=String(model||'').trim();return m?` <span clas
 function staffEmail(id){return String(id||'').trim().toLowerCase()+'@bag.com'}
 function jwtExp(token){try{return JSON.parse(atob(String(token||'').split('.')[1]||''))?.exp||0;}catch(e){return 0}}
 function authExpiredSoonOf(s){const exp=Number(s&&(s.expires_at||jwtExp(s.access_token))); return !exp || (Date.now()/1000) > (exp-90);}
+function authSecondsLeft(s){const o=(s===undefined?authSession:s); const exp=Number(o&&(o.expires_at||jwtExp(o.access_token))); return exp? Math.floor(exp-Date.now()/1000) : 0;}
 function authExpiredSoon(){ return authExpiredSoonOf(authSession); }
 
-/* ═══ (0175) تجديد الجلسة: طلب واحد لا عشرون ═══════════════════════════
-   العطب الذي رآه المالك: 429 على /auth/v1/token?grant_type=refresh_token.
-   السبب ليس الخادم: كل نداء بيانات يمرّ عبر ensureAuth()، ودورة التحديث
-   تُطلق Promise.all على نحو عشرين جدولاً. فحين يدخل الرمز آخر 90 ثانية،
-   ترى العشرون كلها «انتهى» في اللحظة نفسها ⇒ عشرون طلب تجديد متزامن.
-   وSupabase (أ) يحدّ معدّل الطلبات ⇒ 429، (ب) يبدّل رمز التجديد مع كل
-   استخدام ⇒ الطلبات المتزامنة تُبطل بعضها فيسقط بعضها 400 أيضاً.
-   وقد يتكرّر الهجوم كل دقيقة مع كل نبضة تحديث.
+/* ═══ (0176) 429 على تجديد الجلسة — الإصلاح الثاني، وهذا هو الجذر ══════
+   بعد 0175 بقي الـ429 يظهر (ثلاث مرات في شاشة واحدة). السبب أن 0175 عالج
+   **تزامن** الطلبات فقط، ولم يعالج **تكرارها**: كانت ensureAuth تنتظر
+   تجديداً عند كل نداء ما دام الرمز في آخر ٩٠ ثانية من عمره. فسطرٌ واحد
+   (`await ensureAuth()`) أمام عشرين نداءً يعني عشرين انتظاراً لدورة تجديد
+   واحدة، وكل دورة تفشل بـ429 تُقصّر التهدئة إلى ثانيتين فتُعاد المحاولة،
+   وحمل الصفحة التالي يبدأ العدّ من جديد (التهدئة كانت في الذاكرة فقط).
 
-   الحل أربعة أشياء لا أكثر:
-     ١) طلب واحد مشترك: كل من وصل وواحدٌ يعمل ينتظر نتيجته (single-flight).
-     ٢) تهدئة عند 429: ٢ث ← ٤ ← ٨ … حتى ٦٠ث، ولا طلب داخل التهدئة.
-     ٣) مشاركة بين التبويبات: تبويب جدّد ⇒ الآخر يتبنّى رمزه من التخزين
-        بدل طلب ثانٍ (سبب شائع للـ429: ثلاث تبويبات مفتوحة).
-     ٤) رمز تجديد ميت (400/401) ⇒ جلسة منتهية فعلاً ورسالة واحدة واضحة،
-        لا حلقة محاولات.
-   والرسالة للمستخدم عربية: «أعد المحاولة بعد N ثانية» بدل 429 صامت. */
-let __authRefreshPromise=null, __authCooldownUntil=0, __authFailStreak=0;
-const AUTH_COOLDOWN_MAX_MS=60000, AUTH_COOLDOWN_BASE_MS=2000;
-function authCooldownLeft(){ return Math.max(0, Math.ceil((__authCooldownUntil-Date.now())/1000)); }
+   القاعدة الجديدة — ثلاثة مبادئ لا أكثر:
+     ١) **لا تجديد ما دام الرمز صالحاً.** الطلب يمرّ فوراً؛ والتجديد يجري
+        في الخلفية (طلب واحد مشترك) قبل الانتهاء بثلاث دقائق. لا انتظار.
+     ٢) **التهدئة أطول وموحّدة ومكتوبة على القرص.** أول 429 ⇒ ٦٠ ثانية،
+        ثم تتضاعف حتى ١٥ دقيقة. ومحفوظة في localStorage ⇒ لا يمحوها تحديث
+        الصفحة ولا تتجاهلها تبويبات أخرى (ثلاث تبويبات = ثلاث موجات سابقاً).
+        ويُحترم ترويسة Retry-After إن أرسلها الخادم.
+     ٣) **الانقطاع ليس عطباً في البيانات.** إذا انتهى الرمز والتهدئة فعّالة
+        لا نُطلق العشرين نداءً لتفشل وتقول «الجداول غير مهيّأة» فتمحو
+        المعروض. نتوقّف عن الجلب، نُبقي ما على الشاشة، ونُظهر تنبيهاً واحداً.
+
+   ولهذا كان ضرر الـ429 مضاعفاً: كل فشل مصادقة يُترجم في loadHeavy إلى
+   «X not setup yet» ويعيد [] — فيبدو النظام كأن بياناته اختفت، وهي سليمة. */
+const AUTH_CD_KEY='posAuthCooldownUntil', AUTH_CD_MAX_MS=15*60*1000, AUTH_CD_BASE_MS=60*1000, AUTH_BG_REFRESH_S=180;
+let __authRefreshPromise=null, __authFailStreak=0, __authCooldownUntil=0, __authNoticeAt=0;
+function authCooldownUntil(){ let v=Number(__authCooldownUntil)||0; try{ v=Math.max(v, Number(localStorage.getItem(AUTH_CD_KEY)||0)||0); }catch(_e){} return v; }
+function authCooldownLeft(){ return Math.max(0, Math.ceil((authCooldownUntil()-Date.now())/1000)); }
+function setAuthCooldown(ms){ __authCooldownUntil=Date.now()+ms; try{ localStorage.setItem(AUTH_CD_KEY,String(__authCooldownUntil)); }catch(_e){} }
+function clearAuthCooldown(){ __authCooldownUntil=0; __authFailStreak=0; try{ localStorage.removeItem(AUTH_CD_KEY); }catch(_e){} }
+/* «موقوفة» = لا رمز صالح ولا أمل في تجديد الآن ⇒ لا نُغرق الخادم بنداءات فاشلة */
+function authIsPaused(){ return authCooldownLeft()>0 && authSecondsLeft()<=60; }
+function authPauseNotice(msg){
+  const now=Date.now(); if(now-__authNoticeAt < 300000) return; __authNoticeAt=now;
+  try{ toast(msg||'الخادم يحدّ طلبات تجديد الجلسة — المعروض آخر ما وصل، ولا نضغط عليه. أعد المحاولة بعد قليل.','warn'); }catch(_e){}
+}
 function authSessionSaved(){ try{ return JSON.parse(localStorage.getItem('posAuthSession')||'null'); }catch(e){ return null; } }
 function adoptAuthSession(s){
   if(!s||!s.access_token) return false;
@@ -379,8 +393,10 @@ async function refreshAuth(){
       const data=await res.json().catch(()=>({}));
       if(res.status===429){
         __authFailStreak++;
-        const wait=Math.min(AUTH_COOLDOWN_MAX_MS, AUTH_COOLDOWN_BASE_MS*Math.pow(2, __authFailStreak-1));
-        __authCooldownUntil=Date.now()+wait;
+        let ra=0; try{ ra=Number(res.headers&&res.headers.get&&res.headers.get('Retry-After'))||0; }catch(_e){}
+        const wait=ra>0 ? Math.min(ra*1000, AUTH_CD_MAX_MS)
+                         : Math.min(AUTH_CD_MAX_MS, AUTH_CD_BASE_MS*Math.pow(2, __authFailStreak-1));
+        setAuthCooldown(wait);
         throw new Error('RETRY_LATER:'+Math.ceil(wait/1000));
       }
       if(!res.ok){
@@ -391,7 +407,7 @@ async function refreshAuth(){
         }
         throw new Error(msg||'تعذر تحديث الجلسة');
       }
-      __authFailStreak=0; __authCooldownUntil=0;
+      clearAuthCooldown();
       const merged={...authSession,...data};
       if(!merged.expires_at && data.expires_in) merged.expires_at=Math.floor(Date.now()/1000)+Number(data.expires_in);
       adoptAuthSession(merged);
@@ -400,25 +416,31 @@ async function refreshAuth(){
   })();
   return __authRefreshPromise;
 }
+/* لا انتظار ما دام الرمز صالحاً — هذا هو ما يمنع عشرين انتظاراً لكل حملة */
 async function ensureAuth(){
   if(!appUser?.id && !authSession?.access_token) return;
-  if(!authExpiredSoon()) return;
+  const left=authSecondsLeft();
+  if(left>0){
+    /* صالح: يمضي الطلب فوراً. والتجديد — إن قارب الانتهاء — في الخلفية بهدوء. */
+    if(left<AUTH_BG_REFRESH_S && !__authRefreshPromise && authCooldownLeft()===0) refreshAuth().catch(()=>{});
+    return;
+  }
   try{ await refreshAuth(); }
   catch(e){
-    /* التهدئة ليست عطباً: نكمل بالرمز الحالي فإن رفضه الخادم ظهرت رسالة
-       واحدة مفهومة — بدل عشرين محاولة تُغرق الخادم. */
-    if(/^RETRY_LATER:/.test(String(e&&e.message||''))) return;
+    const m=String(e&&e.message||'');
+    if(/^RETRY_LATER:/.test(m)) throw new Error('AUTH_PAUSED:'+m.split(':')[1]);
     throw e;
   }
 }
+function authIsPausedError(e){ return /^AUTH_PAUSED:/.test(String(e&&e.message||'')); }
 /* تبويب آخر جدّد: نتبنّى جلسته فوراً (نفس المتصفح، نفس التخزين) */
 try{ window.addEventListener('storage', ev=>{ if(ev.key==='posAuthSession'&&ev.newValue){ try{ const s=JSON.parse(ev.newValue); if(s?.access_token) authSession=s; }catch(_e){} } }); }catch(_e){}
 async function authSignIn(identifier,code){
   const res=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:staffEmail(identifier),password:code})});
   const data=await res.json().catch(()=>({}));
   if(!res.ok)throw new Error(data.error_description||data.msg||data.message||'auth failed');
-  /* تسجيل دخول جديد = بداية نظيفة: أصفِر التهدئة وعدّاد الفشل */
-  __authFailStreak=0; __authCooldownUntil=0;
+  /* تسجيل دخول جديد = بداية نظيفة: أصفِر التهدئة المحفوظة وعدّاد الفشل */
+  clearAuthCooldown();
   if(!data.expires_at && data.expires_in) data.expires_at=Math.floor(Date.now()/1000)+Number(data.expires_in);
   authSession=data; localStorage.setItem('posAuthSession',JSON.stringify(authSession)); return data.user}
 async function fetchWithAuthRetry(url, options={}, parseEmptyAs=null){
@@ -1354,6 +1376,10 @@ async function loadCore(){
 }
 
 async function loadHeavy(){
+  /* (0176) المصادقة موقوفة (429) والرمز منتهٍ: لا نُطلق عشرة آلاف سطر
+     من الطلبات المحكوم عليها بالفشل — فتظهر كلها «X not setup yet» وتمحو
+     المعروض. نُبقي ما على الشاشة وننبه مرة واحدة. */
+  if(authIsPaused()){ authPauseNotice(); console.warn('[auth] التحميل الثقيل مؤجّل — الخادم يحدّ تجديد الجلسة'); return; }
   // نوافذ زمنية للنمط الكلاسيكي فقط (الجلب الجماعي يجلب الكامل — أدق للتقارير)
   const cutoff60=new Date(Date.now()-60*864e5).toISOString().slice(0,10);
   const cutoff60i=new Date(Date.now()-60*864e5).toISOString();
@@ -2107,7 +2133,7 @@ async function loginPOS(create=false){
   }
   finally{showLoading(false);window.__busy=false; q('loginBtn')?.removeAttribute('disabled')}
 }
-function logoutPOS(){localStorage.removeItem('posUser'); localStorage.removeItem('posAuthSession'); appUser=null; authSession=null; currentRole=null; updateAuthUI(); q('loginScreen').classList.add('show'); loadLoginBranches(); q('loginIdentifier')?.focus()}
+function logoutPOS(){localStorage.removeItem('posUser'); localStorage.removeItem('posAuthSession'); clearAuthCooldown(); appUser=null; authSession=null; currentRole=null; updateAuthUI(); q('loginScreen').classList.add('show'); loadLoginBranches(); q('loginIdentifier')?.focus()}
 function updateAuthUI(){
   const logged=!!(appUser?.id && appUser?.branch_id && authSession?.access_token);
   document.body.classList.toggle('auth-locked',!logged);
@@ -5682,6 +5708,7 @@ const SEL_STOCK = LEAN_SELECT
 
 async function refreshSalesDomain(o={}){
   if(!navigator.onLine) return false;
+  if(authIsPaused()) return false;   /* (0176) لا نداءات تحت تهدئة 429 */
   const cutoff90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
   const since=deltaWindowStart();
   const hzNow = __salesHorizon || salesHorizonDate();
