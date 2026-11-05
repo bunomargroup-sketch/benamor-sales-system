@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261105-1330';
+const APP_BUILD='b20261105-1429';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1315,16 +1315,48 @@ function applyCostReference(){
    والتحويلات محايدة على مستوى المنظومة (طرد مقابل وارد لكل صنف).
    (0150) التاريخ هو movement_date فقط — لا created_at (حركات مهاجَرة
    خُتمت بلحظة الترحيل)، والترتيب داخل اليوم بـlegacy_seq. */
+/* (0177) 500 «canceling statement due to statement timeout» على حركات التكلفة.
+   الاستعلام كان يطلب الترتيب movement_date,legacy_seq nulls last,id — ولا فهرس
+   يخدم هذا الترتيب (الفهرس القائم على product_code) — فكل صفحة Range/OFFSET
+   تُعيد فرز كل الصفوف المطابقة على الخادم. مع كامل التاريخ تجاوزت مهلة الجملة
+   (٨ ثوانٍ لدور authenticated) فسقط النداء بـ500، وبقيت التكلفة على آخر نسخة.
+
+   الحل: التصفيح بمفتاح id (فهرس المفتاح الأساسي) لا بـOFFSET، ثم الترتيب
+   الزمني على الجهاز بعد اكتمال الجلب. نفس الترتيب حرفياً (التاريخ ثم legacy_seq
+   مع nulls last ثم id) — بلا فرز واحد على الخادم. */
+function costMovementSeq(r){ const v=r&&r.legacy_seq; return (v==null||v==='')?Infinity:Number(v); }
+function sortCostMovements(rows){
+  const keyed=(rows||[]).map(r=>{ const t=Date.parse(r&&r.movement_date); return {r, t:Number.isFinite(t)?t:0}; });
+  keyed.sort((a,b)=>{
+    if(a.t!==b.t) return a.t<b.t?-1:1;
+    const sa=costMovementSeq(a.r), sb=costMovementSeq(b.r);
+    if(sa!==sb) return sa<sb?-1:1;
+    const ia=String(a.r.id||''), ib=String(b.r.id||'');
+    return ia<ib?-1:ia>ib?1:0;
+  });
+  return keyed.map(x=>x.r);
+}
 async function loadCostMovements(){
   /* (0164) دون إنترنت كان هذا النداء يرفض فيُسقط loadCore كله ⇒ يُطرد الكاشير
      إلى شاشة الدخول. الآن الفشل يعني «ابقَ على آخر حركات سليمة». */
-  const r=await apiAll('pos_stock_movements',
-    '?select=product_code,movement_type,qty_change,movement_date,reference_table,legacy_seq'+
-    '&movement_type=in.(adjustment,waste,return_supplier,return_customer)'+
-    '&order=movement_date.asc,legacy_seq.asc.nullslast,id.asc').catch(e=>{
-      console.warn('حركات التكلفة غير متاحة الآن — نبقى على آخر ما حُمِّل', e); return null; });
+  const sel='select=id,product_code,movement_type,qty_change,movement_date,reference_table,legacy_seq';
+  const flt='&movement_type=in.(adjustment,waste,return_supplier,return_customer)';
+  const PAGE=2000;
+  const out=[]; let last='', guard=0;
+  try{
+    while(++guard<=400){
+      const rows=await api('pos_stock_movements',{qs:'?'+sel+flt+
+        (last?'&id=gt.'+encodeURIComponent(last):'')+'&order=id.asc&limit='+PAGE});
+      if(!Array.isArray(rows)||!rows.length) break;
+      out.push(...rows); last=rows[rows.length-1].id;
+      if(rows.length<PAGE) break;
+    }
+  }catch(e){
+    console.warn('حركات التكلفة غير متاحة الآن — نبقى على آخر ما حُمِّل', e);
+    return costMovements;
+  }
   /* فراغٌ بعد نجاح سابق = فشل مؤقت في الشبكة: نُبقي آخر بيانات سليمة */
-  if(r && r.length) costMovements=r;
+  if(out.length) costMovements=sortCostMovements(out);
   return costMovements;
 }
 
@@ -9916,6 +9948,53 @@ let expensesListCache=[], expensesListLimit=500, expensesListInit=false, expense
    والرقم أعلى الشاشة يُقرأ كأنه الحقيقة — فلا يجوز أن ينقص بلا أن يقول. */
 let expensesTotalState={sig:null,sum:0,ok:false,loading:false};
 let expensesAggSupported=null; /* null=لم يُجرَّب · true=الخادم يجمع · false=لا يجمع */
+
+/* ═══ (0177) الجمع على الخادم مرفوض على هذا المشروع ═════════════════════
+   الطرفية تُظهر أربع رسائل 400 عند كل تشغيل:
+     GET pos_expenses?select=amount.sum()…          400
+     GET pos_salary_payments?select=amount.sum()…   400
+   والسبب ليس الكود: PostgREST يرفض دوال الجمع ما لم يُفعَّل
+   pgrst.db_aggregates_enabled على دور authenticator (PGRST123 —
+   «Use of aggregate functions is not allowed»). وهو معطّل على مشروعنا.
+
+   ولسنا مضطرين إليه: الجدولان **محمَّلان كاملين في الذاكرة** أصلًا
+   (loadHeavy يجلب pos_expenses و pos_salary_payments بلا حدّ تاريخي وبكل
+   الأعمدة). فالجمع محلياً على كل الصفوف المطابقة يعطي **نفس الرقم** بلا
+   طلب شبكة وبلا 400.
+
+   ونحفظ الرفض في التخزين 24 ساعة: لا نُكرّر طلباً نعرف أنه مرفوض، ونعيد
+   المحاولة كل يوم في حال فُعِّل الجمع على المشروع لاحقاً. */
+const AGG_OFF_KEY='posAggServerOffAt', AGG_RETRY_MS=24*3600*1000;
+function aggServerKnownOff(){ try{ const t=Number(localStorage.getItem(AGG_OFF_KEY)||0); return t>0 && (Date.now()-t)<AGG_RETRY_MS; }catch(e){ return false; } }
+function markAggServerOff(){ try{ localStorage.setItem(AGG_OFF_KEY,String(Date.now())); }catch(e){} }
+function markAggServerOn(){ try{ localStorage.removeItem(AGG_OFF_KEY); }catch(e){} }
+
+/* مطابِق الصفوف: نفس شروط expenseFilterParts() لكن على الصف نفسه في الذاكرة */
+function expenseFilterObj(){
+  return {from:q('expenseListFrom')?.value||'', to:q('expenseListTo')?.value||'',
+          cat:q('expenseListCategory')?.value||'', br:q('expenseListBranch')?.value||'',
+          sr:(q('expenseListSearch')?.value||'').trim().toLowerCase()};
+}
+function expenseRowMatches(x,f){
+  const d=String(x.expense_date||'').slice(0,10);
+  if(f.from && d<f.from) return false;
+  if(f.to && d>f.to) return false;
+  if(f.cat && String(x.category_id||'')!==f.cat) return false;
+  if(f.br==='__no_branch__'){ if(x.location_id) return false; }
+  else if(f.br && String(x.location_id||'')!==f.br) return false;
+  if(f.sr && !String(x.title||'').toLowerCase().includes(f.sr)) return false;
+  return true;
+}
+function expensesTotalLocal(){
+  const f=expenseFilterObj(); let sum=0,n=0;
+  for(const x of (expenses||[])){ if(expenseRowMatches(x,f)){ sum+=Number(x.amount||0); n++; } }
+  return {sum,n};
+}
+function expensesTotalsFallback(sig){
+  if(!(expenses||[]).length) return {sig,sum:0,ok:false,loading:false};
+  const l=expensesTotalLocal();
+  return {sig,sum:l.sum,ok:true,local:true,n:l.n,loading:false};
+}
 /* (0103) المصاريف → شيت SmartBalance: خريطة المؤكَّد (expense_id→sent_at) + المعلق محلياً + الاختيار */
 let expensesSheetSentMap=new Map(), expensesSheetPending=new Set(), expenseSheetSel=new Set();
 function expenseTodayUTC(){ return new Date().toISOString().slice(0,10); } /* مطابق لـ current_date بتوقيت الخادم */
@@ -10036,21 +10115,25 @@ function expensesLoadedTotal(){ return expensesListCache.reduce((a,x)=>a+Number(
 async function fetchExpensesTotal(force){
   const sig=expenseFilterSignature();
   if(!force && expensesTotalState.sig===sig && !expensesTotalState.loading) return;
-  if(expensesAggSupported===false && !force){ expensesTotalState={sig,sum:0,ok:false,loading:false}; renderExpensesTotalsBar(); return; }
+  if((expensesAggSupported===false || aggServerKnownOff()) && !force){
+    expensesTotalState=expensesTotalsFallback(sig); renderExpensesTotalsBar(); return;
+  }
   expensesTotalState={sig,sum:expensesTotalState.sum,ok:expensesTotalState.ok,loading:true};
   renderExpensesTotalsBar();
   try{
     const rows=await api('pos_expenses',{qs:'?select=amount.sum()'+(sig?'&'+sig:'')});
     const raw=Array.isArray(rows)&&rows.length?rows[0].sum:0;
     const v=Number(raw==null?0:raw);
-    expensesAggSupported=true;
+    expensesAggSupported=true; markAggServerOn();
     expensesTotalState={sig,sum:Number.isFinite(v)?v:0,ok:true,loading:false};
   }catch(err){
     /* «الخادم لا يجمع» دائم ⇒ نحفظه فلا نُكرّر الطلب. «انقطع النت» عابر ⇒
        لا نحفظه فتُعاد المحاولة عند أول تغيير فلتر أو تحديث. */
-    if(!window.__netDown) expensesAggSupported=false;
-    expensesTotalState={sig,sum:0,ok:false,loading:false};
-    console.warn('[expenses] جمع الإجمالي على الخادم غير متاح (PostgREST aggregates)',err);
+    if(!window.__netDown){ expensesAggSupported=false; markAggServerOff(); }
+    /* (0177) لا نخترع رقماً ولا نرضى بالمعروض وحده: نجمع من كل الصفوف
+       المطابقة المحمَّلة (الجدول كامل في الذاكرة) — نفس رقم الخادم. */
+    expensesTotalState=expensesTotalsFallback(sig);
+    console.warn('[expenses] جمع الخادم غير متاح (PostgREST aggregates) — نجمع على الجهاز من كل الصفوف المحمَّلة',err&&err.message||err);
   }
   renderExpensesTotalsBar();
 }
@@ -10067,6 +10150,11 @@ function renderExpensesTotalsBar(){
   if(st.sig!==live || st.loading){
     bar.innerHTML=grid(chip('🧾 إجمالي المصاريف (حسب الفلترة)','…'))
       +'<div class="mini" style="margin-top:4px">جارٍ حساب الإجمالي على الخادم من كل الصفوف المطابقة…</div>';
+    return;
+  }
+  if(st.ok && st.local){
+    bar.innerHTML=grid(chip('🧾 إجمالي المصاريف (حسب الفلترة)',money(st.sum)+' '+cur))
+      +`<div class="mini" style="margin-top:4px">محسوب على الجهاز من <b>كل</b> الصفوف المطابقة المحمَّلة (${st.n} صفاً) — لا من المعروض وحده${more?` (المعروض ${n} صفاً والمزيد موجود)`:''}. الخادم لا يوفّر جمعاً على هذا المشروع، والرقم من كامل جدول المصاريف في الذاكرة.</div>`;
     return;
   }
   if(st.ok){
@@ -10333,6 +10421,42 @@ let salaryListDirty=true, salaryListLoaded=false;
 let selectedSalaryId=null, __lastSalaryRowClick={id:null,t:0}, editingSalaryId=null;
 let salaryTotalsState={sig:null,sum:0,fixed:null,comm:null,ok:false,loading:false};
 let salaryAggSupported=null;                 /* null=لم يُجرَّب · true · false */
+
+/* (0177) نفس مبدأ المصاريف: المرتبات محمَّلة كاملة في الذاكرة، فنحسب محلياً */
+function salaryFilterObj(){
+  return {from:q('salaryListFrom')?.value||'', to:q('salaryListTo')?.value||'',
+          emp:q('salaryListEmployee')?.value||'', acc:q('salaryListAccount')?.value||'',
+          kind:(salaryCaps.applied?(q('salaryListKind')?.value||''):''),
+          sr:(q('salaryListSearch')?.value||'').trim().toLowerCase()};
+}
+function salaryRowMatches(x,f){
+  const d=String(x.payment_date||'').slice(0,10);
+  if(f.from && d<f.from) return false;
+  if(f.to && d>f.to) return false;
+  if(f.emp && String(x.employee_id||'')!==f.emp) return false;
+  if(f.acc && String(x.account_id||'')!==f.acc) return false;
+  if(f.kind && String(x.kind||'')!==f.kind) return false;
+  if(f.sr){
+    const a=String(x.notes||'').toLowerCase(), b=String(x.period||'').toLowerCase();
+    if(!a.includes(f.sr) && !b.includes(f.sr)) return false;
+  }
+  return true;
+}
+function salaryTotalsLocal(){
+  const f=salaryFilterObj(); let sum=0,fixed=0,comm=0,n=0;
+  for(const x of (salaryPayments||[])){
+    if(!salaryRowMatches(x,f)) continue;
+    const v=Number(x.amount||0); sum+=v; n++;
+    if(String(x.kind||'')==='fixed') fixed+=v;
+    else if(String(x.kind||'')==='commission') comm+=v;
+  }
+  return {sum,fixed,comm,n};
+}
+function salaryTotalsFallback(sig){
+  if(!(salaryPayments||[]).length) return {sig,sum:0,fixed:null,comm:null,ok:false,loading:false};
+  const l=salaryTotalsLocal();
+  return {sig,sum:l.sum,fixed:salaryCaps.applied?l.fixed:null,comm:salaryCaps.applied?l.comm:null,ok:true,local:true,n:l.n,loading:false};
+}
 let salaryCaps={applied:null};               /* null=لم يُفحص · true=0162 مُشغَّلة */
 let salarySheetSentMap=new Map(), salarySheetPending=new Set(), salarySheetSel=new Set();
 
@@ -10445,8 +10569,8 @@ function salaryLoadedSplit(){
 async function fetchSalaryTotals(force){
   const sig=salaryFilterSignature();
   if(!force && salaryTotalsState.sig===sig && !salaryTotalsState.loading) return;
-  if(salaryAggSupported===false && !force){
-    salaryTotalsState={sig,sum:0,fixed:null,comm:null,ok:false,loading:false};
+  if((salaryAggSupported===false || aggServerKnownOff()) && !force){
+    salaryTotalsState=salaryTotalsFallback(sig);
     renderSalaryTotalsBar(); return;
   }
   salaryTotalsState={...salaryTotalsState,sig,loading:true};
@@ -10460,21 +10584,21 @@ async function fetchSalaryTotals(force){
         api('pos_salary_payments',{qs:'?'+sumQs('commission')})
       ]);
       const fx=Number((a&&a[0]&&a[0].sum)??0), cm=Number((b&&b[0]&&b[0].sum)??0);
-      salaryAggSupported=true;
+      salaryAggSupported=true; markAggServerOn();
       salaryTotalsState={sig,sum:(Number.isFinite(fx)?fx:0)+(Number.isFinite(cm)?cm:0),
                          fixed:Number.isFinite(fx)?fx:0, comm:Number.isFinite(cm)?cm:0,
                          ok:true,loading:false};
     }else{
       const rows=await api('pos_salary_payments',{qs:'?select=amount.sum()'+(base?'&'+base:'')});
       const v=Number((rows&&rows[0]&&rows[0].sum)??0);
-      salaryAggSupported=true;
+      salaryAggSupported=true; markAggServerOn();
       salaryTotalsState={sig,sum:Number.isFinite(v)?v:0,fixed:null,comm:null,ok:true,loading:false};
     }
   }catch(err){
     /* «الخادم لا يجمع» ⇒ نحفظه فلا نكرّر الطلب. انقطاع الشبكة عابر ⇒ لا. */
-    if(!window.__netDown) salaryAggSupported=false;
-    salaryTotalsState={sig,sum:0,fixed:null,comm:null,ok:false,loading:false};
-    console.warn('[salary] جمع الإجمالي على الخادم غير متاح',err);
+    if(!window.__netDown){ salaryAggSupported=false; markAggServerOff(); }
+    salaryTotalsState=salaryTotalsFallback(sig);   /* (0177) جمع محلي من كل الصفوف */
+    console.warn('[salary] جمع الخادم غير متاح — نجمع على الجهاز من كل الصفوف المحمَّلة',err&&err.message||err);
   }
   renderSalaryTotalsBar();
 }
@@ -10490,6 +10614,14 @@ function renderSalaryTotalsBar(){
   if(st.sig!==live || st.loading){
     bar.innerHTML=grid(chip('🧾 إجمالي المرتبات (حسب الفلترة)','…'))
       +'<div class="mini" style="margin-top:4px">جارٍ حساب الإجمالي على الخادم من كل الصفوف المطابقة…</div>';
+    return;
+  }
+  if(st.ok && st.local){
+    const lsplit = (st.fixed==null) ? ''
+      : `<div class="mini" style="margin-top:4px">الفصل: مرتب قار ${money(st.fixed)} · نسبة مبيعات ${money(st.comm)} ${cur}.</div>`;
+    bar.innerHTML=grid(chip('🧾 إجمالي المرتبات (حسب الفلترة)',money(st.sum)+' '+cur)
+        + (st.fixed==null?'':chip('💵 مرتب قار',money(st.fixed)+' '+cur)+chip('📈 نسبة مبيعات',money(st.comm)+' '+cur)))
+      +`<div class="mini" style="margin-top:4px">محسوب على الجهاز من <b>كل</b> الصفوف المطابقة المحمَّلة (${st.n} صفاً) — لا من المعروض وحده${more?` (المعروض ${n} صفاً والمزيد موجود)`:''}.${lsplit}</div>`;
     return;
   }
   if(st.ok){
