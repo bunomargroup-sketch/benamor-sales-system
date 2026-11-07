@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261105-2045';
+const APP_BUILD='b20261107-0901';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -13943,6 +13943,18 @@ function renderStockCount(){
     catEl.innerHTML='<option value="">كل التصنيفات</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
     catEl.value=cats.includes(ccur)?ccur:''; catEl.dataset.ready='1';
   }
+  /* حقل تاريخ الجرد: عند تحرير قائمة محفوظة يُجلب تاريخها، وإلا افتراضياً تاريخ اليوم —
+     ولا يُكتب فوق قيمة أدخلها المستخدم في هذه الجلسة. */
+  const dateEl=q('stockCountDate');
+  if(dateEl){
+    const today=new Date().toISOString().slice(0,10);
+    if(__scEditing && __scEditing.count_date && !dateEl.dataset.userSet){
+      dateEl.value=String(__scEditing.count_date).slice(0,10);
+    }else if(!dateEl.value){
+      dateEl.value=today;
+    }
+    dateEl.dataset.ready='1';
+  }
   if(!loc){q('stockCountBody').innerHTML='<tr><td colspan="8">اختر الفرع.</td></tr>';__scItems=[];window.__scLocStock=new Map();window.__scHiddenCount=0;updateStockCountTotals();return;}
   const term=(q('stockCountSearch')?.value||'').trim().toLowerCase();
   const cat=catEl?.value||'';
@@ -14083,7 +14095,9 @@ async function editStockCount(id){
       stockCountData={}; renderStockCount(); return;
     }
     __scEditing={id:String(r.id), status:r.status||'draft', no:r.count_no||String(r.id),
+                 count_date:r.count_date||null,
                  orig:new Map(items.map(it=>[String(it.product_code),it]))};
+    const de=q('stockCountDate'); if(de) delete de.dataset.userSet;
     locEl.value=String(r.location_id); locEl.dataset.prev=locEl.value;
     clearStockCountFilters();
     showStockCountSub('editor');
@@ -14187,7 +14201,9 @@ function buildStockCountDoc(){
   });
   if(!rows.length){toast('قائمة الجرد فارغة أو بلا كمية معدودة واحدة على الأقل','warn');return null;}
   const diffQ=rows.reduce((a,r)=>a+r.diff_qty,0), diffV=rows.reduce((a,r)=>a+r.diff_value,0);
-  return {loc,cat,rows,header:{count_date:new Date().toISOString().slice(0,10),location_id:loc,category:cat||null,status:'draft',items_count:locStock.size,counted_items:rows.length,diff_qty:diffQ,diff_value:diffV,user_identifier:appUser?.identifier||null}};
+  const countDateEl=q('stockCountDate');
+  const countDate=countDateEl?String(countDateEl.value||'').slice(0,10):'';
+  return {loc,cat,rows,header:{count_date:countDate||new Date().toISOString().slice(0,10),location_id:loc,category:cat||null,status:'draft',items_count:locStock.size,counted_items:rows.length,diff_qty:diffQ,diff_value:diffV,user_identifier:appUser?.identifier||null}};
 }
 function stockCountLocalList(){try{return JSON.parse(localStorage.getItem('posStockCountLocal')||'[]');}catch(_){return[]}}
 function mergedStockCounts(){
