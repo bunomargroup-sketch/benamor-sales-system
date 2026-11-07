@@ -595,7 +595,7 @@
     /* ═══ (المهمة ٢) قائمة المنتجات — عمود ثابت بارتفاع النافذة ═══ */
     #products.active > .panel{display:flex;flex-direction:column;height:calc(100dvh - 130px);min-height:400px;overflow-y:auto;overflow:visible!important}
     #products .product-workbench{flex:1;min-height:200px;display:grid;grid-template-columns:240px minmax(0,1fr);gap:10px;align-items:start}
-    #products .product-table-scroll{max-height:none;flex:1;min-height:0;overflow:auto}
+    #products .product-table-scroll{max-height:none;flex:1;min-height:0;overflow:auto;padding-bottom:70px}
     #products .product-table-scroll thead th{position:sticky;top:0;z-index:4;background:var(--table-head);box-shadow:0 1px 0 var(--border)}
     #products .product-sidebar{max-height:calc(100dvh - 320px);overflow-y:auto}
     #products .tools{margin:0 0 6px;flex-wrap:nowrap;align-items:center;gap:10px}
