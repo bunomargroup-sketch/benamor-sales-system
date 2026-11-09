@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261107-0908';
+const APP_BUILD='b20261107-0909';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -13959,7 +13959,6 @@ function renderStockCount(){
   const term=(q('stockCountSearch')?.value||'').trim().toLowerCase();
   const cat=catEl?.value||'';
   const locStock=scLocStockMap(loc); window.__scLocStock=locStock;
-  /* الجرد يبدأ بقائمة فارغة: لا أسطر إلا الأصناف المضافة (F3 أو يمين المنتج) — ومخزون الفرع يُقرأ حيّاً */
   const items=Object.keys(stockCountData).map(sc=>{
     const p=products.find(x=>String(x.code)===String(sc));
     return {code:sc,pname:p?.name||'',cat:p?.category||'',qty:Number(locStock.get(sc)||0),cost:productCost(sc)};
@@ -13973,7 +13972,7 @@ function renderStockCount(){
   if(!items.length){
     q('stockCountBody').innerHTML=Object.keys(stockCountData).length
       ?'<tr><td colspan="8">لا أصناف تطابق البحث/التصنيف ضمن قائمة الجرد الحالية.</td></tr>'
-      :'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:26px">📋 قائمة الجرد فارغة — اكتب الكود/الباركود في <b>مربع الإدخال السريع</b> أعلاه ثم Enter، أو اضغط <b class="kbd">F3</b> (قائمة المنتجات المفلترة كما في البيع)، أو من شاشة المنتجات اضغط بالزر الأيمن على المنتج واختر «إنشاء جرد بهذا الصنف».</td></tr>';
+      :'<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:26px">📋 قائمة الجرد فارغة.</td></tr>';
     updateStockCountTotals(); return;
   }
   q('stockCountBody').innerHTML=items.map(s=>{
@@ -14022,9 +14021,6 @@ function addStockCountItem(code){
 function removeStockCountItem(code){ if(stockCountData[code]===undefined)return; delete stockCountData[code]; renderStockCount(); }
 /* (1960) مسح بحث/تصنيف المحرر عند نقاط الانتقال — الفلتر القديم كان يخفي أسطر القائمة بصمت (مشكلة «سطر واحد فقط») */
 function clearStockCountFilters(){ const s=q('stockCountSearch'); if(s)s.value=''; const c=q('stockCountCategory'); if(c)c.value=''; }
-/* ─── (1960) مربع الإدخال السريع للجرد — نفس مربع الباركود في شاشة البيع:
-     كود/باركود تام (Enter أو 4 أحرف فأكثر) ← يُضاف الصنف لقائمة الجرد فوراً.
-     بلا مطابقة تامة ← تُفتح قائمة المنتجات المفلترة (F3) بالنص المكتوب. ─── */
 function handleCountBarcodeKey(e){
   if(e.key!=='Enter') return;
   e.preventDefault();
@@ -14038,7 +14034,6 @@ function handleCountBarcodeInput(){
   const v=(q('countBarcodeInput')?.value||'').trim();
   if(v.length>=4){ const p=findProductByCodeOrBarcode(v); if(p){ addStockCountItem(String(p.code)); q('countBarcodeInput').value=''; } }
 }
-/* (1960) حارس الماسح الضوئي لشاشة الجرد — كما في البيع: النقرات السريعة تُوجَّه لمربع الإدخال السريع حتى لو كان التركيز في مكان آخر */
 document.addEventListener('keydown',e=>{
   if(!q('stockCount')?.classList.contains('active')) return;
   if(e.ctrlKey||e.altKey||e.metaKey) return;
@@ -14311,7 +14306,7 @@ async function saveStockCount(){
     toast(isResettle?`تم تطبيق فرق التعديل (${applied} صنف) وتحديث القائمة`:`تم تسوية ${applied} صنف وحفظ قائمة الجرد`,'success');
   }catch(e){console.error(e);toast('تعذّر حفظ الجرد: '+friendlyError(e),'error')}finally{showLoading(false);window.__busy=false}
 }
-/* ─── قوائم الجرد السابقة: عرض وتحرير — والإلغاء/الحذف للمدير عبر معاملة
+/* قوائم الجرد السابقة: عرض وتحرير — والإلغاء/الحذف للمدير عبر معاملة
    0149 (المسوّى يُعكس أثره المخزني ذرّياً ويبقى «ملغى»، والمسودة تُحذف) ─── */
 function renderStockCountLists(){
   const el=q('stockCountListsBody'); if(!el)return;
