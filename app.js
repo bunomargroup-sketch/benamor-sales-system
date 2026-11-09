@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261107-0909';
+const APP_BUILD='b20261109-1831';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -3590,7 +3590,7 @@ function addSaleProductFromPicker(code,qtyOverride=null){
   const p=products.find(x=>String(x.code)===String(code)); if(!p){toast('لم يتم العثور على المنتج'); return;}
   if(productPickerTarget==='count'){ /* (1960) الجرد: يضيف الصنف لقائمة الجرد والنافذة تبقى مفتوحة */ addStockCountItem(String(p.code)); return; }
   const qty=Number((qtyOverride ?? q('salePickerQty').value) || 1);
-  if(productPickerTarget==='proforma') addOrIncrementProformaProduct(p,qty); else if(productPickerTarget==='purchase') addOrIncrementPurchaseProduct(p,qty); else if(productPickerTarget==='transfer') addOrIncrementTransferProduct(p,qty); else if(productPickerTarget==='noInvoiceReturn') addNoInvoiceReturnProduct(p,qty); else addOrIncrementSaleProduct(p,qty);
+  if(productPickerTarget==='proforma') addOrIncrementProformaProduct(p,qty); else if(productPickerTarget==='purchase') addOrIncrementPurchaseProduct(p,qty); else if(productPickerTarget==='transfer') addOrIncrementTransferProduct(p,qty); else if(productPickerTarget==='noInvoiceReturn') addNoInvoiceReturnProduct(p,qty); else if(productPickerTarget==='standalonePurchaseReturn') addStandalonePurchaseReturnProduct(p,qty); else addOrIncrementSaleProduct(p,qty);
   q('salePickerQty').value='1';
   toast('تمت إضافة المنتج للفاتورة');
 }
@@ -8392,7 +8392,7 @@ function closeTopSaleLayer(){
   if(q('salePaymentScreen')?.classList.contains('payment-open')){closeSalePaymentScreen();return true;}
   return false;
 }
-function saleModalOpen(){return !!document.querySelector('#saleProductPickerModal.show,#productViewModal.show,#movementsModal.show,#printPreviewModal.show,#quickProductModal.show,#saleReturnModal.show,#purchaseReturnModal.show,#shortcutsModal.show')}
+function saleModalOpen(){return !!document.querySelector('#saleProductPickerModal.show,#productViewModal.show,#movementsModal.show,#printPreviewModal.show,#quickProductModal.show,#saleReturnModal.show,#purchaseReturnModal.show,#standalonePurchaseReturnModal.show,#shortcutsModal.show')}
 
 
 
@@ -8537,9 +8537,11 @@ const ESC_MODAL_CLOSE={
   movementsModal:()=>closeMovementsModal(),
   printPreviewModal:()=>closePrintPreview(),
   quickProductModal:()=>closeQuickProductModal(),
-  saleReturnModal:()=>closeSaleReturnModal()
+  saleReturnModal:()=>closeSaleReturnModal(),
+  purchaseReturnModal:()=>closePurchaseReturnModal(),
+  standalonePurchaseReturnModal:()=>closeStandalonePurchaseReturnModal()
 };
-const ESC_SALE_LAYERS=new Set(['saleProductPickerModal','productViewModal','movementsModal','printPreviewModal','quickProductModal','saleReturnModal','shortcutsModal','__payment__','__calc__']);
+const ESC_SALE_LAYERS=new Set(['saleProductPickerModal','productViewModal','movementsModal','printPreviewModal','quickProductModal','saleReturnModal','purchaseReturnModal','standalonePurchaseReturnModal','shortcutsModal','__payment__','__calc__']);
 function escCloseFocusedWindow(){
   try{
     const keys=Object.keys(__wins||{}); let best=null,bz=-1;
@@ -11714,6 +11716,166 @@ function applyPurchaseReturnLocally(ret, body, items, invNo){
   }
 }
 
+/* ═══════════════ مرتجع مشتريات مستقل (standalone) — لا يتطلب فاتورة شراء أصلية ═══════════════ */
+/* تكلفة الصنف من آخر شراء؛ نقصان المخزون؛ قيد ذمة المورد؛ حركة استرداد إن كانت التسوية نقد/تحويل/بطاقة */
+let standalonePurchaseReturnItems=[];
+function openStandalonePurchaseReturn(){
+  standalonePurchaseReturnItems=[];
+  q('standalonePurchaseReturnDate').value=new Date().toISOString().slice(0,10);
+  q('standalonePurchaseReturnLocation').value=appUser?.branch_id||'';
+  q('standalonePurchaseReturnSupplier').value='';
+  q('standalonePurchaseReturnSettlement').value='credit';
+  q('standalonePurchaseReturnAccount').value='';
+  q('standalonePurchaseReturnReference').value='';
+  q('standalonePurchaseReturnNotes').value='';
+  renderStandalonePurchaseReturnItems();
+  refreshStandalonePurchaseReturnAccountOptions();
+  renderStandalonePurchaseReturnLocationOptions();
+  renderStandalonePurchaseReturnSupplierOptions();
+  q('standalonePurchaseReturnModal').classList.add('show');
+  setTimeout(()=>q('standalonePurchaseReturnLocation')?.focus(),50);
+}
+function closeStandalonePurchaseReturnModal(){
+  q('standalonePurchaseReturnModal')?.classList.remove('show');
+  standalonePurchaseReturnItems=[];
+}
+function renderStandalonePurchaseReturnLocationOptions(){
+  const sel=q('standalonePurchaseReturnLocation'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML=locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+  if(cur) sel.value=cur;
+  else if(appUser?.branch_id && [...sel.options].some(o=>o.value===appUser.branch_id)) sel.value=appUser.branch_id;
+}
+function renderStandalonePurchaseReturnSupplierOptions(){
+  const sel=q('standalonePurchaseReturnSupplier'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">بدون مورّد (اختياري)</option>'+(suppliers||[]).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+function refreshStandalonePurchaseReturnAccountOptions(){
+  const sel=q('standalonePurchaseReturnAccount'); if(!sel) return;
+  const method=q('standalonePurchaseReturnSettlement')?.value;
+  const loc=q('standalonePurchaseReturnLocation')?.value||appUser?.branch_id||null;
+  if(!['cash','bank_transfer','card'].includes(method)){ sel.innerHTML='<option value="">—</option>'; sel.value=''; sel.disabled=true; return; }
+  sel.disabled=false;
+  const compat=financeAccounts.filter(a=>{
+    if(method==='cash') return a.account_type==='cash';
+    if(method==='bank_transfer') return a.account_type==='bank'||a.account_type==='card';
+    return a.account_type==='card'||a.account_type==='bank';
+  });
+  const sorted=[...compat].sort((a,b)=>((a.location_id===loc)?0:1)-((b.location_id===loc)?0:1));
+  sel.innerHTML=sorted.map(a=>`<option value="${a.id}">${esc(a.name)}${a.location_id===loc?' (فرع المختار)':''}</option>`).join('');
+  const def=defaultFinanceAccountFor(method, loc);
+  if(def && sorted.some(a=>a.id===def)) sel.value=def;
+  else if(sorted.length) sel.value=sorted[0].id;
+}
+q('standalonePurchaseReturnSettlement')?.addEventListener('change',refreshStandalonePurchaseReturnAccountOptions);
+q('standalonePurchaseReturnLocation')?.addEventListener('change',refreshStandalonePurchaseReturnAccountOptions);
+function renderStandalonePurchaseReturnItems(){
+  const b=q('standalonePurchaseReturnItemsBody'); if(!b)return;
+  b.innerHTML=standalonePurchaseReturnItems.map((it,i)=>`<tr><td class="ltr">${esc(it.product_code)}</td><td>${esc(it.product_name)}</td><td class="ltr"><input class="spr-qty" data-i="${i}" type="number" min="1" step="any" value="${it.qty}" oninput="standalonePurchaseReturnQty(this)"></td><td class="ltr">${money(it.unit_cost)}</td><td class="ltr"><b>${money(Number(it.qty)*Number(it.unit_cost))}</b></td><td><button type="button" class="btn danger" onclick="removeStandalonePurchaseReturnItem(${i})">حذف</button></td></tr>`).join('')||'<tr><td colspan="6">لم تُضف أصناف — استخدم «اختيار صنف» أو الإدخال السريع</td></tr>';
+  updateStandalonePurchaseReturnTotal();
+}
+function standalonePurchaseReturnQty(inp){
+  const it=standalonePurchaseReturnItems[Number(inp.dataset.i)]; if(!it)return;
+  const v=Math.max(0,Number(inp.value||0));
+  if(v===0){removeStandalonePurchaseReturnItem(Number(inp.dataset.i));return;}
+  it.qty=v;
+  renderStandalonePurchaseReturnItems();
+}
+function removeStandalonePurchaseReturnItem(i){
+  standalonePurchaseReturnItems.splice(Number(i),1);
+  renderStandalonePurchaseReturnItems();
+}
+function updateStandalonePurchaseReturnTotal(){
+  let total=0;
+  standalonePurchaseReturnItems.forEach(it=>total+=Number(it.qty||0)*Number(it.unit_cost||0));
+  const t=q('standalonePurchaseReturnTotal'); if(t) t.textContent='الإجمالي: '+money(total)+' '+APP_CONFIG.currency;
+}
+function addStandalonePurchaseReturnProduct(p,qty=1){
+  if(!p)return;
+  const code=String(p.code||'').trim();
+  if(!code){toast('الصنف بدون كود — لا يمكن aggiunta','warn');return;}
+  /* التكلفة من آخر شراء للصنف (مرآة المنطق في الـ RPC على الخادم) */
+  let cost=0;
+  const lastBuy=(purchaseItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===String(code).trim().toLowerCase() && Number(x.unit_cost||0)>0);
+  if(lastBuy.length){
+    lastBuy.sort((a,b)=>String(b.purchase_date||'').localeCompare(String(a.purchase_date||'')));
+    cost=Number(lastBuy[0].unit_cost||0);
+  }
+  if(!cost) cost=Number(p.purchase_price||p.cost||0);
+  const ex=standalonePurchaseReturnItems.find(x=>x.product_code===code);
+  if(ex)ex.qty=Number(ex.qty||0)+Number(qty||1);
+  else standalonePurchaseReturnItems.push({product_code:code,product_name:p.name||code,qty:Number(qty||1),unit_cost:cost});
+  renderStandalonePurchaseReturnItems();
+}
+function openStandalonePurchaseReturnPicker(){
+  productPickerTarget='standalonePurchaseReturn';
+  fillPickerSelect('salePickerCategory','category','كل التصنيفات');
+  fillPickerSelect('salePickerBrand','brand','كل الماركات');
+  fillPickerSelect('salePickerColor','color','كل الألوان');
+  fillPickerSelect('salePickerSupplier','supplier_name','كل الموردين');
+  q('salePickerQty').value=q('salePickerQty').value||'1';
+  setProductPickerTitle('standalonePurchaseReturn');
+  if(q('salePickerSearch'))q('salePickerSearch').value='';
+  if(q('salePickerExtraSearch'))q('salePickerExtraSearch').innerHTML='';
+  pickerSelectedIndex=-1;
+  q('saleProductPickerModal').classList.add('show'); modalToTop(q('saleProductPickerModal'));
+  renderSaleProductPicker();
+  setTimeout(()=>q('salePickerSearch')?.focus(),50);
+}
+function quickStandalonePurchaseReturn(){
+  const code=prompt('كود الصنف:').trim(); if(!code)return;
+  const p=products.find(x=>String(x.code||'').trim().toLowerCase()===String(code).trim().toLowerCase());
+  if(!p){toast('لم يتم العثور على الصنف بالكود: '+code,'warn');return;}
+  const qty=prompt('الكمية:','1'); if(qty===null)return;
+  const qv=Math.max(1,Number(qty||1));
+  addStandalonePurchaseReturnProduct(p,qv);
+}
+async function saveStandalonePurchaseReturn(){
+  const loc=q('standalonePurchaseReturnLocation')?.value; if(!loc){toast('اختر الفرع','warn');return;}
+  if(!standalonePurchaseReturnItems.length){toast('أضف صنفاً واحداً على الأقل','warn');return;}
+  const method=q('standalonePurchaseReturnSettlement').value;
+  let account_id=null;
+  if(['cash','bank_transfer','card'].includes(method)){
+    account_id=q('standalonePurchaseReturnAccount')?.value||defaultFinanceAccountFor(method,loc);
+    if(!account_id){toast('اختر الحساب الذي يُستلم فيه المبلغ','warn');return;}
+  }
+  const items=standalonePurchaseReturnItems.map(it=>({product_code:it.product_code,product_name:it.product_name||'',qty:Number(it.qty||0),unit_cost:Number(it.unit_cost||0)}));
+  const body={return_date:q('standalonePurchaseReturnDate').value, location_id:loc, supplier_id:q('standalonePurchaseReturnSupplier')?.value||null, settlement_method:method, account_id, reference:q('standalonePurchaseReturnReference')?.value.trim()||null, notes:q('standalonePurchaseReturnNotes')?.value.trim()||null};
+  if(window.__busy)return; window.__busy=true;
+  try{
+    showLoading(true);
+    const idem=getDraftKey('standalonePurchaseReturn');
+    const ret=await rpc('post_purchase_return_standalone_transaction',{p_return:body,p_items:items,p_idempotency_key:idem,p_user_identifier:appUser?.identifier||''});
+    logAction('standalone_purchase_return','pos_purchase_returns',ret.id, `${items.length} صنف - ${money(ret.total)} ${APP_CONFIG.currency}`);
+    clearDraftKey('standalonePurchaseReturn');
+    applyStandalonePurchaseReturnLocally(ret, body, items);
+    closeStandalonePurchaseReturnModal();
+    toast('تم حفظ فاتورة إرجاع المشتريات المستقلة — حُدّث المخزون وذمة المورد','success');
+    refreshAfterLocalUpdate();
+  }catch(err){console.error(err);toast('خطأ في حفظ إرجاع المشتريات المستقل: '+friendlyError(err),'error')}
+  finally{showLoading(false);window.__busy=false}
+}
+q('standalonePurchaseReturnForm')?.addEventListener('submit', async e=>{
+  e.preventDefault();
+  await saveStandalonePurchaseReturn();
+});
+function applyStandalonePurchaseReturnLocally(ret, body, items){
+  purchaseReturns.unshift({...body, id:ret.id, purchase_id:null, supplier_id:ret.supplier_id, total:Number(ret.total||0), return_date:ret.return_date||body.return_date, location_id:body.location_id, settlement_method:body.settlement_method, created_at:new Date().toISOString()});
+  items.forEach(it=>{
+    purchaseReturnItems.push({return_id:ret.id, purchase_item_id:null, product_code:it.product_code, product_name:it.product_name||'', qty:Number(it.qty), unit_cost:Number(it.unit_cost||0), line_total:Number(it.qty)*Number(it.unit_cost||0), created_at:new Date().toISOString()});
+    localAdjustStock(body.location_id, it.product_code, it.product_name||'', -Number(it.qty), 'return_supplier', 'pos_purchase_returns', ret.id, 'مرتجع مشتريات مستقل');
+  });
+  if(Number(ret.total||0)>0 && ret.supplier_id){
+    ledger.unshift({supplier_id:ret.supplier_id, entry_date:ret.return_date||body.return_date, entry_type:'return', description:'مرتجع مشتريات مستقل' + (body.reference?' - '+body.reference:''), debit:Number(ret.total), credit:0, reference_table:'pos_purchase_returns', reference_id:ret.id, created_at:new Date().toISOString()});
+    const sp=suppliers.find(x=>x.id===ret.supplier_id); if(sp) sp.balance=Number(sp.balance||0)-Number(ret.total);
+  }
+  if(['cash','bank_transfer','card'].includes(body.settlement_method)&&body.account_id){
+    localMovement(body.account_id,'in','supplier_refund',Number(ret.total||0),ret.return_date||body.return_date,'pos_purchase_returns',ret.id,'استرداد من مورد / مرتجع مشتريات مستقل');
+  }
+}
+
 /* ═══════════ (0178) مرتجعات المشتريات: كانت تُحفظ ولا تُرى في أي قائمة ═══════════
    ما قاله المالك حرفياً: «سجّلت مرتجعاً ولم أجده في القائمة».
    والحقيقة أن المستند كان يُحفظ في pos_purchase_returns (ويُخصم من المخزون
@@ -14167,7 +14329,8 @@ function setProductPickerTitle(mode){
            proforma:['قائمة المنتجات للفاتورة المبدئية','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
            purchase:['قائمة منتجات فاتورة الشراء','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
            transfer:['قائمة منتجات التحويل','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
-           noInvoiceReturn:['قائمة المنتجات للاسترجاع بدون فاتورة','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة']}[mode]||['قائمة المنتجات','F3 — ابحث بالفلاتر ثم أضف'];
+           noInvoiceReturn:['قائمة المنتجات للاسترجاع بدون فاتورة','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة'],
+           standalonePurchaseReturn:['قائمة المنتجات لإرجاع مشتريات مستقل','F3 — ابحث بالفلاتر ثم اختر الكمية واضغط إضافة']}[mode]||['قائمة المنتجات','F3 — ابحث بالفلاتر ثم أضف'];
   const h=q('productPickerTitle'); if(h)h.textContent=t[0];
   const m=q('productPickerHint'); if(m)m.textContent=t[1];
 }

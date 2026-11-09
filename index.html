@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261107-0909">
+<link rel="stylesheet" href="app.css?v=20261109-1831">
 </head>
 <body class="auth-locked">
   <header>
@@ -734,6 +734,7 @@
             <button class="btn secondary" type="button" onclick="printSelectedPurchase()" title="طباعة الفاتورة المحددة">🖨 طباعة</button>
             <button class="btn secondary" type="button" onclick="purchaseListAction('pay')" title="تسجيل دفعة للمورد على الفاتورة المحددة — المتبقي مقترحاً">💵 دفعة للمورد</button>
             <button class="btn secondary" type="button" onclick="purchaseListAction('return')" title="إرجاع بضاعة للفاتورة المحددة إلى المورد">↩ إرجاع</button>
+            <button class="btn secondary" type="button" onclick="openStandalonePurchaseReturn()" title="إرجاع مشتريات مستقل دون ربط بفاتورة شراء أصلية — التكلفة من آخر شراء للصنف">↩ إرجاع مستقل</button>
             <button class="btn secondary" type="button" onclick="openPurchaseReturnsList()" title="كل مستندات مرتجعات المشتريات: التاريخ والمورد والإجمالي وطباعة المستند">📋 مرتجعات المشتريات</button>
             <button class="btn danger" type="button" onclick="purchaseListAction('delete')">🗑 حذف</button>
             <span class="mini" id="purchaseSelHint">حدّد فاتورة شراء من القائمة لتنفيذ إجراء عليها</span>
@@ -1633,6 +1634,33 @@
     </div>
   </div>
 
+  <div class="modal" id="standalonePurchaseReturnModal">
+    <div class="modal-card" style="max-width:920px">
+      <div class="modal-head">
+        <div><h2 id="standalonePurchaseReturnTitle" style="margin:0">فاتورة إرجاع مشتريات مستقلة</h2><div class="mini" id="standalonePurchaseReturnSub"></div></div>
+        <button class="btn secondary" onclick="closeStandalonePurchaseReturnModal()">إغلاق</button>
+      </div>
+      <form id="standalonePurchaseReturnForm">
+        <div class="form">
+          <div><label>التاريخ</label><input id="standalonePurchaseReturnDate" type="date" required></div>
+          <div><label>الفرع</label><select id="standalonePurchaseReturnLocation" required></select></div>
+          <div><label>المورد</label><select id="standalonePurchaseReturnSupplier"></select></div>
+          <div><label>طريقة التسوية مع المورد</label><select id="standalonePurchaseReturnSettlement"><option value="credit" selected>خصم من ذمة المورد (دين)</option><option value="cash">استرداد نقدي من المورد</option><option value="bank_transfer">تحويل مصرفي من المورد</option><option value="card">بطاقة من المورد</option></select></div>
+          <div><label>الحساب الذي يُستلم فيه المبلغ</label><select id="standalonePurchaseReturnAccount" disabled></select></div>
+          <div><label>المرجع (فاتورة/رقم/ملاحظة داخلية)</label><input id="standalonePurchaseReturnReference" placeholder="اختياري"></div>
+          <div style="grid-column:1/-1"><label>ملاحظات</label><input id="standalonePurchaseReturnNotes" placeholder="اختياري"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn secondary" type="button" onclick="openStandalonePurchaseReturnPicker()">اختيار صنف (F3)</button>
+          <button class="btn secondary" type="button" onclick="quickStandalonePurchaseReturn()">إدخال سريع بالكود</button>
+          <span class="mini">السعر من آخر شراء للصنف</span>
+        </div>
+        <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>التكلفة من آخر شراء</th><th>الإجمالي</th><th></th></tr></thead><tbody id="standalonePurchaseReturnItemsBody"></tbody></table></div>
+        <div class="row" style="margin-top:12px"><button class="btn" type="submit" id="standalonePurchaseReturnSubmitBtn">حفظ فاتورة الإرجاع المستقل</button><span class="mini" id="standalonePurchaseReturnTotal">الإجمالي: 0</span></div>
+      </form>
+    </div>
+  </div>
+
   <div class="modal" id="priceCheckerCartsModal">
     <div class="modal-card" style="max-width:860px">
       <div class="modal-head">
@@ -2121,6 +2149,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261107-0909"></script>
+<script src="app.js?v=20261109-1831"></script>
 </body>
 </html>
