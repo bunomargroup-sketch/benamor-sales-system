@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1835';
+const APP_BUILD='b20261109-1836';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -12012,7 +12012,7 @@ async function submitPurchaseReturnEdit(){
   window.__busy=true;
   try{
     showLoading(true);
-    const ret=await rpc('update_purchase_return',{p_return_id:id,p_return:{return_date:q('prEditDate').value||null,location_id:q('prEditLocation')?.value||appUser?.branch_id||null,supplier_id:null,settlement_method:method,account_id,notes,reference},p_items:payload,p_user_identifier:appUser?.identifier||null});
+    const ret=await rpc('update_purchase_return',{p_return_id:id,p_return:{return_date:q('prEditDate').value||null,location_id:q('prEditLocation')?.value||appUser?.branch_id||null,supplier_id:null,settlement_method:method,account_id:account,notes,reference},p_items:payload,p_user_identifier:appUser?.identifier||null});
     await logAction('purchase_return_edit','pos_purchase_returns',id,`تعديل مرتجع ${String(id).slice(0,8)} — ${payload.length} سطر — ${method}`);
     q('purchaseReturnEditModal').classList.remove('show');
     _editingPurchaseReturnId=null;
