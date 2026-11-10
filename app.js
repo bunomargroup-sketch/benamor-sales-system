@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1833';
+const APP_BUILD='b20261109-1834';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -11994,7 +11994,9 @@ async function submitPurchaseReturnEdit(){
   let payload=[], err=null;
   document.querySelectorAll('#prEditItemsBody tr').forEach(tr=>{
     if(err) return;
-    const code=tr.querySelector('.pr-edit-code')?.value.trim()||'';
+    const codeInput=tr.querySelector('.pr-edit-code');
+    const codeCell=tr.querySelector('td.ltr b, td:first-child b');
+    const code=(codeInput?codeInput.value.trim():(codeCell?codeCell.textContent.trim():''))||'';
     const name=tr.querySelector('.pr-edit-name')?.textContent?.trim()||code;
     const qty=Number(tr.querySelector('.pr-edit-qty').value||0);
     const cost=Number(tr.querySelector('.pr-edit-unit-cost')?.value||0);
