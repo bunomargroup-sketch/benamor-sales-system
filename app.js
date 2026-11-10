@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1832';
+const APP_BUILD='b20261109-1833';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -11903,7 +11903,7 @@ function openPurchaseReturnEdit(id){
   q('prEditItemsBody').innerHTML=items.map(it=>{
     return `<tr data-idx=\"\"><td class="ltr"><b>${esc(it.product_code)}</b></td><td>${esc(it.product_name)}</td>
       <td><input class="pr-edit-qty ltr" type="number" step="any" min="0.001" value="${Number(it.qty||0)}" style="max-width:90px;text-align:center" oninput="prEditRecalc()"></td>
-      <td class="ltr">${money(Number(it.unit_cost||0))}</td>
+      <td class="ltr"><input class="pr-edit-unit-cost ltr" type="number" step="any" min="0" value="${Number(it.unit_cost||0)}" style="max-width:90px;text-align:center" oninput="prEditRecalc()"></td>
       <td class="pr-edit-line ltr">${money(Number(it.line_total||0))}</td>
       <td><button type="button" class="btn danger" onclick="prEditRemoveRow(this)">✕</button></td></tr>`;
   }).join('');
@@ -11956,8 +11956,7 @@ function prEditRecalc(){
   let total=0;
   document.querySelectorAll('#prEditItemsBody tr').forEach(tr=>{
     const qty=Number(tr.querySelector('.pr-edit-qty').value||0);
-    const costText=tr.querySelector('td:nth-child(4)').textContent;
-    const cost=Number(costText.replace(/[^\d.-]/g,'')||0);
+    const cost=Number(tr.querySelector('.pr-edit-unit-cost').value||0);
     const line=qty*cost;
     tr.querySelector('.pr-edit-line').textContent=money(line);
     total+=line;
@@ -11967,7 +11966,7 @@ function prEditRecalc(){
 function prEditAddRow(){
   const tbody=q('prEditItemsBody'); if(!tbody)return;
   const tr=document.createElement('tr');
-  tr.innerHTML=`<td class="ltr"><input class="pr-edit-code" type="text" placeholder="كود الصنف" style="max-width:120px" oninput="prEditFillRow(this)"></td><td class="pr-edit-name mini">—</td><td><input class="pr-edit-qty ltr" type="number" step="any" min="0.001" value="1" style="max-width:80px;text-align:center" oninput="prEditRecalc()"></td><td class="pr-edit-cost ltr">—</td><td class="pr-edit-line ltr">—</td><td><button type="button" class="btn danger" onclick="prEditRemoveRow(this)">✕</button></td>`;
+  tr.innerHTML=`<td class="ltr"><input class="pr-edit-code" type="text" placeholder="كود الصنف" style="max-width:120px" oninput="prEditFillRow(this)"></td><td class="pr-edit-name mini">—</td><td><input class="pr-edit-qty ltr" type="number" step="any" min="0.001" value="1" style="max-width:80px;text-align:center" oninput="prEditRecalc()"></td><td class="ltr"><input class="pr-edit-unit-cost ltr" type="number" step="any" min="0" value="0" style="max-width:90px;text-align:center" oninput="prEditRecalc()"></td><td class="pr-edit-line ltr">—</td><td><button type="button" class="btn danger" onclick="prEditRemoveRow(this)">✕</button></td>`;
   tbody.appendChild(tr);
   prEditRecalc();
 }
@@ -11980,7 +11979,7 @@ function prEditFillRow(inp){
   const lastBuy=(purchaseItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===String(code).trim().toLowerCase() && Number(x.unit_cost||0)>0);
   if(lastBuy.length){lastBuy.sort((a,b)=>String(b.purchase_date||'').localeCompare(String(a.purchase_date||'')));cost=Number(lastBuy[0].unit_cost||0);}
   if(!cost) cost=Number(p?.purchase_price||p?.cost||0);
-  const costEl=tr.querySelector('.pr-edit-cost'); if(costEl) costEl.textContent=money(cost);
+  const costEl=tr.querySelector('.pr-edit-unit-cost'); if(costEl) costEl.value=money(cost);
   prEditRecalc();
 }
 function prEditRemoveRow(btn){
@@ -11998,8 +11997,7 @@ async function submitPurchaseReturnEdit(){
     const code=tr.querySelector('.pr-edit-code')?.value.trim()||'';
     const name=tr.querySelector('.pr-edit-name')?.textContent?.trim()||code;
     const qty=Number(tr.querySelector('.pr-edit-qty').value||0);
-    const costText=tr.querySelector('.pr-edit-cost')?.textContent||'0';
-    const cost=Number(costText.replace(/[^\d.-]/g,'')||0);
+    const cost=Number(tr.querySelector('.pr-edit-unit-cost')?.value||0);
     if(!code)err='اكتب كود الصنف في كل سطر';
     else if(!(qty>0))err='الكمية يجب أن تكون موجبة';
     else if(cost<0)err='التكلفة يجب أن تكون ≥ صفر';
