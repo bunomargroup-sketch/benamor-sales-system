@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1836';
+const APP_BUILD='b20261109-1837';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -11882,9 +11882,9 @@ let _editingPurchaseReturnId=null;
 function openPurchaseReturnEdit(id){
   const r=purchaseReturns.find(x=>String(x.id)===String(id));
   if(!r){toast('لم يُعثر على مستند المرتجع','warn');return;}
-  const isAdm=isManager();
+  const isAdm=isManager(); const isProg=String(currentRole?.role||'')==='programmer';
   const mine=r.user_identifier && String(r.user_identifier).trim().toLowerCase()===String(appUser?.identifier||'').trim().toLowerCase();
-  if(!isAdm && !mine){toast('التعديل للمدير أو للموظف الذي سجّل هذا المرتجع فقط','warn');return;}
+  if(!isAdm && !isProg && !mine){toast('التعديل للمدير أو المبرمج أو للموظف الذي سجّل هذا المرتجع فقط','warn');return;}
   const items=prItemsOf(r);
   if(!items.length){toast('لا توجد أسطر لهذا المرتجع','warn');return;}
   _editingPurchaseReturnId=id;
