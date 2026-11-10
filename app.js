@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1831';
+const APP_BUILD='b20261109-1832';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -11876,6 +11876,173 @@ function applyStandalonePurchaseReturnLocally(ret, body, items){
   }
 }
 
+/* ═══════════════ تعديل مرتجع مشتريات قائم ═══════════════ */
+/* يسمح للمدير أو لموظف سجل المرتجع بتعديل الكميات، طريقة التسوية، الحساب، الملاحظات */
+let _editingPurchaseReturnId=null;
+function openPurchaseReturnEdit(id){
+  const r=purchaseReturns.find(x=>String(x.id)===String(id));
+  if(!r){toast('لم يُعثر على مستند المرتجع','warn');return;}
+  const isAdm=isManager();
+  const mine=r.user_identifier && String(r.user_identifier).trim().toLowerCase()===String(appUser?.identifier||'').trim().toLowerCase();
+  if(!isAdm && !mine){toast('التعديل للمدير أو للموظف الذي سجّل هذا المرتجع فقط','warn');return;}
+  const items=prItemsOf(r);
+  if(!items.length){toast('لا توجد أسطر لهذا المرتجع','warn');return;}
+  _editingPurchaseReturnId=id;
+  ensurePurchaseReturnEditModal();
+  q('prEditSub').textContent=`مرتجع ${String(id).slice(0,8)} — ${prSupplierOf(r)?.name||'بدون مورّد'} — ${prLocationOf(r)?.name||'—'} — سجّله: ${esc(r.user_identifier||'—')}`;
+  q('prEditDate').value=String(r.return_date||'').slice(0,10);
+  q('prEditSettlement').value=r.settlement_method||'credit';
+  q('prEditLocation').innerHTML=locations.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+  q('prEditLocation').value=r.location_id||appUser?.branch_id||'';
+  q('prEditSettlement').dispatchEvent(new Event('change'));
+  const mv=financeMovements.find(m=>m.reference_table==='pos_purchase_returns' && m.reference_id===id && m.movement_type==='supplier_refund');
+  if(mv&&mv.account_id) q('prEditAccount').value=mv.account_id;
+  if(!q('prEditAccount').value){const a=defaultFinanceAccountFor(q('prEditSettlement').value,r.location_id); if(a) q('prEditAccount').value=a;}
+  q('prEditReference').value=r.reference||'';
+  q('prEditNotes').value=String(r.notes||'').split(' — تعديل بواسطة')[0];
+  q('prEditItemsBody').innerHTML=items.map(it=>{
+    return `<tr data-idx=\"\"><td class="ltr"><b>${esc(it.product_code)}</b></td><td>${esc(it.product_name)}</td>
+      <td><input class="pr-edit-qty ltr" type="number" step="any" min="0.001" value="${Number(it.qty||0)}" style="max-width:90px;text-align:center" oninput="prEditRecalc()"></td>
+      <td class="ltr">${money(Number(it.unit_cost||0))}</td>
+      <td class="pr-edit-line ltr">${money(Number(it.line_total||0))}</td>
+      <td><button type="button" class="btn danger" onclick="prEditRemoveRow(this)">✕</button></td></tr>`;
+  }).join('');
+  prEditRecalc();
+  [q('prEditDate'),q('prEditSettlement'),q('prEditAccount'),q('prEditReference'),q('prEditNotes')].forEach(el=>{ if(el) el.disabled=false; });
+  q('prEditItemsBody').querySelectorAll('input').forEach(i=>{ i.readOnly=false; });
+  q('prEditSaveBtn').style.display='';
+  q('purchaseReturnEditModal').classList.add('show');
+}
+function ensurePurchaseReturnEditModal(){
+  if(q('purchaseReturnEditModal')) return;
+  const d=document.createElement('div'); d.className='modal'; d.id='purchaseReturnEditModal';
+  d.innerHTML=`<div class="modal-card" style="max-width:min(960px,96vw)">
+    <div class="modal-head"><div><h2 style="margin:0" id="prEditTitle">✏️ تعديل مرتجع مشتريات</h2><div class="mini" id="prEditSub">—</div></div>
+      <button class="btn secondary" type="button" onclick="q('purchaseReturnEditModal').classList.remove('show')">إغلاق</button></div>
+    <form id="prEditForm">
+      <div class="form">
+        <div><label>التاريخ</label><input id="prEditDate" type="date" required></div>
+        <div><label>الفرع</label><select id="prEditLocation" required></select></div>
+        <div><label>طريقة التسوية مع المورد</label><select id="prEditSettlement"><option value="credit">خصم من ذمة المورد (دين)</option><option value="cash">استرداد نقدي من المورد</option><option value="bank_transfer">تحويل مصرفي من المورد</option><option value="card">بطاقة من المورد</option></select></div>
+        <div><label>الحساب الذي يُستلم فيه المبلغ</label><select id="prEditAccount" disabled></select></div>
+        <div><label>المرجع</label><input id="prEditReference" placeholder="اختياري"></div>
+        <div style="grid-column:1/-1"><label>ملاحظات</label><input id="prEditNotes" placeholder="اختياري"></div>
+      </div>
+      <div class="table-scroll" style="max-height:40vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th class="ltr">الكمية</th><th class="ltr">التكلفة</th><th class="ltr">الإجمالي</th><th></th></tr></thead><tbody id="prEditItemsBody"></tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="btn secondary" type="button" onclick="prEditAddRow()">+ إضافة صنف</button></div>
+      <div class="row" style="margin-top:12px"><button class="btn" type="button" id="prEditSaveBtn" onclick="submitPurchaseReturnEdit()">💾 حفظ التعديل</button><span class="mini" id="prEditTotal">الإجمالي: 0</span></div>
+    </form>
+  </div>`;
+  document.body.appendChild(d);
+  q('prEditSettlement')?.addEventListener('change',function(){
+    const sel=q('prEditAccount'); const method=this.value;
+    if(!['cash','bank_transfer','card'].includes(method)){sel.innerHTML='<option value="">—</option>';sel.value='';sel.disabled=true;return;}
+    sel.disabled=false;
+    const loc=q('prEditLocation')?.value||appUser?.branch_id||null;
+    const compat=financeAccounts.filter(a=>{
+      if(method==='cash') return a.account_type==='cash';
+      if(method==='bank_transfer') return a.account_type==='bank'||a.account_type==='card';
+      return a.account_type==='card'||a.account_type==='bank';
+    });
+    const sorted=[...compat].sort((a,b)=>((a.location_id===loc)?0:1)-((b.location_id===loc)?0:1));
+    sel.innerHTML=sorted.map(a=>`<option value="${a.id}">${esc(a.name)}${a.location_id===loc?' (فرع المختار)':''}</option>`).join('');
+    const def=defaultFinanceAccountFor(method, loc);
+    if(def && sorted.some(a=>a.id===def)) sel.value=def;
+    else if(sorted.length) sel.value=sorted[0].id;
+  });
+  q('prEditForm')?.addEventListener('submit',e=>{e.preventDefault();submitPurchaseReturnEdit();});
+}
+function prEditRecalc(){
+  let total=0;
+  document.querySelectorAll('#prEditItemsBody tr').forEach(tr=>{
+    const qty=Number(tr.querySelector('.pr-edit-qty').value||0);
+    const costText=tr.querySelector('td:nth-child(4)').textContent;
+    const cost=Number(costText.replace(/[^\d.-]/g,'')||0);
+    const line=qty*cost;
+    tr.querySelector('.pr-edit-line').textContent=money(line);
+    total+=line;
+  });
+  q('prEditTotal').textContent='الإجمالي: '+money(total)+' '+APP_CONFIG.currency;
+}
+function prEditAddRow(){
+  const tbody=q('prEditItemsBody'); if(!tbody)return;
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td class="ltr"><input class="pr-edit-code" type="text" placeholder="كود الصنف" style="max-width:120px" oninput="prEditFillRow(this)"></td><td class="pr-edit-name mini">—</td><td><input class="pr-edit-qty ltr" type="number" step="any" min="0.001" value="1" style="max-width:80px;text-align:center" oninput="prEditRecalc()"></td><td class="pr-edit-cost ltr">—</td><td class="pr-edit-line ltr">—</td><td><button type="button" class="btn danger" onclick="prEditRemoveRow(this)">✕</button></td>`;
+  tbody.appendChild(tr);
+  prEditRecalc();
+}
+function prEditFillRow(inp){
+  const code=inp.value.trim(); if(!code)return;
+  const p=products.find(x=>String(x.code||'').trim().toLowerCase()===String(code).trim().toLowerCase());
+  const tr=inp.closest('tr');
+  const nameEl=tr.querySelector('.pr-edit-name'); if(nameEl) nameEl.textContent=p?.name||code;
+  let cost=0;
+  const lastBuy=(purchaseItems||[]).filter(x=>String(x.product_code||'').trim().toLowerCase()===String(code).trim().toLowerCase() && Number(x.unit_cost||0)>0);
+  if(lastBuy.length){lastBuy.sort((a,b)=>String(b.purchase_date||'').localeCompare(String(a.purchase_date||'')));cost=Number(lastBuy[0].unit_cost||0);}
+  if(!cost) cost=Number(p?.purchase_price||p?.cost||0);
+  const costEl=tr.querySelector('.pr-edit-cost'); if(costEl) costEl.textContent=money(cost);
+  prEditRecalc();
+}
+function prEditRemoveRow(btn){
+  btn.closest('tr').remove(); prEditRecalc();
+}
+async function submitPurchaseReturnEdit(){
+  const id=_editingPurchaseReturnId; if(!id) return;
+  if(window.__busy)return;
+  const method=q('prEditSettlement').value;
+  const account=q('prEditAccount').value||null;
+  if(['cash','bank_transfer','card'].includes(method) && !account){toast('اختر حساب التعويض لهذه الطريقة','warn');return;}
+  let payload=[], err=null;
+  document.querySelectorAll('#prEditItemsBody tr').forEach(tr=>{
+    if(err) return;
+    const code=tr.querySelector('.pr-edit-code')?.value.trim()||'';
+    const name=tr.querySelector('.pr-edit-name')?.textContent?.trim()||code;
+    const qty=Number(tr.querySelector('.pr-edit-qty').value||0);
+    const costText=tr.querySelector('.pr-edit-cost')?.textContent||'0';
+    const cost=Number(costText.replace(/[^\d.-]/g,'')||0);
+    if(!code)err='اكتب كود الصنف في كل سطر';
+    else if(!(qty>0))err='الكمية يجب أن تكون موجبة';
+    else if(cost<0)err='التكلفة يجب أن تكون ≥ صفر';
+    if(!err) payload.push({product_code:code,product_name:name,qty,unit_cost:cost});
+  });
+  if(err){toast(err,'warn');return;}
+  if(!payload.length){toast('لا توجد أسطر للحفظ','warn');return;}
+  const notes=q('prEditNotes').value.trim();
+  const reference=q('prEditReference').value.trim()||null;
+  window.__busy=true;
+  try{
+    showLoading(true);
+    const ret=await rpc('update_purchase_return',{p_return_id:id,p_return:{return_date:q('prEditDate').value||null,location_id:q('prEditLocation')?.value||appUser?.branch_id||null,supplier_id:null,settlement_method:method,account_id,notes,reference},p_items:payload,p_user_identifier:appUser?.identifier||null});
+    await logAction('purchase_return_edit','pos_purchase_returns',id,`تعديل مرتجع ${String(id).slice(0,8)} — ${payload.length} سطر — ${method}`);
+    q('purchaseReturnEditModal').classList.remove('show');
+    _editingPurchaseReturnId=null;
+    toast('تم تعديل مرتجع المشتريات — عُكس الأثر القديم وثبّت الجديد','success');
+    await refreshAfterLocalUpdate();
+  }catch(e){
+    console.error(e);
+    const m=String(e?.message||'');
+    let t='تعذّر التعديل: '+friendlyError(e);
+    if(m.includes('STOCK_INVARIANT_VIOLATION')||m.includes('INSUFFICIENT_STOCK'))t='حارس المخزون منع التعديل: المخزون الحالي أقل من كمية المرتجع لأحد الأصناف — عُدّل المخزون أولاً';
+    else if(m.includes('RETURN_EDIT_NOT_ALLOWED'))t='التعديل للمدير أو لموظف سجل المرتجع فقط';
+    else if(m.includes('RETURN_QTY_MUST_BE_POSITIVE'))t='الكمية يجب أن تكون موجبة';
+    else if(m.includes('RETURN_TOTAL_MUST_BE_POSITIVE'))t='الإجمالي يجب أن يكون موجباً';
+    toast(t,'error');
+  }finally{showLoading(false);window.__busy=false;}
+}
+/* إرسال استرداد مرتجع مشتريات إلى الشيت (للتسويات النقدية/المصرفية/البطاقة) */
+async function sendPurchaseReturnToSheet(id){
+  if(window.__busy)return; window.__busy=true;
+  try{
+    showLoading(true);
+    const res=await rpc('pos_sheet_purchase_return_send',{p_return_id:id});
+    if(res.skipped){toast(res.reason==='no_cash_refund'?'هذا المرتجع ليس له استرداد نقدي يُرسل للشيت' : (res.reason==='already_sent'?'تم الإرسال إلى الشيت مسبقاً' : 'تخطى الإرسال'),'warn');return;}
+    await logAction('purchase_return_send_sheet','pos_purchase_returns',id,`إرسال استرداد مرتجع ${String(id).slice(0,8)} إلى الشيت`);
+    toast('تم إرسال استرداد المرتجع إلى الشيت بنجاح','success');
+    await refreshAfterLocalUpdate();
+  }catch(e){console.error(e);toast('تعذّر الإرسال للشيت: '+friendlyError(e),'error')}
+  finally{showLoading(false);window.__busy=false;}
+}
+
 /* ═══════════ (0178) مرتجعات المشتريات: كانت تُحفظ ولا تُرى في أي قائمة ═══════════
    ما قاله المالك حرفياً: «سجّلت مرتجعاً ولم أجده في القائمة».
    والحقيقة أن المستند كان يُحفظ في pos_purchase_returns (ويُخصم من المخزون
@@ -11984,7 +12151,7 @@ function renderPurchaseReturnsList(){
       <td>${esc(prMethodLabel(r.settlement_method))}</td>
       <td>${prItemsOf(r).length}</td>
       <td class="mini">${esc(r.user_identifier||'—')}</td>
-      <td class="row" style="gap:6px;flex-wrap:wrap"><button class="btn secondary" type="button" onclick="printPurchaseReturn('${esc(r.id)}')">🖨 طباعة</button><button class="btn secondary" type="button" onclick="q('prListModal').classList.remove('show');viewPurchaseDetails('${esc(r.purchase_id)}')">📄 الفاتورة</button></td>
+      <td class="row" style="gap:6px;flex-wrap:wrap"><button class="btn secondary" type="button" onclick="printPurchaseReturn('${esc(r.id)}')">🖨 طباعة</button><button class="btn secondary" type="button" onclick="q('prListModal').classList.remove('show');openPurchaseReturnEdit('${esc(r.id)}')">✏️ تعديل</button>${['cash','bank_transfer','card'].includes(String(r.settlement_method||''))?`<button class="btn secondary" type="button" onclick="q('prListModal').classList.remove('show');sendPurchaseReturnToSheet('${esc(r.id)}')">📋 إرسال للشيت</button>`:''}<button class="btn secondary" type="button" onclick="q('prListModal').classList.remove('show');viewPurchaseDetails('${esc(r.purchase_id)}')">📄 الفاتورة</button></td>
     </tr>`).join('')||'<tr><td colspan="9">لا توجد مرتجعات مطابقة.</td></tr>';
   }
   const tot=rows.reduce((a,r)=>a+Number(r.total||0),0);
