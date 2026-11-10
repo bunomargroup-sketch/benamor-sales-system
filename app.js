@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1834';
+const APP_BUILD='b20261109-1835';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -14247,6 +14247,13 @@ function stockCountBranchChanged(el){
   const n=Object.keys(stockCountData).length;
   if(n>0 && !confirm(`قائمة الجرد الحالية فيها ${n} صنفاً — تغيير الفرع يفرغها. متابعة؟`)){ el.value=el.dataset.prev||el.value; return; }
   el.dataset.prev=el.value; stockCountData={}; clearStockCountFilters(); renderStockCount();
+  /* إذا كنا في وضع تعديل قائمة محفوظة، حدّث موقع الفرع في كائن التعديل وامسح الأساس الأصلي
+     (الأصناف تعود لفرع سابق) حتى لا تُحسب فروقات خاطئة عند التسوية. */
+  if(__scEditing){
+    __scEditing.location_id=el.value;
+    __scEditing.orig=new Map();
+    toast('تم تغيير الفرع — قائمة الأصناف أُفرغت، أضف أصناف الفرع الجديد','info');
+  }
 }
 function scLocStockMap(loc){
   const m=new Map(); stock.forEach(s=>{if(s.location_id===loc) m.set(String(s.product_code),Number(s.qty||0));});
@@ -14420,6 +14427,7 @@ async function editStockCount(id){
     }
     __scEditing={id:String(r.id), status:r.status||'draft', no:r.count_no||String(r.id),
                  count_date:r.count_date||null,
+                 location_id:r.location_id,
                  orig:new Map(items.map(it=>[String(it.product_code),it]))};
     const de=q('stockCountDate'); if(de) delete de.dataset.userSet;
     locEl.value=String(r.location_id); locEl.dataset.prev=locEl.value;
