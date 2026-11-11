@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1838';
+const APP_BUILD='b20261109-1839';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -293,7 +293,7 @@ function setSyncState(state,msg){const el=q('syncState'); if(!el)return;
   /* (العمل دون اتصال) وقت آخر بيانات صحيحة — لا يكفي «متصل» وحدها */
   let extra=''; try{ if(state!=='syncing' && typeof lastSyncText==='function' && __lastSyncAt) extra=' · آخر تحديث '+lastSyncText(); }catch(_e){}
   el.textContent=msg+extra; el.title=msg+extra;}
-function showLoading(v){q('loading').style.display=v?'block':'none'; setSyncState(v?'syncing':(navigator.onLine?'online':'offline'), v?'جاري المزامنة...':(navigator.onLine?'متصل مع Supabase':'غير متصل'))}
+function showLoading(v){q('loading').style.display=v?'block':'none'; q('loadingOverlay').style.display=v?'flex':'none'; setSyncState(v?'syncing':(navigator.onLine?'online':'offline'), v?'جاري المزامنة...':(navigator.onLine?'متصل مع Supabase':'غير متصل'))}
 function toast(msg,type='info'){
   const t=q('toast'); const colors={success:'var(--good)',error:'var(--bad)',warn:'var(--warn)',info:'var(--blue)'};
   const icons={success:'ti-circle-check',error:'ti-alert-circle',warn:'ti-alert-triangle',info:'ti-info-circle'};
