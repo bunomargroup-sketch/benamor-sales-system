@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261109-1839';
+const APP_BUILD='b20261109-1840';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2146,15 +2146,24 @@ async function loginPOS(create=false){
     q('loginBtn')?.setAttribute('disabled','disabled');
     showLoading(true);
     let user; try{ user=await authSignIn(identifier,code); }catch(authErr){ authErr.isAuthError=true; throw authErr; }
-    /* (0076) النواة أولاً: أصناف/مخزون/حسابات/أدوار — ثم التاريخ الكامل بالخلفية بلا حجب للشاشة */
-    await loadCore();
-    const loc=resolveSelectedLoginBranch(selectedBranch, selectedBranchText);
+    /* إظهار واجهة النظام فوراً بعد المصادقة دون انتظار تحميل البيانات — التحميل في الخلفية */
+    const loc=locations.find(l=>String(l.name)===String(selectedBranch)||String(l.id)===String(selectedBranch))||
+                {id:selectedBranch,name:selectedBranchText};
     if(!loc){throw new Error('تعذر ربط الفرع المختار. حدّث الصفحة وحاول مرة أخرى.');}
     appUser={id:user.id,identifier,branch_id:loc.id,branch_name:loc.name}; localStorage.setItem('posUser',JSON.stringify(appUser));
     await ensureRoleAfterLogin(); updateAuthUI(); applyPermissions(); renderStatusBar();
-    markAllTabsDirty(); renderTab(activeTabId(), true); /* إعادة رسم بعد ضبط الدور — أزرار المرتجع (✏/🗑) تظهر من أول رسم */
-    setSyncState('online','جاهز — جارٍ تحميل التفاصيل بالخلفية…');
+    /* إخفاء شاشة التحميل وإظهار الواجهة فوراً — لا ننتظر تحميل البيانات */
+    showLoading(false);
+    markAllTabsDirty(); renderTab(activeTabId(), true);
+    setSyncState('online','جاهز — جارٍ تحميل البيانات في الخلفية…');
     toast(create?'تم إنشاء المستخدم والدخول':'تم الدخول','success');
+    /* تحميل البيانات الأساسية والثقيلة في الخلفية دون حجب الشاشة */
+    loadCore().then(()=>{
+      markAllTabsDirty(); renderTab(activeTabId(),true); /* إعادة رسم بعد توفر البيانات الأساسية */
+    }).catch(err=>{
+      console.error('core load failed',err);
+      setSyncState('online','بيانات جزئية — تُحدث في الخلفية');
+    });
     loadHeavy().catch(err=>{console.error('background heavy load failed',err); setSyncState('online','تحديث جزئي — بعض التفاصيل لم تكتمل: '+err.message); markAllTabsDirty(); renderTab(activeTabId(),true);});
     notifyAdminOfSellerEdits();
     syncOfflineQueue().catch(console.warn); updateOfflineQueueBadge(); /* ارفع طابور هذا الجهاز فور الدخول */
