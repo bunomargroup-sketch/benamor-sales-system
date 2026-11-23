@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2034';
+const APP_BUILD='b20261123-2044';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -5159,8 +5159,8 @@ async function viewPurchaseDetails(id){
     q('pvdMeta').textContent=`${p.purchase_date||''} · المورد: ${s?.name||'—'} · المكان: ${l?.name||'—'} · ${typeLabel(p.status)}`;
     const info=[['رقم فاتورة الشراء',p.purchase_no],['رقم فاتورة المورد',p.invoice_no],['الإجمالي',money(p.total)+' '+APP_CONFIG.currency],['المدفوع للمورد',p.paid_amount!=null?money(p.paid_amount)+' '+APP_CONFIG.currency:null],['طريقة الدفع',p.payment_method?typeLabel(p.payment_method):null],['ملاحظات',p.notes]].filter(x=>x[1]);
     q('pvdBody').innerHTML=`<table style="width:100%"><thead><tr>${info.map(x=>`<th>${x[0]}</th>`).join('')}</tr></thead><tbody><tr>${info.map(x=>`<td>${esc(String(x[1]))}</td>`).join('')}</tr></tbody></table>
-      <table style="width:100%;margin-top:12px"><thead><tr><th>الكود</th><th>الاسم</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody>${
-        (items||[]).map(it=>`<tr><td class="ltr">${esc(it.product_code||'')}</td><td>${esc(it.product_name||'')}</td><td>${money(it.qty)}</td><td>${money(it.unit_cost)}</td><td><b>${money(it.line_total)}</b></td></tr>`).join('') || '<tr><td colspan="5">لا توجد أصناف.</td></tr>'
+      <table style="width:100%;margin-top:12px"><thead><tr><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody>${
+        (items||[]).map(it=>`<tr><td class="ltr">${esc(it.product_code||'')}</td><td>${esc(it.product_name||'')}</td>${itemBMCells(it.product_code)}<td>${money(it.qty)}</td><td>${money(it.unit_cost)}</td><td><b>${money(it.line_total)}</b></td></tr>`).join('') || '<tr><td colspan="7">لا توجد أصناف.</td></tr>'
       }</tbody></table>${purchaseReturnsSectionHtml(id)}`;
     q('pvdModal').classList.add('show'); modalToTop(q('pvdModal'));
   }catch(e){toast('خطأ: '+friendlyError(e),'error');}
@@ -5318,6 +5318,7 @@ function addTransferRow(item={}){
   }
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="ti-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" oninput="fillTransferRow(this)" onchange="fillTransferRow(this)"></td><td><input class="ti-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td class="ti-brand line-attr"></td><td class="ti-model line-attr ltr"></td><td><input class="ti-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateTransferAvailable(this)"></td><td class="ti-available"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove()">حذف</button></td>`;
+  if(item.product_code){ const _p=productByCode(item.product_code); const _b=tr.querySelector('.ti-brand'); if(_b)_b.textContent=_p?.brand||''; const _m=tr.querySelector('.ti-model'); if(_m)_m.textContent=_p?.model||''; }
   q('transferItemsBody').appendChild(tr); updateTransferAvailable(tr.querySelector('.ti-qty'));
 }
 function fillTransferRow(input){
@@ -7585,7 +7586,7 @@ async function showSaleInvoiceDoc(id,mode){
     const subtotal=items.reduce((a,it)=>a+Number(it.line_total||0),0);
     const paid=Number(sl.paid_amount||0), balance=Number(sl.balance_due||0);
     const badge=Number(sl.total||0)<0?'<span class="badge refund">مُستردّة — فارق استبدال</span>':(balance>0?'<span class="badge due">آجل / متبقٍ</span>':'<span class="badge paid">مدفوعة بالكامل</span>'); const offlineBadge=sl.offline_pending?'<div style="margin-top:8px"><span style="display:inline-block;border-radius:6px;padding:4px 11px;font-size:12.5px;font-weight:700;background:#fffbeb;color:#b45309;border:1px solid #fde68a">نسخة محلية — يُرقَّم عند المزامنة</span></div>':''; const dp=String(sl.sale_date||'').split('-'); const dateDisp=(dp.length===3)?(dp[2]+'-'+dp[1]+'-'+dp[0]):String(sl.sale_date||'');
-    const rows=items.map((it,i)=>{const comps=compositeItems.filter(ci=>ci.composite_code===it.product_code); return `<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${esc(pLabel(it.product_code,it.product_name))}${comps.length?('<div class="sub2 ltr">'+comps.map(ci=>esc(ci.component_code)+'×'+Number(ci.qty||1)).join(' · ')+'</div>'):''}</td><td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_price)}</td><td class="n">${money(it.line_discount||0)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`;}).join('');
+    const rows=items.map((it,i)=>{const comps=compositeItems.filter(ci=>ci.composite_code===it.product_code); return `<tr><td class="n">${i+1}</td><td class="code ltr">${esc(it.product_code)}</td><td class="name">${mode==='view'?esc(pName(it.product_code,it.product_name)):esc(pLabel(it.product_code,it.product_name))}${comps.length?('<div class="sub2 ltr">'+comps.map(ci=>esc(ci.component_code)+'×'+Number(ci.qty||1)).join(' · ')+'</div>'):''}</td>${mode==='view'?itemBMCells(it.product_code):''}<td class="n">${money(it.qty)}</td><td class="n">${money(it.unit_price)}</td><td class="n">${money(it.line_discount||0)}</td><td class="n ttl">${money(it.line_total)}</td></tr>`;}).join('');
     const html=`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة بيع ${esc(sl.invoice_no||sl.id.slice(0,8))}</title><style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
 *{box-sizing:border-box}
@@ -7686,7 +7687,7 @@ ${mode==='view'?'':'<div class="bar"><button class="pbtn" onclick="window.print(
     <div class="f"><div class="lbl">الفرع</div><div class="val">${esc(loc?.name||'-')}</div></div>
     <div class="f"><div class="lbl">طريقة الدفع</div><div class="val">${esc(salePaymentMethodLabel(sl))}</div></div>
   </div>
-  <table class="items"><thead><tr><th class="n">#</th><th style="text-align:center">الكود</th><th>الصنف</th><th class="n">الكمية</th><th class="n">السعر</th><th class="n">الخصم</th><th class="n">الإجمالي</th></tr></thead><tbody>${rows}</tbody></table>
+  <table class="items"><thead><tr><th class="n">#</th><th style="text-align:center">الكود</th><th>الصنف</th>${mode==='view'?'<th>العلامة التجارية</th><th>الموديل</th>':''}<th class="n">الكمية</th><th class="n">السعر</th><th class="n">الخصم</th><th class="n">الإجمالي</th></tr></thead><tbody>${rows}</tbody></table>
   <div class="summary">
     <div class="pay">
       <div class="sec-t">تفاصيل الدفع</div>
@@ -8028,6 +8029,7 @@ async function deleteSale(id){
 function addProformaRow(item={}){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="pr-code ltr" list="productsDatalist" value="${esc(item.product_code||'')}" placeholder="اكتب الكود أو الاسم" onkeydown="if(event.key==='Enter'){event.preventDefault();fillProformaRow(this)}" onchange="fillProformaRow(this)"><div class="mini pr-note"></div></td><td><input class="pr-name" value="${esc(item.product_name||'')}" required placeholder="اسم المنتج"></td><td class="pr-brand line-attr"></td><td class="pr-model line-attr ltr"></td><td><input class="pr-qty" type="number" step="1" min="1" value="${esc(item.qty||1)}" oninput="updateProformaTotal()"></td><td><input class="pr-price" type="text" inputmode="decimal" value="${esc(item.unit_price||0)}" oninput="updateProformaTotal()"></td><td class="pr-margin">0.00</td><td class="pr-margin-pct">0%</td><td><input class="pr-discount" value="${esc(item.discount_text||item.line_discount||0)}" placeholder="0 أو 10%" oninput="updateProformaTotal()"></td><td class="pr-line"><b>0.00</b></td><td><button type="button" class="btn danger" onclick="this.closest('tr').remove();updateProformaTotal()">حذف</button></td>`;
+  if(item.product_code){ const _p=productByCode(item.product_code); const _b=tr.querySelector('.pr-brand'); if(_b)_b.textContent=_p?.brand||''; const _m=tr.querySelector('.pr-model'); if(_m)_m.textContent=_p?.model||''; }
   q('proformaItemsBody').appendChild(tr); fillProductNote(tr,'.pr-note',item.product_code); updateProformaTotal();
 }
 function fillProformaRow(input){
