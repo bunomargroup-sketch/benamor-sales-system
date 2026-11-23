@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-1536">
+<link rel="stylesheet" href="app.css?v=20261123-1701">
 </head>
 <body class="auth-locked">
   <header>
@@ -99,37 +99,6 @@
           <div class="card" id="dashCardCustomersDebt"><h3>ديون الزبائن</h3><div class="num amount total" id="customersDebtTotal">0</div></div>
           <div class="card" id="dashCardSuppliersBalance"><h3>إجمالي أرصدة الموردين</h3><div class="num amount total" id="suppliersBalance">0</div></div>
           <div class="card hidden" id="dashNoInvoiceReturns" style="grid-column:1/-1;border-color:rgba(217,119,6,.5)"></div>
-        </div>
-        <div class="panel">
-          <div class="quick-board">
-            <div class="quick-group">
-              <h2><i class="ti ti-shopping-cart"></i> البيع</h2>
-              <div class="quick-grid">
-                <button class="quick-tile" type="button" onclick="openTab('sales')"><i class="ti ti-receipt-2"></i><span>فاتورة بيع</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('salesList')"><i class="ti ti-file-invoice"></i><span>فواتير البيع</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('proformas')"><i class="ti ti-file-description"></i><span>فاتورة مبدئية</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('customers')"><i class="ti ti-users"></i><span>الزبائن والديون</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('products')"><i class="ti ti-box"></i><span>المنتجات</span></button>
-              </div>
-            </div>
-            <div class="quick-group">
-              <h2><i class="ti ti-building-warehouse"></i> الشراء والمخزون</h2>
-              <div class="quick-grid">
-                <button class="quick-tile" type="button" onclick="openTab('purchases')"><i class="ti ti-receipt"></i><span>فاتورة شراء</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('transfers')"><i class="ti ti-arrows-exchange"></i><span>تحويل مخزون</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('stock')"><i class="ti ti-stack-2"></i><span>المخزون الحالي</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('suppliers')"><i class="ti ti-truck"></i><span>الموردون</span></button>
-              </div>
-            </div>
-            <div class="quick-group finance">
-              <h2><i class="ti ti-cash"></i> المالية والتقارير</h2>
-              <div class="quick-grid">
-                <button class="quick-tile" type="button" onclick="openTab('payments')"><i class="ti ti-cash-banknote"></i><span>دفعة مورد</span></button>
-                <button class="quick-tile" type="button" onclick="openTab('ledger')"><i class="ti ti-file-analytics"></i><span>كشف مورد</span></button>
-                <button class="quick-tile wide" type="button" onclick="openTab('reports')"><i class="ti ti-chart-bar"></i><span>التقارير</span></button>
-              </div>
-            </div>
-          </div>
         </div>
         <div class="panel">
           <h2>آخر فواتير البيع</h2>
@@ -410,7 +379,7 @@
         </div>
         <div class="panel">
           <div class="tools"><h2>دفعات الزبائن</h2><input id="custPaymentsSearch" placeholder="🔍 ابحث بالزبون أو رقم الفاتورة…" style="max-width:340px" oninput="renderCustomerPaymentsList()"></div>
-          <p class="muted">آخر 300 دفعة على فواتير البيع. التعديل والحذف للمدير فقط وتنعكس تلقائياً على الخزينة بتاريخ الدفعة ورصيد الفاتورة وكشف الزبون.</p>
+          <p class="muted">آخر 300 دفعة. التعديل والحذف للمدير فقط.</p>
           <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الزبون</th><th>الفاتورة</th><th>الطريقة</th><th>المبلغ</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="customerPaymentsBody"></tbody></table></div>
         </div>
       </section>
@@ -903,7 +872,6 @@
       <section id="finance" class="section">
         <div class="panel">
           <h2>الخزائن والمصارف</h2>
-          <p class="muted">إدارة خزائن الفروع والحسابات المصرفية والبطاقات، مع تسجيل التحويلات والمصاريف والمرتبات.</p>
           <!-- (0144) فحص انحراف الخزائن — في الواجهة لا في السجلّ -->
           <div class="treasury-drift-bar mini" style="display:none;margin:6px 0 2px"></div>
           <div class="grid cards">
@@ -1130,7 +1098,7 @@
         <section id="dailyCashClosing" class="section">
           <div class="panel">
             <div class="tools"><h2>تقرير حالة الخزينة</h2><div class="row"><label class="mini" style="margin:0">من</label><input id="dailyCashDateFrom" type="date" onchange="renderDailyCashReport()"><label class="mini" style="margin:0">إلى</label><input id="dailyCashDateTo" type="date" onchange="renderDailyCashReport()"><select id="dailyCashBranch" onchange="renderDailyCashReport()" style="min-width:200px"></select><button class="btn secondary" type="button" onclick="printDailyCashReport()">طباعة التقرير</button><button class="btn" type="button" onclick="saveDailyCashClosing()">حفظ إغلاق اليوم</button><button class="btn secondary" type="button" onclick="prepareDailyCashTransfer()">تحويل المتبقي لخزينة الإدارة</button></div><div class="row" style="margin-top:8px;flex-wrap:wrap"><span class="mini">فترة سريعة:</span><button class="btn secondary" type="button" onclick="setCashPeriod(1)">اليوم</button><button class="btn secondary" type="button" onclick="setCashPeriod(4)">4 أيام</button><button class="btn secondary" type="button" onclick="setCashPeriod(7)">أسبوع</button><button class="btn secondary" type="button" onclick="setCashPeriod(30)">شهر</button><button class="btn secondary" type="button" onclick="setCashPeriod(90)">3 أشهر</button></div></div>
-            <p class="muted">التقرير ديناميكي ويمكن طباعته في أي وقت. إذا تم تعديل أو إضافة فواتير بعد إذن المدير، سيتغير التقرير حسب البيانات الحالية.</p>
+            <p class="muted">التقرير ديناميكي ويُطبع في أي وقت؛ يتغيّر إذا عُدّلت الفواتير بعد الإذن.</p>
             <div id="dailyCashReportBody"></div><div class="panel" style="box-shadow:none;margin-top:14px"><h2>سجل إغلاقات الخزينة السابقة</h2><div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>الفرع</th><th>المسؤول</th><th>عدد الفواتير</th><th>المتبقي كاش</th><th>وقت الحفظ</th><th>ملاحظات</th><th>إجراء</th></tr></thead><tbody id="dailyCashClosingsBody"></tbody></table></div></div>
           </div>
         </section>
@@ -1148,7 +1116,6 @@
               <button class="btn secondary" onclick="printReports()">طباعة التقرير</button>
             </div>
           </div>
-          <p class="muted">تقارير سريعة للمبيعات بعد خصم المرتجعات، الأرباح التقديرية، المخزون، أرصدة الموردين، وأرصدة الزبائن.</p>
           <div class="grid cards">
             <div class="card"><h3>إجمالي المبيعات</h3><div class="num" id="repSalesTotal">0</div></div>
             <div class="card"><h3>إجمالي المرتجعات</h3><div class="num" id="repReturnsTotal">0</div></div>
@@ -1442,13 +1409,13 @@
   <div class="modal show" id="loginScreen">
     <div class="modal-card" style="max-width:460px">
       <h2 id="loginTitle">دخول نظام البيع</h2>
-      <p class="muted">اكتب المعرّف والكود. أول مستخدم يدخل سيصبح مدير تلقائيًا إذا لم توجد صلاحيات بعد.</p>
+      <p class="muted">اكتب المعرّف والكود.</p>
       <div class="grid" style="gap:12px">
         <div><label>المعرّف</label><input id="loginIdentifier" class="ltr" placeholder="مثال: admin"></div>
         <div><label>الكود</label><input id="loginCode" type="password" class="ltr" placeholder="الكود"></div>
         <div><label>الفرع</label><select id="loginBranch"><option value="">اختر الفرع</option><option value="فرع 11 يونيو">فرع 11 يونيو</option><option value="فرع السراج">فرع السراج</option></select></div>
         <div class="row"><button class="btn" id="loginBtn" onclick="loginPOS(false)">دخول</button></div>
-        <div id="loginHelp">اختر الفرع ثم اكتب المعرّف والكود للدخول.</div>
+        <div id="loginHelp"></div>
       </div>
     </div>
   </div>
@@ -2156,6 +2123,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-1536"></script>
+<script src="app.js?v=20261123-1701"></script>
 </body>
 </html>
