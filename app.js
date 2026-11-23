@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2044';
+const APP_BUILD='b20261123-2055';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -5120,7 +5120,7 @@ async function deletePurchase(id){
 function ensurePurchaseViewDetailsModal(){
   if(q('pvdModal')) return;
   const d=document.createElement('div'); d.className='modal'; d.id='pvdModal';
-  d.innerHTML=`<div class="modal-card" style="max-width:min(900px,96vw)">
+  d.innerHTML=`<div class="modal-card" style="max-width:min(1280px,97vw)">
     <div class="modal-head"><div><h2 style="margin:0">📄 فاتورة شراء — <span class="ltr" id="pvdTitle">—</span></h2><div class="mini" id="pvdMeta"></div></div>
       <div class="row" style="gap:6px;flex-wrap:wrap">
         <button class="btn secondary" type="button" onclick="pvdCloseAndEdit()" title="فتح الفاتورة المحددة للتعديل">✏️ فتح / تعديل</button>
@@ -7726,7 +7726,7 @@ let viewSaleCtxId=null;
 function ensureSaleViewModal(){
   if(q('saleViewModal')) return;
   const d=document.createElement('div'); d.className='modal'; d.id='saleViewModal';
-  d.innerHTML=`<div class="modal-card" style="max-width:min(860px,96vw);height:min(90vh,940px);display:flex;flex-direction:column">
+  d.innerHTML=`<div class="modal-card" style="max-width:min(1280px,97vw);height:min(94vh,1100px);display:flex;flex-direction:column">
     <div class="modal-head" style="flex-shrink:0"><div><h2 style="margin:0">👁️ مشاهدة فاتورة — <span class="ltr" id="svTitle">—</span></h2><div class="mini">عرض للقراءة فقط — التعديل له زرّه الخاص حسب الصلاحية</div></div>
       <div class="row" style="gap:6px"><button class="btn secondary" type="button" onclick="printViewedSale()" title="طباعة نفس المستند">🖨️ طباعة</button><button class="btn secondary" type="button" id="svEditBtn" style="display:none" onclick="editViewedSale()" title="فتح الفاتورة للتعديل حسب صلاحيتك">✏️ تعديل</button><button class="btn secondary" type="button" onclick="q('saleViewModal').classList.remove('show')">إغلاق</button></div></div>
     <iframe id="saleViewFrame" title="معاينة الفاتورة" style="flex:1;width:100%;border:0;border-radius:10px;background:#e2e8f0"></iframe>
@@ -7752,7 +7752,7 @@ let viewDetailsCtxId=null;
 function ensureSaleViewDetailsModal(){
   if(q('saleViewDetailsModal')) return;
   const d=document.createElement('div'); d.className='modal'; d.id='saleViewDetailsModal';
-  d.innerHTML=`<div class="modal-card" style="max-width:min(1120px,97vw)">
+  d.innerHTML=`<div class="modal-card" style="max-width:min(1280px,97vw)">
     <div class="modal-head"><div><h2 style="margin:0">🧾 مشاهدة الفاتورة — <span class="ltr" id="svdTitle">—</span></h2><div class="mini">بنفس شكل نموذج إدخال الفاتورة — للقراءة فقط، والتعديل له زرّه الخاص حسب الصلاحية</div></div>
       <div class="row" style="gap:6px;flex-wrap:wrap">
         <button class="btn secondary" type="button" onclick="svdPrint()" title="طباعة الفاتورة">🖨️ طباعة</button>
