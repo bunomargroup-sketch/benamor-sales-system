@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-1701">
+<link rel="stylesheet" href="app.css?v=20261123-1846">
 </head>
 <body class="auth-locked">
   <header>
@@ -1309,9 +1309,7 @@
       <section id="stockCount" class="section">
         <div class="panel">
           <div class="tools"><h2>الجرد الفعلي للمخزون</h2><div class="row">
-            <button class="btn secondary active" type="button" id="scSubEditorBtn" onclick="showStockCountSub('editor')">📝 جرد جديد</button>
-            <button class="btn secondary" type="button" id="scSubListsBtn" onclick="showStockCountSub('lists')">📚 قوائم الجرد السابقة</button>
-            <button class="btn secondary" type="button" onclick="refreshSalesDomain().then(()=>renderStockCount())">تحديث</button>
+            <button class="btn secondary" type="button" onclick="refreshSalesDomain().then(()=>{renderStockCount();renderStockCountLists();})">تحديث</button>
           </div></div>
 
           <div id="stockCountEditor">
@@ -1337,7 +1335,8 @@
             </div>
           </div>
 
-          <div id="stockCountLists" style="display:none">
+          <h3 style="margin:18px 0 6px;font-size:15px">📚 قوائم الجرد السابقة</h3>
+          <div id="stockCountLists">
             <p class="muted">كل الجردات المحفوظة: الفرق الكمي و<strong>قيمة الفرق بسعر التكلفة</strong>، والحالة (مسودة لم تُسوَّ بعد / مسوّى). زر الحذف للمدير فقط.</p>
             <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>الرقم</th><th>التاريخ</th><th>الفرع</th><th>التصنيف</th><th>المجرِد</th><th>أصناف مجردة</th><th>كمية الفرق</th><th>قيمة الفرق</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="stockCountListsBody"></tbody></table></div>
           </div>
@@ -2123,6 +2122,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-1701"></script>
+<script src="app.js?v=20261123-1846"></script>
 </body>
 </html>

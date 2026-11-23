@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-1701';
+const APP_BUILD='b20261123-1846';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -1520,7 +1520,7 @@ const TAB_RENDERERS={
   purchases:()=>{fillSupplierSelects();},
   purchasesList:()=>renderPurchasesList(),
   stock:()=>{renderStock(); renderStockWaste();},
-  stockCount:()=>renderStockCount(),
+  stockCount:()=>{renderStockCount();renderStockCountLists();},
   composites:()=>renderComposites(),
   transfers:()=>{renderTransfers(); initSuggestionFilters();},
   locations:()=>{renderLocations(); onLocationsTabOpen();},
@@ -5873,7 +5873,7 @@ function refreshSalesDomainRender(){
   else { if(TAB_RENDERERS.salesList) tabDirty['salesList']=true; }
   try{renderStatusBar();}catch(_e){}
   if(q('stock')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{renderStock();}catch(_e){} }
-  if(q('stockCount')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{ if(q('stockCountLists')?.style.display!=='none') renderStockCountLists(); else renderStockCount(); }catch(_e){} }
+  if(q('stockCount')?.classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')) { try{ renderStockCount(); renderStockCountLists(); }catch(_e){} }
 }
 
 
@@ -8422,7 +8422,7 @@ document.querySelectorAll('nav button').forEach(btn=>btn.addEventListener('click
   if(btn.dataset.tab==='sales'){ renderSaleTabs(); applySaleLayoutPrefs(); toggleSaleCustomerPanel(true); if(!editingSaleId && !__saleTabId && !saleHasContent()){q('saleItemsBody').innerHTML=''; ensureSaleInvoiceNo(false);} setTimeout(()=>{ q('saleBarcodeInput')?.focus(); },50); }
   if(btn.dataset.tab==='reports' && btn.dataset.reportDefault){setTimeout(()=>showReport(btn.dataset.reportDefault),50);}
   if(btn.dataset.tab==='dailyCashClosing'){setTimeout(()=>renderDailyCashReport(),50);}
-  if(btn.dataset.tab==='stockCount'){setTimeout(()=>renderStockCount(),50);}
+  if(btn.dataset.tab==='stockCount'){setTimeout(()=>{renderStockCount();renderStockCountLists();},50);}
   if(btn.dataset.tab==='expensesQuick'){setTimeout(()=>onExpensesTabOpen(),50);}
   if(btn.dataset.tab==='locations'){setTimeout(()=>onLocationsTabOpen(),50);}
   if(btn.dataset.tab==='transfers'){setTimeout(()=>initSuggestionFilters(),50);}
@@ -14246,11 +14246,10 @@ let stockCountData={};
 let __scEditing=null; /* (1945) قائمة جرد محفوظة مفتوحة للتحرير: {id,status,no,orig:Map(code→سطر)} */
 let __scItems=[]; /* أسطر جدول الجرد آخر رسم — لنافذة F3 والإجماليات */
 function showStockCountSub(name){
-  const ed=q('stockCountEditor'), ls=q('stockCountLists'); if(!ed||!ls)return;
-  const lists=name==='lists';
-  ed.style.display=lists?'none':''; ls.style.display=lists?'':'none';
-  q('scSubEditorBtn')?.classList.toggle('active',!lists); q('scSubListsBtn')?.classList.toggle('active',lists);
-  if(lists) renderStockCountLists();
+  /* (redesign) المحرر والقوائم معروضان معاً دائماً — الدالة تُبقي التوافق وتُمرّر العرض إلى القسم المطلوب */
+  const target=name==='lists'?q('stockCountLists'):q('stockCountEditor');
+  try{target?.scrollIntoView({behavior:'smooth',block:'start'});}catch(_e){}
+  if(name==='lists') renderStockCountLists();
 }
 function stockCountBranchChanged(el){
   const n=Object.keys(stockCountData).length;
@@ -14471,7 +14470,7 @@ async function saveStockCountViaRpc(doc,status,existingId=null){
   const rec={...(res.count||{}),_items:res.items||doc.rows};
   const i=(stockCounts||[]).findIndex(x=>String(x.id)===String(res.id));
   if(i>=0) stockCounts[i]={...stockCounts[i],...rec}; else stockCounts.unshift(rec);
-  if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
+  renderStockCountLists();
   return res;
 }
 /* تحديث قائمة جرد محفوظة (رأس + استبدال الأسطر) بدلاً من إنشاء قائمة جديدة */
@@ -14489,7 +14488,6 @@ async function updateStockCountRecord(id, doc, status){
 /* ─── (1960) نافذة F3 للجرد: نفس قائمة المنتجات في البيع (بحث متعدد الأسطر + فلاتر التصنيف/الماركة/اللون/المورد) —
      الاختيار يضيف الصنف إلى قائمة الجرد ولا يغلق النافذة (لإضافة عدة أصناف متتالية). ─── */
 function openStockCountPicker(presetTerm=''){
-  if(q('stockCountLists') && q('stockCountLists').style.display!=='none'){toast('ارجع إلى تبويب «جرد جديد» أولاً','info');return;}
   const loc=q('stockCountLocation')?.value; if(!loc){toast('اختر الفرع أولاً ثم F3 لإضافة أصناف','warn');return;}
   productPickerTarget='count';
   setProductPickerTitle('count');
@@ -14566,7 +14564,7 @@ async function postStockCountDoc(doc,status){
     const rec={...hdr,id:'loc_'+Date.now(),_local:true,_items:doc.rows};
     const ls=stockCountLocalList(); ls.unshift(rec); localStorage.setItem('posStockCountLocal',JSON.stringify(ls.slice(0,50)));
     toast('تعذّر الحفظ على الخادم — حُفظت القائمة مسودةً محلية على هذا الجهاز فقط (بلا أي أثر على المخزون) وتظهر في قوائم الجرد','warn');
-    if(q('stockCountLists')?.style.display!=='none') renderStockCountLists();
+    renderStockCountLists();
     return {id:rec.id,count:rec,items:doc.rows,local:true};
   }
 }
@@ -14584,7 +14582,7 @@ async function saveStockCountList(){
     else{ await postStockCountDoc(doc,'draft'); }
     await logAction(wasEdit?'stock_count_edit_save':'stock_count_save',null,null,`${wasEdit?'تحديث قائمة جرد':'حفظ قائمة جرد'} ${doc.rows.length} صنف — ${locations.find(l=>l.id===doc.loc)?.name||''} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
     __scEditing=null; stockCountData={}; clearStockCountFilters(); renderStockCount();
-    toast(wasEdit?'تم تحديث القائمة المحفوظة':'تم حفظ قائمة الجرد — تجدها في تبويب «قوائم الجرد السابقة»','success');
+    toast(wasEdit?'تم تحديث القائمة المحفوظة':'تم حفظ قائمة الجرد — تجدها في القائمة أسفل الصفحة','success');
   }catch(e){console.error(e);toast('تعذّر حفظ قائمة الجرد: '+friendlyError(e),'error')}
   finally{showLoading(false);window.__busy=false}
 }
@@ -14664,8 +14662,8 @@ function renderStockCountLists(){
     const safe=String(r.id).replace(/'/g,"\\\\'");
     const editBtn=r.status==='cancelled'?'':`<button class="btn secondary" type="button" style="padding:4px 8px" title="فتح القائمة في المحرر لتعديل الكميات وإعادة الحفظ/التسوية" onclick="editStockCount('${safe}')">✎ تعديل</button> `;
     const cancelBtn=(!r._local&&r.status!=='cancelled'&&isManager())?` <button class="btn danger" type="button" style="padding:4px 8px" title="${r.status==='settled'?'إلغاء القائمة وعكس صافي أثرها على المخزون بمعاملة واحدة':'حذف المسودة نهائياً'}" onclick="cancelStockCount('${safe}')">${r.status==='settled'?'↩ إلغاء وعكس':'🗑 حذف'}</button>`:'';
-    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="محفوظة محلياً على هذا الجهاز إلى حين تشغيل SQL 0061">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap">${editBtn}<button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${cancelBtn}</td></tr>`;
-  }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من تبويب «جرد جديد».</td></tr>';
+    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="مسودة على هذا الجهاز فقط (تعذّر حفظها على الخادم وقتها). افتحها بزر «تعديل» ثم «حفظ قائمة الجرد» لرفعها إلى الخادم">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap">${editBtn}<button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${cancelBtn}</td></tr>`;
+  }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من المحرر أعلى هذه القائمة.</td></tr>';
 }
 async function cancelStockCount(id){
   const r=mergedStockCounts().find(x=>String(x.id)===String(id));
