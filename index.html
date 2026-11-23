@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-1943">
+<link rel="stylesheet" href="app.css?v=20261123-2034">
 </head>
 <body class="auth-locked">
   <header>
@@ -106,7 +106,7 @@
         </div>
         <div class="panel">
           <h2>آخر حركات المخزون</h2>
-          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الصنف</th><th>المكان</th><th>الكمية</th></tr></thead><tbody id="dashMovementsBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>المكان</th><th>الكمية</th></tr></thead><tbody id="dashMovementsBody"></tbody></table></div>
         </div>
       </section>
 
@@ -224,7 +224,7 @@
           <div class="table-scroll" style="max-height:70vh">
             <table>
               <thead><tr>
-                <th data-min="110">الكود</th><th data-min="160">الاسم</th><th data-min="90">الماركة</th>
+                <th data-min="110">الكود</th><th data-min="160">الاسم</th><th data-min="90">العلامة التجارية</th>
                 <th data-min="100">التكلفة القديمة</th><th data-min="100">التكلفة الجديدة</th><th data-min="90">نسبة التغيّر</th>
                 <th data-min="100">سعر البيع الحالي</th><th data-min="90">الهامش القديم</th><th data-min="90">الهامش الحالي</th>
                 <th data-min="100">السعر المقترح</th><th data-min="100">سعر البيع الجديد</th><th data-min="90">الهامش بعد التعديل</th>
@@ -478,7 +478,7 @@
                 </div>
                 <div class="table-scroll sale-lines-scroll">
                   <table>
-                    <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="90">الماركة</th><th data-min="90">الموديل</th><th data-min="70">الكمية</th><th data-min="100">سعر البيع</th><th class="th-margin" data-min="90">الهامش</th><th class="th-margin-pct" data-min="90">نسبة الهامش</th><th data-min="80">خصم السطر %</th><th data-min="100">المتوفر</th><th data-min="100">الإجمالي</th><th data-noresize></th></tr></thead>
+                    <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="90">العلامة التجارية</th><th data-min="90">الموديل</th><th data-min="70">الكمية</th><th data-min="100">سعر البيع</th><th class="th-margin" data-min="90">الهامش</th><th class="th-margin-pct" data-min="90">نسبة الهامش</th><th data-min="80">خصم السطر %</th><th data-min="100">المتوفر</th><th data-min="100">الإجمالي</th><th data-noresize></th></tr></thead>
                     <tbody id="saleItemsBody"></tbody>
                   </table>
                 </div>
@@ -589,7 +589,7 @@
               <button class="btn secondary" type="button" onclick="openProformaProductPicker()">قائمة المنتجات F3</button>
             </div>
             <div class="table-scroll">
-              <table><thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر</th><th>الإجمالي</th><th></th></tr></thead><tbody id="proformaItemsBody"></tbody></table>
+              <table><thead><tr><th>اختيار المنتج / الكود</th><th>اسم المنتج</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>خصم السطر</th><th>الإجمالي</th><th></th></tr></thead><tbody id="proformaItemsBody"></tbody></table>
             </div>
             <div class="form sale-summary" style="margin-top:12px">
               <div><label>خصم</label><input id="proformaDiscount" type="text" inputmode="decimal" value="0" oninput="updateProformaTotal()"></div>
@@ -665,7 +665,7 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="90">الماركة</th><th data-min="90">الموديل</th><th data-min="70">الكمية</th><th data-min="100">سعر الشراء</th><th data-min="100">الإجمالي</th><th data-noresize></th></tr></thead>
+                <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="90">العلامة التجارية</th><th data-min="90">الموديل</th><th data-min="70">الكمية</th><th data-min="100">سعر الشراء</th><th data-min="100">الإجمالي</th><th data-noresize></th></tr></thead>
                 <tbody id="purchaseItemsBody"></tbody>
               </table>
             </div>
@@ -749,7 +749,7 @@
           <!-- [4] الجدول -->
           <div class="table-scroll stock-table-scroll" style="margin-top:8px">
             <table>
-              <thead><tr><th>المكان</th><th>كود المنتج</th><th>اسم المنتج</th><th>التصنيف</th><th>المورد</th><th>الكمية</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th><th>آخر تحديث</th></tr></thead>
+              <thead><tr><th>المكان</th><th>كود المنتج</th><th>اسم المنتج</th><th>العلامة التجارية</th><th>الموديل</th><th>التصنيف</th><th>المورد</th><th>الكمية</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th><th>آخر تحديث</th></tr></thead>
               <tbody id="stockBody"></tbody>
             </table>
           </div>
@@ -778,7 +778,7 @@
             </div>
             <div class="table-scroll">
               <table>
-                <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th data-min="70">الكمية</th><th data-min="100">المتوفر في المصدر</th><th data-noresize></th></tr></thead>
+                <thead><tr><th data-min="120">اختيار المنتج / الكود</th><th data-min="160">اسم المنتج</th><th>العلامة التجارية</th><th>الموديل</th><th data-min="70">الكمية</th><th data-min="100">المتوفر في المصدر</th><th data-noresize></th></tr></thead>
                 <tbody id="transferItemsBody"></tbody>
               </table>
             </div>
@@ -803,7 +803,7 @@
 
           <div id="sgPanelA" class="panel">
             <div class="table-scroll" style="max-height:56vh"><table>
-              <thead><tr><th style="width:34px">✓</th><th>التاريخ</th><th>الصنف</th><th>الفرع الطالب</th><th>كميته هناك</th><th>المتوفّر في المواقع الأخرى</th><th>المصدر المقترح</th><th>الكمية المقترحة</th><th>مرات الطلب</th><th>مَن طلبه</th><th></th></tr></thead>
+              <thead><tr><th style="width:34px">✓</th><th>التاريخ</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>الفرع الطالب</th><th>كميته هناك</th><th>المتوفّر في المواقع الأخرى</th><th>المصدر المقترح</th><th>الكمية المقترحة</th><th>مرات الطلب</th><th>مَن طلبه</th><th></th></tr></thead>
               <tbody id="sgABody"></tbody>
               <tfoot id="sgAFoot"></tfoot>
             </table></div>
@@ -812,7 +812,7 @@
           <div id="sgPanelB" class="panel" style="display:none">
             <div class="mini" style="margin-bottom:8px">أصناف كميتها ≤ الحدّ في فرع بيعٍ سبق أن بيع فيه هذا الصنف — ستمتلئ وحدها مع تراكم فواتير البيع</div>
             <div class="table-scroll" style="max-height:56vh"><table>
-              <thead><tr><th style="width:34px">✓</th><th>الصنف</th><th>الفرع</th><th>كميته هناك</th><th>الحدّ</th><th>آخر بيع له فيه</th><th>المصدر المقترح</th><th>الكمية المقترحة</th><th></th></tr></thead>
+              <thead><tr><th style="width:34px">✓</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>الفرع</th><th>كميته هناك</th><th>الحدّ</th><th>آخر بيع له فيه</th><th>المصدر المقترح</th><th>الكمية المقترحة</th><th></th></tr></thead>
               <tbody id="sgBBody"></tbody>
               <tfoot id="sgBFoot"></tfoot>
             </table></div>
@@ -827,7 +827,7 @@
               <input id="sgFilterMinValue" type="text" inputmode="decimal" placeholder="أدنى قيمة للسطر (د.ل)" style="width:150px" oninput="renderSuggestionList()">
             </div>
             <div class="table-scroll" style="max-height:56vh"><table>
-              <thead><tr><th style="width:34px">✓</th><th>الصنف</th><th>التصنيف</th><th>الفرع</th><th>كميته هناك</th><th>المصدر المقترح</th><th>المتاح عند المصدر</th><th>الكمية المقترحة</th><th>قيمة السطر</th><th></th></tr></thead>
+              <thead><tr><th style="width:34px">✓</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>التصنيف</th><th>الفرع</th><th>كميته هناك</th><th>المصدر المقترح</th><th>المتاح عند المصدر</th><th>الكمية المقترحة</th><th>قيمة السطر</th><th></th></tr></thead>
               <tbody id="sgCBody"></tbody>
               <tfoot id="sgCFoot"></tfoot>
             </table></div>
@@ -846,7 +846,7 @@
             </div>
             <div class="mini" id="requiredCountSummary" style="margin-bottom:8px;font-weight:700"></div>
             <div class="table-scroll" style="max-height:60vh"><table>
-              <thead><tr><th style="width:36px">#</th><th>الصنف</th><th>الموقع</th><th>الكمية السالبة</th><th>آخر حركة له</th><th>التصنيف</th></tr></thead>
+              <thead><tr><th style="width:36px">#</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>الموقع</th><th>الكمية السالبة</th><th>آخر حركة له</th><th>التصنيف</th></tr></thead>
               <tbody id="requiredCountBody"></tbody>
               <tfoot id="requiredCountFoot"></tfoot>
             </table></div>
@@ -1167,12 +1167,12 @@
 
         <div class="panel">
           <h2>أفضل المنتجات مبيعًا</h2>
-          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>إجمالي البيع</th><th>ربح تقديري</th></tr></thead><tbody id="repTopProductsBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>إجمالي البيع</th><th>ربح تقديري</th></tr></thead><tbody id="repTopProductsBody"></tbody></table></div>
         </div>
 
         <div class="panel">
           <h2>مخزون منخفض / سالب</h2>
-          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>التكلفة</th></tr></thead><tbody id="repLowStockBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>المكان</th><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>التكلفة</th></tr></thead><tbody id="repLowStockBody"></tbody></table></div>
         </div>
 
         <div class="panel">
@@ -1188,7 +1188,7 @@
           <div class="panel"><h2>قائمة الدخل</h2><p class="muted">صافي الإيرادات بعد المرتجعات، ناقص تكلفة البضاعة والمصاريف والمرتبات خلال الفترة.</p><div id="repIncomeBody"></div></div>
         </div>
         <div id="rep-items" class="rep-view hidden">
-          <div class="panel"><div class="tools"><h2>ربحية الأصناف</h2><input id="repItemSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderReportsDetail()" style="max-width:280px"></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repItemProfitBody"></tbody></table></div></div>
+          <div class="panel"><div class="tools"><h2>ربحية الأصناف</h2><input id="repItemSearch" placeholder="بحث بالكود أو الاسم..." oninput="renderReportsDetail()" style="max-width:280px"></div><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repItemProfitBody"></tbody></table></div></div>
         </div>
         <div id="rep-customers" class="rep-view hidden">
           <div class="panel"><h2>ربحية الزبائن</h2><div class="table-scroll"><table><thead><tr><th>الزبون</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الدين الحالي</th></tr></thead><tbody id="repCustomerProfitBody"></tbody></table></div></div>
@@ -1219,7 +1219,7 @@
           <div class="panel"><h2>أرباح الموردين</h2><div class="table-scroll"><table><thead><tr><th>المورد</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repSupplierProfitBody"></tbody></table></div></div>
         </div>
         <div id="rep-lossitems" class="rep-view hidden">
-          <div class="panel"><h2>أصناف تسبب خسائر</h2><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repLossItemsBody"></tbody></table></div></div>
+          <div class="panel"><h2>أصناف تسبب خسائر</h2><div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repLossItemsBody"></tbody></table></div></div>
         </div>
         <div id="rep-losscustomers" class="rep-view hidden">
           <div class="panel"><h2>زبائن تسبب خسائر</h2><div class="table-scroll"><table><thead><tr><th>الزبون</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الدين الحالي</th></tr></thead><tbody id="repLossCustomersBody"></tbody></table></div></div>
@@ -1334,7 +1334,7 @@
               <button type="button" class="schip schip-picker" onclick="openStockCountPicker()">قائمة المنتجات <b class="kbd">F3</b></button>
             </div>
             <div id="scEditBanner" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:#fff8e6;border:1px solid #e2c766;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px"></div>
-            <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المخزون</th><th>التكلفة</th><th>المعدود</th><th>الفرق</th><th>قيمة الفرق</th></tr></thead><tbody id="stockCountBody"></tbody></table></div>
+            <div class="table-scroll" style="max-height:60vh"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>المخزون</th><th>التكلفة</th><th>المعدود</th><th>الفرق</th><th>قيمة الفرق</th></tr></thead><tbody id="stockCountBody"></tbody></table></div>
             <div id="stockCountTotals" class="card" style="margin-top:10px;font-size:14px"></div>
             <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
               <button class="btn secondary" type="button" onclick="saveStockCountList()" title="حفظ قائمة الجرد كمستند (بالفروقات وقيمتها) دون تغيير المخزون">💾 حفظ قائمة الجرد</button>
@@ -1365,7 +1365,7 @@
             </select></div>
             <div style="flex:1;min-width:180px"><label>ملاحظات</label><input id="wasteNotes" placeholder="اختياري"></div>
           </form>
-          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>التكلفة</th><th>القيمة</th><th></th></tr></thead><tbody id="wasteItemsBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>التكلفة</th><th>القيمة</th><th></th></tr></thead><tbody id="wasteItemsBody"></tbody></table></div>
           <div class="row" style="margin-top:10px;gap:8px;align-items:center">
             <button class="btn secondary" type="button" onclick="addWasteRow()">+ إضافة صنف</button>
             <button class="btn" type="button" onclick="document.getElementById('wasteForm').requestSubmit()">✓ تسجيل البضاعة التالفة</button>
@@ -1585,10 +1585,10 @@
           <div style="grid-column:1/-1"><label>ملاحظات</label><input id="saleReturnNotes" placeholder="اختياري"></div>
           <div style="grid-column:1/-1" class="mini" id="saleReturnAccountWarn" style="display:none;color:var(--bad)"></div>
         </div>
-        <div class="table-scroll hidden" id="saleReturnItemsTable"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المباع</th><th>سعر البيع</th><th>خصم السطر</th><th>كمية المرتجع</th></tr></thead><tbody id="saleReturnItemsBody"></tbody></table></div>
+        <div class="table-scroll hidden" id="saleReturnItemsTable"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>المباع</th><th>سعر البيع</th><th>خصم السطر</th><th>كمية المرتجع</th></tr></thead><tbody id="saleReturnItemsBody"></tbody></table></div>
         <div class="hidden" id="noInvoiceItemsWrap">
           <div class="row" style="margin-bottom:8px"><button class="btn secondary" type="button" onclick="openNoInvoiceReturnPicker()"><i class="ti ti-search"></i> اختيار صنف (نافذة المنتجات)</button><span class="mini">السعر يُملأ من سعر البيع الحالي ويمكن تعديله</span></div>
-          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody id="noInvoiceReturnItemsBody"></tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody id="noInvoiceReturnItemsBody"></tbody></table></div>
         </div>
         <div class="row" style="margin-top:12px"><button class="btn" type="submit" id="saleReturnSubmitBtn">حفظ فاتورة المرتجع</button><span class="mini" id="saleReturnTotal">الإجمالي: 0</span></div>
       </form>
@@ -1608,7 +1608,7 @@
           <div><label>الحساب الذي يُستلم فيه المبلغ</label><select id="purchaseReturnAccount" disabled></select></div>
           <div style="grid-column:1/-1"><label>ملاحظات</label><input id="purchaseReturnNotes" placeholder="اختياري"></div>
         </div>
-        <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>المشترى</th><th>المُرجَع سابقاً</th><th>المتبقي القابل للإرجاع</th><th>التكلفة</th><th>كمية الإرجاع</th></tr></thead><tbody id="purchaseReturnItemsBody"></tbody></table></div>
+        <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>المشترى</th><th>المُرجَع سابقاً</th><th>المتبقي القابل للإرجاع</th><th>التكلفة</th><th>كمية الإرجاع</th></tr></thead><tbody id="purchaseReturnItemsBody"></tbody></table></div>
         <div class="row" style="margin-top:12px"><button class="btn" type="submit" id="purchaseReturnSubmitBtn">حفظ فاتورة الإرجاع</button><span class="mini" id="purchaseReturnTotal">الإجمالي: 0</span></div>
       </form>
     </div>
@@ -1635,7 +1635,7 @@
           <button class="btn secondary" type="button" onclick="quickStandalonePurchaseReturn()">إدخال سريع بالكود</button>
           <span class="mini">السعر من آخر شراء للصنف</span>
         </div>
-        <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الكمية</th><th>التكلفة من آخر شراء</th><th>الإجمالي</th><th></th></tr></thead><tbody id="standalonePurchaseReturnItemsBody"></tbody></table></div>
+        <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>الكمية</th><th>التكلفة من آخر شراء</th><th>الإجمالي</th><th></th></tr></thead><tbody id="standalonePurchaseReturnItemsBody"></tbody></table></div>
         <div class="row" style="margin-top:12px"><button class="btn" type="submit" id="standalonePurchaseReturnSubmitBtn">حفظ فاتورة الإرجاع المستقل</button><span class="mini" id="standalonePurchaseReturnTotal">الإجمالي: 0</span></div>
       </form>
     </div>
@@ -1666,7 +1666,7 @@
         <div><label>المورد</label><select id="salePickerSupplier" onkeydown="handleSalePickerKey(event)" onchange="renderSaleProductPicker()"></select></div>
         <div><label>الكمية</label><input id="salePickerQty" onkeydown="handleSalePickerKey(event)" type="number" step="1" min="1" value="1"></div>
       </div>
-      <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>الماركة / الموديل</th><th>اللون</th><th>المورد</th><th>ملاحظات</th><th>المتوفر في الفرع</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>إجراء</th></tr></thead><tbody id="salePickerBody"></tbody></table></div>
+      <div class="table-scroll"><table><thead><tr><th>الكود</th><th>الصنف</th><th>العلامة التجارية</th><th>الموديل</th><th>اللون</th><th>المورد</th><th>ملاحظات</th><th>المتوفر في الفرع</th><th>سعر البيع</th><th>الهامش</th><th>نسبة الهامش</th><th>إجراء</th></tr></thead><tbody id="salePickerBody"></tbody></table></div>
       <div class="mini" id="salePickerInfo" style="margin-top:10px"></div>
     </div>
   </div>
@@ -2129,6 +2129,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-1943"></script>
+<script src="app.js?v=20261123-2034"></script>
 </body>
 </html>
