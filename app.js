@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-1846';
+const APP_BUILD='b20261123-1926';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2443,7 +2443,24 @@ async function saveLocationCategoryRules(){
   }catch(err){ console.error(err); toast('خطأ في حفظ الأقسام: '+friendlyError(err),'error'); }
   finally{ showLoading(false); window.__busy=false; }
 }
-async function onLocationsTabOpen(){ await ensureLocationCategoryRules(); renderLocationCategoryRules(); }
+async function onLocationsTabOpen(){ await ensureLocationCategoryRules(); renderCarryAutoView(); }
+/* (اقتراحات التحويل) عرض «ما يحمله كل فرع» تلقائياً من المبيعات الفعلية — للقراءة فقط (محرّر الاستثناءات لاحقاً) */
+function renderCarryAutoView(){
+  const host=q('lcrAutoView'); if(!host) return;
+  const salesLocs=locations.filter(l=>l.is_sales_location);
+  if(!salesLocs.length){ host.innerHTML='<div class="mini">لا فروع بيع.</div>'; return; }
+  const prodMap=new Map(products.map(p=>[String(p.code).toLowerCase(),p]));
+  const saleLocOf=new Map(sales.map(s=>[s.id,s.location_id]));
+  const soldCatAt=new Set();
+  for(const it of saleItems){ const loc=saleLocOf.get(it.sale_id); if(!loc) continue; const cat=prodMap.get(String(it.product_code||'').toLowerCase())?.category; if(cat) soldCatAt.add(loc+'|'+cat); }
+  const term=(q('lcrSearch')?.value||'').trim();
+  const cats=[...new Set(products.map(p=>p.category).filter(c=>c&&String(c).trim()))].sort((a,b)=>String(a).localeCompare(String(b),'ar'));
+  const rows=cats.filter(c=>!term||String(c).includes(term));
+  const perLoc=salesLocs.map(l=>esc(l.name)+': <b>'+cats.filter(c=>soldCatAt.has(l.id+'|'+c)).length+'</b>').join(' · ');
+  const head='<tr><th style="min-width:200px">التصنيف <span class="mini">('+rows.length+'/'+cats.length+')</span></th>'+salesLocs.map(l=>'<th>'+esc(l.name)+'</th>').join('')+'</tr>';
+  const body=rows.map(cat=>'<tr><td>'+esc(cat)+'</td>'+salesLocs.map(l=>soldCatAt.has(l.id+'|'+cat)?'<td><span class="badge green">✔ يُباع</span></td>':'<td><span class="badge gray">—</span></td>').join('')+'</tr>').join('')||'<tr><td colspan="'+(salesLocs.length+1)+'">لا تصنيفات مطابقة.</td></tr>';
+  host.innerHTML='<div class="mini" style="margin-bottom:8px">يحمل كل فرع تلقائياً التصنيفات التي سبق أن باعها — '+perLoc+'</div><div class="table-scroll" style="max-height:60vh"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+}
 
 
 
@@ -6412,7 +6429,7 @@ q('returnsBody')?.addEventListener('contextmenu',e=>{
    القواعد السارية على الثلاث: بوّابة الأقسام (0050) · الحدّ (تصنيف ثم عام) ·
    جنزور مصدرًا أولًا · المصدر لا ينزل تحت حدّه · السوالب مستبعدة ·
    لا اقتراحين متعاكسين (الوجهة هي الأقل، والمصدر فوق حدّه) · تجاهل 30 يومًا (0052). */
-let sgOpenRequests=[], sgDismissals=[], sgActiveList='A', sgSelected=new Map(), sgNegativesCount=0;
+let sgOpenRequests=[], sgDismissals=[], sgActiveList='C', sgSelected=new Map(), sgNegativesCount=0;
 const SG_DISMISS_DAYS=30;
 /* ═══ (المهمة ٤) قائمة «جرد مطلوب» — الكميات السالبة ═══
    222 صفاً سالباً تخصّ 215 صنفاً (لقطة الإنتاج): أرقام لا يُبنى عليها قرار.
@@ -6518,13 +6535,16 @@ function buildSuggestionEngine(){
   const qtyMap=new Map();
   for(const r of stock){ const k=String(r.product_code||'').toLowerCase()+'|'+r.location_id; const v=Number(r.qty||0); if(!qtyMap.has(k)||v>qtyMap.get(k)) qtyMap.set(k,v); }
   const soldAt=new Map();
+  const soldCatAt=new Set(); /* (موقع|تصنيف حالي) باعه الفرع من قبل — أساس «الحمل» التلقائي */
   const saleLocOf=new Map(sales.map(s=>[s.id,s.location_id]));
   const saleDateOf=new Map(sales.map(s=>[s.id,String(s.sale_date||'')]));
   for(const it of saleItems){
     const loc=saleLocOf.get(it.sale_id); if(!loc) continue;
-    const k=String(it.product_code||'').toLowerCase()+'|'+loc;
+    const codeL=String(it.product_code||'').toLowerCase();
+    const k=codeL+'|'+loc;
     const d=saleDateOf.get(it.sale_id)||'';
     if(!soldAt.has(k)||d>soldAt.get(k)) soldAt.set(k,d);
+    const pcat=prodMap.get(codeL)?.category; if(pcat) soldCatAt.add(loc+'|'+pcat);
   }
   const threshold=(code,loc)=>{
     const p=prodMap.get(String(code).toLowerCase());
@@ -6534,8 +6554,7 @@ function buildSuggestionEngine(){
   const carried=(code,loc)=>{
     const p=prodMap.get(String(code).toLowerCase());
     if(!p?.category) return true;
-    const rule=ruleMap.get(loc+'|'+p.category);
-    return rule?rule.carried:false; /* بلا صفّ ⇒ غير محمول (قرار صاحب العمل) */
+    return soldCatAt.has(loc+'|'+p.category); /* تلقائي: الفرع «يحمل» التصنيف الذي سبق أن باعه فعلاً */
   };
   const qty=(code,loc)=>qtyMap.get(String(code).toLowerCase()+'|'+loc)||0;
   const pickSource=(code,dest,need)=>{
@@ -6549,7 +6568,7 @@ function buildSuggestionEngine(){
     }
     return null;
   };
-  return {neg,prodMap,qty,soldAt,threshold,carried,pickSource,janzour,salesLocs};
+  return {neg,prodMap,qty,soldAt,soldCatAt,threshold,carried,pickSource,janzour,salesLocs};
 }
 function sgSuggestionFor(engine,code,dest){
   const p=engine.prodMap.get(String(code).toLowerCase()); if(!p) return null;
