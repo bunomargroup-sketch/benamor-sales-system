@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-1926">
+<link rel="stylesheet" href="app.css?v=20261123-1943">
 </head>
 <body class="auth-locked">
   <header>
@@ -123,6 +123,18 @@
           </div>
           <div class="mini" style="margin:6px 0;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--blue) 10%,transparent)">🔄 يُحدِّد النظام «ما يحمله كل فرع» تلقائياً من مبيعاته الفعلية — لا حاجة لأي تعبئة يدوية. محرّر الاستثناءات (إضافة/استبعاد تصنيف لفرع) قادم قريباً.</div>
           <div id="lcrAutoView"></div>
+        </div>
+
+        <div class="panel">
+          <div class="tools" style="flex-wrap:wrap;gap:8px"><h2>استثناءات الحمل اليدوية</h2><span class="mini" id="lceAdminNote"></span></div>
+          <p class="muted">الأصل أن يحمل الفرع ما يبيعه تلقائياً. أضف استثناءً فقط لتُجبر حمل تصنيف جديد لم يُبع بعد، أو لتستبعد تصنيفاً يُباع لكنك لم تعد تخزّنه.</p>
+          <div class="row" style="gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+            <div><label>الفرع</label><select id="lceBranch" style="min-width:150px"></select></div>
+            <div><label>التصنيف</label><select id="lceCategory" style="min-width:240px"></select></div>
+            <div><label>النوع</label><select id="lceMode" style="min-width:210px"><option value="carry">اجعله محمولاً (رغم عدم البيع)</option><option value="exclude">استبعده (رغم البيع)</option></select></div>
+            <button class="btn" type="button" id="lceAddBtn" onclick="addCarryException()">+ إضافة استثناء</button>
+          </div>
+          <div class="table-scroll" style="max-height:40vh"><table><thead><tr><th>الفرع</th><th>التصنيف</th><th>النوع</th><th>إجراء</th></tr></thead><tbody id="lceBody"></tbody></table></div>
         </div>
       </section>
 
@@ -2117,6 +2129,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-1926"></script>
+<script src="app.js?v=20261123-1943"></script>
 </body>
 </html>

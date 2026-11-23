@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-1926';
+const APP_BUILD='b20261123-1943';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2443,23 +2443,105 @@ async function saveLocationCategoryRules(){
   }catch(err){ console.error(err); toast('خطأ في حفظ الأقسام: '+friendlyError(err),'error'); }
   finally{ showLoading(false); window.__busy=false; }
 }
-async function onLocationsTabOpen(){ await ensureLocationCategoryRules(); renderCarryAutoView(); }
+async function onLocationsTabOpen(){ await ensureLocationCategoryRules(); fillCarryExceptionForm(); renderCarryAutoView(); renderCarryExceptions(); }
+/* مجموعة (موقع|تصنيف حالي) باعه الفرع فعلاً — الأساس التلقائي للحمل */
+function carrySoldCatSet(){
+  const prodMap=new Map(products.map(p=>[String(p.code).toLowerCase(),p]));
+  const saleLocOf=new Map(sales.map(s=>[s.id,s.location_id]));
+  const set=new Set();
+  for(const it of saleItems){ const loc=saleLocOf.get(it.sale_id); if(!loc) continue; const cat=prodMap.get(String(it.product_code||'').toLowerCase())?.category; if(cat) set.add(loc+'|'+cat); }
+  return set;
+}
+function fillCarryExceptionForm(){
+  const bsel=q('lceBranch');
+  if(bsel && (!bsel.dataset.filled || bsel.options.length===0)){
+    const sl=locations.filter(l=>l.is_sales_location);
+    bsel.innerHTML=sl.map(l=>'<option value="'+l.id+'">'+esc(l.name)+'</option>').join('');
+    bsel.dataset.filled='1';
+  }
+  const csel=q('lceCategory');
+  if(csel){
+    const cats=[...new Set(products.map(p=>p.category).filter(c=>c&&String(c).trim()))].sort((a,b)=>String(a).localeCompare(String(b),'ar'));
+    const cur=csel.value;
+    csel.innerHTML='<option value="">— اختر تصنيفاً —</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+    if(cur) csel.value=cur;
+  }
+  const admin=isManager();
+  const addBtn=q('lceAddBtn'); if(addBtn) addBtn.style.display=admin?'':'none';
+  const note=q('lceAdminNote'); if(note) note.textContent=admin?'':'🔒 التعديل للمدير فقط';
+}
+function renderCarryExceptions(){
+  const host=q('lceBody'); if(!host) return;
+  const sold=carrySoldCatSet();
+  const curCats=new Set(products.map(p=>p.category).filter(c=>c&&String(c).trim()));
+  const admin=isManager();
+  const exc=locationCategoryRules.filter(r=>{
+    const l=locations.find(x=>x.id===r.location_id);
+    if(!l||!l.is_sales_location) return false;
+    if(!curCats.has(r.category)) return false;
+    const auto=sold.has(r.location_id+'|'+r.category);
+    return (!!r.carried)!==auto; /* استثناء فعلي فقط (يخالف التلقائي) */
+  });
+  host.innerHTML=exc.map(r=>{
+    const l=locations.find(x=>x.id===r.location_id);
+    const type=r.carried?'<span class="badge blue">محمول يدوياً</span>':'<span class="badge red">مستبعد يدوياً</span>';
+    const btn=admin?'<button class="btn secondary" type="button" style="padding:4px 8px" onclick="removeCarryException(\''+r.id+'\')">إلغاء</button>':'';
+    return '<tr><td>'+esc(l?.name||'—')+'</td><td>'+esc(r.category)+'</td><td>'+type+'</td><td>'+btn+'</td></tr>';
+  }).join('')||'<tr><td colspan="4" class="mini">لا استثناءات حالياً — النظام يعمل تلقائياً من المبيعات.</td></tr>';
+}
+async function addCarryException(){
+  if(!isManager()){toast('الاستثناءات للمدير فقط','warn');return;}
+  const loc=q('lceBranch')?.value, cat=q('lceCategory')?.value, mode=q('lceMode')?.value;
+  if(!loc||!cat){toast('اختر الفرع والتصنيف','warn');return;}
+  const carried=(mode==='carry');
+  const auto=carrySoldCatSet().has(loc+'|'+cat);
+  if(carried===auto){toast(carried?'هذا التصنيف يُباع في الفرع أصلاً — لا حاجة لاستثناء':'هذا التصنيف غير مُباع في الفرع — غير محمول أصلاً','info');return;}
+  if(window.__busy) return; window.__busy=true;
+  try{
+    showLoading(true);
+    await fetchWithAuthRetry(SUPABASE_URL+'/rest/v1/pos_location_category_rules',{method:'POST',headers:{...H,Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify([{location_id:loc,category:cat,carried,min_qty:null,updated_at:new Date().toISOString(),updated_by:appUser?.identifier||''}])});
+    await ensureLocationCategoryRules(true);
+    renderCarryAutoView(); renderCarryExceptions();
+    if(q('lceCategory')) q('lceCategory').value='';
+    toast('أُضيف الاستثناء','success');
+    logAction('carry_exception_add','pos_location_category_rules',null,loc+'|'+cat+'='+carried);
+  }catch(err){console.error(err);toast('خطأ في إضافة الاستثناء: '+friendlyError(err),'error');}
+  finally{showLoading(false);window.__busy=false;}
+}
+async function removeCarryException(id){
+  if(!isManager()){toast('الاستثناءات للمدير فقط','warn');return;}
+  if(!confirm('إلغاء هذا الاستثناء وإرجاع التصنيف إلى الوضع التلقائي؟')) return;
+  if(window.__busy) return; window.__busy=true;
+  try{
+    showLoading(true);
+    await fetchWithAuthRetry(SUPABASE_URL+'/rest/v1/pos_location_category_rules?id=eq.'+encodeURIComponent(id),{method:'DELETE',headers:{...H}});
+    await ensureLocationCategoryRules(true);
+    renderCarryAutoView(); renderCarryExceptions();
+    toast('أُلغي الاستثناء','success');
+    logAction('carry_exception_remove','pos_location_category_rules',String(id),'');
+  }catch(err){console.error(err);toast('خطأ في إلغاء الاستثناء: '+friendlyError(err),'error');}
+  finally{showLoading(false);window.__busy=false;}
+}
 /* (اقتراحات التحويل) عرض «ما يحمله كل فرع» تلقائياً من المبيعات الفعلية — للقراءة فقط (محرّر الاستثناءات لاحقاً) */
 function renderCarryAutoView(){
   const host=q('lcrAutoView'); if(!host) return;
   const salesLocs=locations.filter(l=>l.is_sales_location);
   if(!salesLocs.length){ host.innerHTML='<div class="mini">لا فروع بيع.</div>'; return; }
-  const prodMap=new Map(products.map(p=>[String(p.code).toLowerCase(),p]));
-  const saleLocOf=new Map(sales.map(s=>[s.id,s.location_id]));
-  const soldCatAt=new Set();
-  for(const it of saleItems){ const loc=saleLocOf.get(it.sale_id); if(!loc) continue; const cat=prodMap.get(String(it.product_code||'').toLowerCase())?.category; if(cat) soldCatAt.add(loc+'|'+cat); }
+  const sold=carrySoldCatSet();
+  const ruleMap=new Map(locationCategoryRules.map(r=>[r.location_id+'|'+r.category,r]));
   const term=(q('lcrSearch')?.value||'').trim();
   const cats=[...new Set(products.map(p=>p.category).filter(c=>c&&String(c).trim()))].sort((a,b)=>String(a).localeCompare(String(b),'ar'));
   const rows=cats.filter(c=>!term||String(c).includes(term));
-  const perLoc=salesLocs.map(l=>esc(l.name)+': <b>'+cats.filter(c=>soldCatAt.has(l.id+'|'+c)).length+'</b>').join(' · ');
+  const eff=(loc,cat)=>{ const r=ruleMap.get(loc+'|'+cat); return r?!!r.carried:sold.has(loc+'|'+cat); };
+  const perLoc=salesLocs.map(l=>esc(l.name)+': <b>'+cats.filter(c=>eff(l.id,c)).length+'</b>').join(' · ');
   const head='<tr><th style="min-width:200px">التصنيف <span class="mini">('+rows.length+'/'+cats.length+')</span></th>'+salesLocs.map(l=>'<th>'+esc(l.name)+'</th>').join('')+'</tr>';
-  const body=rows.map(cat=>'<tr><td>'+esc(cat)+'</td>'+salesLocs.map(l=>soldCatAt.has(l.id+'|'+cat)?'<td><span class="badge green">✔ يُباع</span></td>':'<td><span class="badge gray">—</span></td>').join('')+'</tr>').join('')||'<tr><td colspan="'+(salesLocs.length+1)+'">لا تصنيفات مطابقة.</td></tr>';
-  host.innerHTML='<div class="mini" style="margin-bottom:8px">يحمل كل فرع تلقائياً التصنيفات التي سبق أن باعها — '+perLoc+'</div><div class="table-scroll" style="max-height:60vh"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+  const cell=(loc,cat)=>{
+    const auto=sold.has(loc+'|'+cat); const r=ruleMap.get(loc+'|'+cat);
+    if(r && (!!r.carried)!==auto) return r.carried?'<td><span class="badge blue">✔ يدوي</span></td>':'<td><span class="badge red">✕ مستبعد</span></td>';
+    return auto?'<td><span class="badge green">✔ يُباع</span></td>':'<td><span class="badge gray">—</span></td>';
+  };
+  const body=rows.map(cat=>'<tr><td>'+esc(cat)+'</td>'+salesLocs.map(l=>cell(l.id,cat)).join('')+'</tr>').join('')||'<tr><td colspan="'+(salesLocs.length+1)+'">لا تصنيفات مطابقة.</td></tr>';
+  host.innerHTML='<div class="mini" style="margin-bottom:8px">المحمول فعلياً لكل فرع (تلقائي من المبيعات + استثناءاتك) — '+perLoc+'</div><div class="table-scroll" style="max-height:52vh"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
 }
 
 
@@ -6554,6 +6636,8 @@ function buildSuggestionEngine(){
   const carried=(code,loc)=>{
     const p=prodMap.get(String(code).toLowerCase());
     if(!p?.category) return true;
+    const exc=ruleMap.get(loc+'|'+p.category); /* استثناء يدوي (مفتاحه تصنيف حالي) يتقدّم على التلقائي */
+    if(exc) return exc.carried;
     return soldCatAt.has(loc+'|'+p.category); /* تلقائي: الفرع «يحمل» التصنيف الذي سبق أن باعه فعلاً */
   };
   const qty=(code,loc)=>qtyMap.get(String(code).toLowerCase()+'|'+loc)||0;
