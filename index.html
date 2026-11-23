@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-2156">
+<link rel="stylesheet" href="app.css?v=20261123-2218">
 </head>
 <body class="auth-locked">
   <header>
@@ -1253,19 +1253,19 @@
           <div id="columnSettingsBody"></div>
         </div>
         <div class="panel">
-          <h2>النسخ الاحتياطي والعمل دون اتصال</h2>
+          <h2>لقطة محلية للعمل دون اتصال</h2>
           <div class="mini" style="margin-bottom:8px">إصدار التشغيل الحالي: <b id="settingsBuild" class="ltr">—</b> — إذا اختلف عن آخر إصدار منشور فهذا الجهاز يعمل نسخة قديمة (أعد تحميل الصفحة)</div>
-          <p class="muted">للإنترنت الضعيف: نزّل نسخة احتياطية من كل البيانات واحفظها على الجهاز، ثم استعدها على أي جهاز لتعمل المنظومة فوراً من البيانات المحفوظة دون انتظار التحميل. ملاحظة: البيع والحفظ لا يزالان يحتاجان اتصالاً للوصول إلى الخادم.</p>
+          <p class="muted">تنزّل <strong>لقطة مختصرة</strong> من البيانات للعمل السريع دون اتصال (وليست نسخة كاملة): تُحفظ على الجهاز وتُستعاد لتفتح المنظومة فوراً دون انتظار التحميل. ⚠️ ليست نسخة تعافٍ من كارثة — النسخة الكاملة هي النسخة اليومية التلقائية. والبيع والحفظ يحتاجان اتصالاً بالخادم.</p>
           <div class="row" style="margin-top:10px">
-            <button class="btn" type="button" onclick="downloadBackup()">⬇️ تنزيل نسخة احتياطية</button>
-            <label class="btn secondary" style="cursor:pointer">⬆️ استعادة من نسخة احتياطية<input type="file" accept="application/json,.json" style="display:none" onchange="restoreBackup(this)"></label>
+            <button class="btn" type="button" onclick="downloadBackup()">⬇️ تنزيل لقطة محلية</button>
+            <label class="btn secondary" style="cursor:pointer">⬆️ استعادة لقطة محلية<input type="file" accept="application/json,.json" style="display:none" onchange="restoreBackup(this)"></label>
             <button class="btn secondary" type="button" onclick="loadAll()">🔄 تحديث من الخادم</button>
           </div>
           <p class="mini" style="margin-top:8px">للأفضل: ثبّت التطبيق كـ PWA (إضافة إلى الشاشة الرئيسية / Install) ليفتح فوراً دون انتظار الإنترنت.</p>
         </div>
         <div class="panel">
           <h2>النسخ الاحتياطي على Google Drive</h2>
-          <p class="muted">يُحفظ في مجلد مخفي خاص بالتطبيق في حسابك على Google (appDataFolder) ولا يظهر بين ملفاتك. يتيح مزامنة النسخة بين الأجهزة بضغطة زر.</p>
+          <p class="muted">يُحفظ في مجلد مخفي خاص بالتطبيق في حسابك على Google (appDataFolder) ولا يظهر بين ملفاتك. يتيح نقل <strong>اللقطة المختصرة نفسها</strong> بين الأجهزة بضغطة زر — وليست نسخة كاملة. (متقدّم: يتطلب إعداد OAuth مرّة واحدة.)</p>
           <div><label>معرّف العميل (OAuth Client ID) من Google Cloud</label><input id="gDriveClientID" class="ltr" placeholder="xxxxx.apps.googleusercontent.com"></div>
           <div class="row" style="margin-top:8px">
             <button class="btn secondary" type="button" onclick="gDriveSaveClientID()">حفظ المعرّف</button>
@@ -1278,7 +1278,7 @@
           <p class="mini" style="margin-top:6px">مطلوب إنشاء OAuth Client ID مرة واحدة من Google Cloud Console (راجع التعليمات). البيع والحفظ لا يزالان يحتاجان اتصالاً بالخادم.</p>
         </div>
         <div class="panel">
-          <h2>الإعدادات</h2>
+          <h2>الإعدادات العامة</h2>
           <p class="muted">إعدادات سريعة محفوظة على هذا الجهاز. يمكن تغيير الاسم والعملة وحد المخزون المنخفض بدون تعديل الكود.</p>
           <form class="form" id="settingsForm">
             <div><label>اسم الشركة</label><input id="settingsBusinessName"></div>
@@ -1319,14 +1319,6 @@
         </div>
       </section>
 
-      <section id="next" class="section">
-        <div class="panel">
-          <h2>المرحلة القادمة</h2>
-          <ul>
-            <li>الخطوة القادمة: تحسين الصلاحيات والمستخدمين، ثم تقارير متقدمة حسب الحاجة.</li>
-          </ul>
-        </div>
-      </section>
       <section id="stockCount" class="section">
         <div class="panel">
           <div class="tools"><h2>الجرد الفعلي للمخزون</h2><div class="row">
@@ -2143,6 +2135,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-2156"></script>
+<script src="app.js?v=20261123-2218"></script>
 </body>
 </html>
