@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2055';
+const APP_BUILD='b20261123-2102';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -13652,7 +13652,11 @@ function renderReportsDetail(){
     q('repSupplierProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(5);
   }
   if(currentReport==='lossitems' && q('repLossItemsBody')){
-    const rows=itemProfitRows().filter(r=>r.profit<0).sort((a,b)=>a.profit-b.profit);
+    /* (قاعدة المالك) الخسارة = بيعٌ فعليّ بأقل من التكلفة فقط. المرتجعات ليست خسارة
+       (الإرجاع يعكس عملية بيع) — فتُحسب من أصناف البيع وحدها بلا طرح المرتجعات. */
+    const _lm={};
+    d.fItems.forEach(it=>{ if(Number(it.qty||0)<=0) return; /* استبعاد المرتجعات/الاسترجاع (أسطر بكمية سالبة) — الإرجاع ليس خسارة */ const k=it.product_code; const o=_lm[k]||(_lm[k]={code:k,name:it.product_name,qty:0,sales:0,cost:0}); o.qty+=Number(it.qty||0); o.sales+=Number(it.line_total||0); o.cost+=Number(it.qty||0)*saleLineCost(it);});
+    const rows=Object.values(_lm).map(r=>({...r,profit:r.sales-r.cost,margin:r.sales?(r.sales-r.cost)/r.sales*100:0})).filter(r=>r.profit<0).sort((a,b)=>a.profit-b.profit);
     q('repLossItemsBody').innerHTML=rows.map(r=>`<tr><td class="ltr"><b>${esc(r.code)}</b></td><td>${esc(r.name)}</td>${itemBMCells(r.code)}<td>${money(r.qty)}</td><td>${money(r.sales)}</td><td>${money(r.cost)}</td><td class="stock-negative">${money(r.profit)}</td><td class="stock-negative">${money(r.margin)}%</td></tr>`).join('')||emptyRow(9,'لا توجد أصناف خاسرة في الفترة المحددة.');
   }
   if(currentReport==='losscustomers' && q('repLossCustomersBody')){
