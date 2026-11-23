@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2139';
+const APP_BUILD='b20261123-2156';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2008,7 +2008,6 @@ function renderDashboard(){
   const todayNoInvRet=saleReturns.filter(r=>!r.sale_id&&String(r.return_date||'').slice(0,10)===today);
   const dashNoInv=q('dashNoInvoiceReturns');
   if(dashNoInv){ if(todayNoInvRet.length){dashNoInv.classList.remove('hidden'); dashNoInv.innerHTML=`<h3>⚠️ مرتجعات بلا فاتورة اليوم</h3><div class="num">${todayNoInvRet.length} بقيمة ${money(todayNoInvRet.reduce((a,r)=>a+Number(r.total||0),0))} ${APP_CONFIG.currency}</div>`;} else dashNoInv.classList.add('hidden'); }
-  try{renderDashCharts();}catch(_e){console.warn('charts',_e);}
   renderDashboardLists();
 }
 
@@ -2049,12 +2048,10 @@ function svgGrouped(labels, sa, sb, opts){ opts=opts||{};
   return '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">'+lg+s+'</svg>';
 }
 function renderDashCharts(){
-  const panel=q('dashChartsPanel'); if(!panel) return;
-  if(!canSeeDebtTotals()){ panel.classList.add('hidden'); return; }
-  panel.classList.remove('hidden');
+  const menu=q('dashChartMenu'), area=q('dashChartArea'); if(!menu||!area) return;
+  if(!canSeeDebtTotals()){ menu.innerHTML=''; area.innerHTML='<div class="mini" style="padding:16px;color:var(--muted)">هذه اللوحة للمدير والمحاسب والمبرمج فقط.</div>'; return; }
   __dashAggCache=dashAgg();
-  const menu=q('dashChartMenu');
-  if(menu) menu.innerHTML=DASH_INDICATORS.map(ind=>'<button class="seg-btn'+(ind.id===__dashChartCur?' active':'')+'" type="button" data-dc="'+ind.id+'" onclick="showDashChart(\''+ind.id+'\')"><i class="ti '+ind.icon+'"></i> '+esc(ind.label)+'</button>').join('');
+  menu.innerHTML=DASH_INDICATORS.map(ind=>'<button class="seg-btn'+(ind.id===__dashChartCur?' active':'')+'" type="button" data-dc="'+ind.id+'" onclick="showDashChart(\''+ind.id+'\')"><i class="ti '+ind.icon+'"></i> '+esc(ind.label)+'</button>').join('');
   showDashChart(__dashChartCur);
 }
 function showDashChart(id){
@@ -2065,44 +2062,52 @@ function showDashChart(id){
   try{ const a=__dashAggCache||dashAgg(); const ind=DASH_INDICATORS.find(x=>x.id===id); area.innerHTML='<div class="card" style="padding:12px">'+ind.r(a)+'</div>'; }
   catch(e){ area.innerHTML='<div class="mini" style="padding:16px;color:var(--muted)">تعذّر رسم المؤشر</div>'; console.warn('dashchart',e); }
 }
-function _mlbl(m){ return m.slice(5)+'/'+m.slice(2,4); }
 function _short(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; }
 function _dcBranchLabels(map){ return [...map.keys()].map(id=>(locations.find(l=>l.id===id)||{}).name||'—'); }
 function _dcTop(map,n,labelFn){ const arr=[...map.entries()].map(e=>({k:e[0],v:e[1]})).sort((a,b)=>b.v-a.v).slice(0,n); return {labels:arr.map(x=>labelFn?labelFn(x.k):String(x.k)), values:arr.map(x=>x.v)}; }
 function dashAgg(){
-  const months=dashChartMonthKeys(6); const mi=new Map(months.map((m,i)=>[m,i]));
-  const saleMo=new Map(sales.map(s=>[s.id,String(s.sale_date||'').slice(0,7)]));
-  const saleLoc=new Map(sales.map(s=>[s.id,s.location_id]));
-  const mNetSales=months.map(()=>0), mProfit=months.map(()=>0), mPurch=months.map(()=>0), mRet=months.map(()=>0), mInv=months.map(()=>0);
+  const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'', loc=q('reportLocation')?.value||'';
+  let buckets=[], bkey, lbl;
+  if(from&&to){
+    const d1=new Date(from+'T00:00'), d2=new Date(to+'T00:00');
+    const days=Math.round((d2-d1)/864e5)+1;
+    if(days<=62){ for(let d=new Date(d1); d<=d2; d.setDate(d.getDate()+1)){ buckets.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); } bkey=s=>String(s||'').slice(0,10); lbl=b=>b.slice(8)+'/'+b.slice(5,7); }
+    else { let d=new Date(d1.getFullYear(),d1.getMonth(),1); const end=new Date(d2.getFullYear(),d2.getMonth(),1); for(; d<=end; d.setMonth(d.getMonth()+1)){ buckets.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); } bkey=s=>String(s||'').slice(0,7); lbl=b=>b.slice(5)+'/'+b.slice(2,4); }
+  } else { buckets=dashChartMonthKeys(6); bkey=s=>String(s||'').slice(0,7); lbl=b=>b.slice(5)+'/'+b.slice(2,4); }
+  const bi=new Map(buckets.map((b,i)=>[b,i]));
+  const inR=d=>inDateRange(d,from,to);
+  const sOk=new Map(), sKey=new Map(), sLoc=new Map();
+  for(const s of sales){ sOk.set(s.id, inR(s.sale_date) && (!loc||s.location_id===loc)); sKey.set(s.id, bkey(s.sale_date)); sLoc.set(s.id, s.location_id); }
+  const mNetSales=buckets.map(()=>0), mProfit=buckets.map(()=>0), mPurch=buckets.map(()=>0), mRet=buckets.map(()=>0), mInv=buckets.map(()=>0);
   const byBranchSales=new Map(), byBranchProfit=new Map(), byCatSales=new Map(), byCatProfit=new Map(), bySupSales=new Map(), byProdSales=new Map(), byCustSales=new Map(), bySellerSales=new Map();
-  for(const it of saleItems){ const mo=saleMo.get(it.sale_id); if(!mi.has(mo)) continue; const i=mi.get(mo);
+  for(const it of saleItems){ if(!sOk.get(it.sale_id)) continue; const b=sKey.get(it.sale_id); const i=bi.has(b)?bi.get(b):-1;
     const rev=Number(it.line_total||0), prof=rev-Number(it.qty||0)*saleLineCost(it);
-    mNetSales[i]+=rev; mProfit[i]+=prof;
-    const loc=saleLoc.get(it.sale_id); if(loc){ byBranchSales.set(loc,(byBranchSales.get(loc)||0)+rev); byBranchProfit.set(loc,(byBranchProfit.get(loc)||0)+prof); }
+    if(i>=0){ mNetSales[i]+=rev; mProfit[i]+=prof; }
+    const l=sLoc.get(it.sale_id); if(l){ byBranchSales.set(l,(byBranchSales.get(l)||0)+rev); byBranchProfit.set(l,(byBranchProfit.get(l)||0)+prof); }
     const p=productByCode(it.product_code); const cat=(p&&p.category)?p.category:'بدون تصنيف';
     byCatSales.set(cat,(byCatSales.get(cat)||0)+rev); byCatProfit.set(cat,(byCatProfit.get(cat)||0)+prof);
     const sup=(p&&p.supplier_name)?p.supplier_name:'—'; bySupSales.set(sup,(bySupSales.get(sup)||0)+rev);
     const pn=(p&&p.name)?p.name:String(it.product_code||''); byProdSales.set(pn,(byProdSales.get(pn)||0)+rev);
   }
   const cById=new Map(customers.map(c=>[c.id,c.name]));
-  for(const s of sales){ const mo=String(s.sale_date||'').slice(0,7); if(!mi.has(mo)) continue; mInv[mi.get(mo)]+=1;
+  for(const s of sales){ if(!sOk.get(s.id)) continue; const b=sKey.get(s.id); if(bi.has(b)) mInv[bi.get(b)]+=1;
     const cn=cById.get(s.customer_id)||'نقدي'; byCustSales.set(cn,(byCustSales.get(cn)||0)+Number(s.total||0));
     const sl=(typeof sellerName==='function'?sellerName(s.user_identifier):(s.user_identifier||'—'))||'—'; bySellerSales.set(sl,(bySellerSales.get(sl)||0)+Number(s.total||0));
   }
-  for(const r of saleReturns){ const mo=String(r.return_date||'').slice(0,7); if(mi.has(mo)) mRet[mi.get(mo)]+=Number(r.total||0); }
-  for(const pu of purchases){ const mo=String(pu.purchase_date||'').slice(0,7); if(mi.has(mo)) mPurch[mi.get(mo)]+=Number(pu.total||0); }
-  const mAvg=months.map((m,i)=>mInv[i]?mNetSales[i]/mInv[i]:0);
-  const stockValBranch=new Map(); for(const st of stock){ stockValBranch.set(st.location_id,(stockValBranch.get(st.location_id)||0)+Number(st.qty||0)*productCost(st.product_code)); }
-  return {months,mNetSales,mProfit,mPurch,mRet,mInv,mAvg,byBranchSales,byBranchProfit,byCatSales,byCatProfit,bySupSales,byProdSales,byCustSales,bySellerSales,stockValBranch};
+  for(const r of saleReturns){ if(!(inR(r.return_date)&&(!loc||r.location_id===loc))) continue; const b=bkey(r.return_date); if(bi.has(b)) mRet[bi.get(b)]+=Number(r.total||0); }
+  for(const pu of purchases){ if(!(inR(pu.purchase_date)&&(!loc||pu.location_id===loc))) continue; const b=bkey(pu.purchase_date); if(bi.has(b)) mPurch[bi.get(b)]+=Number(pu.total||0); }
+  const mAvg=buckets.map((b,i)=>mInv[i]?mNetSales[i]/mInv[i]:0);
+  const stockValBranch=new Map(); for(const st of stock){ if(loc&&st.location_id!==loc) continue; stockValBranch.set(st.location_id,(stockValBranch.get(st.location_id)||0)+Number(st.qty||0)*productCost(st.product_code)); }
+  return {months:buckets,lbl,mNetSales,mProfit,mPurch,mRet,mInv,mAvg,byBranchSales,byBranchProfit,byCatSales,byCatProfit,bySupSales,byProdSales,byCustSales,bySellerSales,stockValBranch};
 }
 const _DCS={w:900,h:360};
 const DASH_INDICATORS=[
-  {id:'sales_profit',label:'المبيعات والربح',icon:'ti-chart-bar',r:a=>svgGrouped(a.months.map(_mlbl),{name:'المبيعات',color:'var(--blue)',values:a.mNetSales},{name:'صافي الربح',color:'var(--good)',values:a.mProfit},_DCS)},
-  {id:'sales_purch',label:'المبيعات والمشتريات',icon:'ti-arrows-exchange',r:a=>svgGrouped(a.months.map(_mlbl),{name:'المبيعات',color:'var(--blue)',values:a.mNetSales},{name:'المشتريات',color:'var(--warn)',values:a.mPurch},_DCS)},
-  {id:'profit_month',label:'الربح شهرياً',icon:'ti-trending-up',r:a=>svgBars(a.months.map(_mlbl),a.mProfit,{w:_DCS.w,h:_DCS.h,color:'var(--good)'})},
-  {id:'returns_month',label:'المرتجعات شهرياً',icon:'ti-receipt-refund',r:a=>svgBars(a.months.map(_mlbl),a.mRet,{w:_DCS.w,h:_DCS.h,color:'var(--bad)'})},
-  {id:'invoices_month',label:'عدد الفواتير',icon:'ti-file-invoice',r:a=>svgBars(a.months.map(_mlbl),a.mInv,{w:_DCS.w,h:_DCS.h,color:'var(--blue)'})},
-  {id:'avg_invoice',label:'متوسط الفاتورة',icon:'ti-calculator',r:a=>svgBars(a.months.map(_mlbl),a.mAvg,{w:_DCS.w,h:_DCS.h,color:'#0ea5e9'})},
+  {id:'sales_profit',label:'المبيعات والربح',icon:'ti-chart-bar',r:a=>svgGrouped(a.months.map(a.lbl),{name:'المبيعات',color:'var(--blue)',values:a.mNetSales},{name:'صافي الربح',color:'var(--good)',values:a.mProfit},_DCS)},
+  {id:'sales_purch',label:'المبيعات والمشتريات',icon:'ti-arrows-exchange',r:a=>svgGrouped(a.months.map(a.lbl),{name:'المبيعات',color:'var(--blue)',values:a.mNetSales},{name:'المشتريات',color:'var(--warn)',values:a.mPurch},_DCS)},
+  {id:'profit_month',label:'الربح بالفترة',icon:'ti-trending-up',r:a=>svgBars(a.months.map(a.lbl),a.mProfit,{w:_DCS.w,h:_DCS.h,color:'var(--good)'})},
+  {id:'returns_month',label:'المرتجعات بالفترة',icon:'ti-receipt-refund',r:a=>svgBars(a.months.map(a.lbl),a.mRet,{w:_DCS.w,h:_DCS.h,color:'var(--bad)'})},
+  {id:'invoices_month',label:'عدد الفواتير',icon:'ti-file-invoice',r:a=>svgBars(a.months.map(a.lbl),a.mInv,{w:_DCS.w,h:_DCS.h,color:'var(--blue)'})},
+  {id:'avg_invoice',label:'متوسط الفاتورة',icon:'ti-calculator',r:a=>svgBars(a.months.map(a.lbl),a.mAvg,{w:_DCS.w,h:_DCS.h,color:'#0ea5e9'})},
   {id:'branch_sales',label:'المبيعات حسب الفرع',icon:'ti-building-store',r:a=>svgBars(_dcBranchLabels(a.byBranchSales),[...a.byBranchSales.values()],{w:_DCS.w,h:_DCS.h,color:'var(--blue)'})},
   {id:'branch_profit',label:'الربح حسب الفرع',icon:'ti-building-bank',r:a=>svgBars(_dcBranchLabels(a.byBranchProfit),[...a.byBranchProfit.values()],{w:_DCS.w,h:_DCS.h,color:'var(--good)'})},
   {id:'stock_branch',label:'قيمة المخزون حسب الفرع',icon:'ti-packages',r:a=>svgBars(_dcBranchLabels(a.stockValBranch),[...a.stockValBranch.values()],{w:_DCS.w,h:_DCS.h,color:'#8b5cf6'})},
@@ -13753,6 +13758,7 @@ function renderReportsDetail(){
     d.fItems.forEach(it=>add(it,1)); d.fRetItems.forEach(it=>add(it,-1)); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
     q('repSupplierProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(5);
   }
+  if(currentReport==='charts' && q('dashChartArea')){ renderDashCharts(); }
   if(currentReport==='purchaseprofit' && q('repPurchaseProfitBody')){
     const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'', loc=q('reportLocation')?.value||'';
     /* مبيعات كل صنف (صافية: المرتجعات أسطر سالبة) ومتوسط سعر بيعه */

@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-2139">
+<link rel="stylesheet" href="app.css?v=20261123-2156">
 </head>
 <body class="auth-locked">
   <header>
@@ -107,11 +107,6 @@
         <div class="panel">
           <h2>آخر حركات المخزون</h2>
           <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>المكان</th><th>الكمية</th></tr></thead><tbody id="dashMovementsBody"></tbody></table></div>
-        </div>
-        <div class="panel hidden" id="dashChartsPanel">
-          <div class="tools"><h2>لوحة المؤشرات</h2><span class="mini" style="color:var(--muted)">آخر 6 أشهر</span></div>
-          <div class="seg" id="dashChartMenu" style="margin:8px 0 12px;flex-wrap:wrap"></div>
-          <div id="dashChartArea"></div>
         </div>
       </section>
 
@@ -1159,6 +1154,7 @@
             <button class="seg-btn" type="button" data-rep="losscustomers" onclick="showReport('losscustomers')"><i class="ti ti-user-down"></i> زبائن خاسرون</button>
             <button class="seg-btn" type="button" data-rep="supplierprofit" onclick="showReport('supplierprofit')"><i class="ti ti-truck-delivery"></i> ربحية الموردين</button>
             <button class="seg-btn" type="button" data-rep="purchaseprofit" onclick="showReport('purchaseprofit')"><i class="ti ti-receipt-2"></i> ربحية فواتير الشراء</button>
+            <button class="seg-btn" type="button" data-rep="charts" onclick="showReport('charts')"><i class="ti ti-chart-dots"></i> لوحة المؤشرات</button>
             <button class="seg-btn" type="button" data-rep="itemhistory" onclick="showReport('itemhistory')"><i class="ti ti-history"></i> حركة صنف</button>
             <button class="seg-btn" type="button" data-rep="customerhistory" onclick="showReport('customerhistory')"><i class="ti ti-user-search"></i> حركة زبون</button>
           </div>
@@ -1220,6 +1216,12 @@
         </div>
         <div id="rep-catprofit" class="rep-view hidden">
           <div class="panel"><h2>أرباح مجموعات الأصناف</h2><p class="muted">مجموعات الأصناف = حقل التصنيف في المنتج.</p><div class="table-scroll"><table><thead><tr><th>التصنيف</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repCatProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-charts" class="rep-view hidden">
+          <div class="panel">
+            <div class="seg" id="dashChartMenu" style="flex-wrap:wrap;margin-bottom:12px"></div>
+            <div id="dashChartArea"></div>
+          </div>
         </div>
         <div id="rep-purchaseprofit" class="rep-view hidden">
           <div class="panel"><div class="tools"><h2>ربحية فواتير الشراء (الربح المحقّق)</h2></div>
@@ -2141,6 +2143,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-2139"></script>
+<script src="app.js?v=20261123-2156"></script>
 </body>
 </html>
