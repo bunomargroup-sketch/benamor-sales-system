@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2102';
+const APP_BUILD='b20261123-2114';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2008,10 +2008,71 @@ function renderDashboard(){
   const todayNoInvRet=saleReturns.filter(r=>!r.sale_id&&String(r.return_date||'').slice(0,10)===today);
   const dashNoInv=q('dashNoInvoiceReturns');
   if(dashNoInv){ if(todayNoInvRet.length){dashNoInv.classList.remove('hidden'); dashNoInv.innerHTML=`<h3>⚠️ مرتجعات بلا فاتورة اليوم</h3><div class="num">${todayNoInvRet.length} بقيمة ${money(todayNoInvRet.reduce((a,r)=>a+Number(r.total||0),0))} ${APP_CONFIG.currency}</div>`;} else dashNoInv.classList.add('hidden'); }
+  try{renderDashCharts();}catch(_e){console.warn('charts',_e);}
   renderDashboardLists();
 }
 
 
+/* ════ (لوحة المؤشرات) رسوم بيانية SVG بلا مكتبات خارجية — تعمل بلا إنترنت ════ */
+function dashChartMonthKeys(n){ const out=[]; const d=new Date(); for(let i=n-1;i>=0;i--){ const x=new Date(d.getFullYear(),d.getMonth()-i,1); out.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')); } return out; }
+function _fmtK(v){ v=Number(v)||0; const a=Math.abs(v); if(a>=1e6) return (v/1e6).toFixed(a>=1e7?0:1)+'M'; if(a>=1e3) return Math.round(v/1e3)+'k'; return String(Math.round(v)); }
+function _shortCat(c){ c=String(c||''); const parts=c.split('›'); let s=(parts[parts.length-1]||c).trim(); return s.length>11?s.slice(0,10)+'…':s; }
+function svgBars(labels, values, opts){ opts=opts||{};
+  const w=opts.w||520,h=opts.h||200, pad={l:6,r:6,t:16,b:36};
+  const all=values.map(v=>Number(v)||0);
+  const minV=Math.min(0,...all), maxV=Math.max(0,...all), range=(maxV-minV)||1;
+  const plotH=h-pad.t-pad.b, n=all.length||1, gw=(w-pad.l-pad.r)/n;
+  const yOf=v=>pad.t+plotH*(1-((v-minV)/range)); const y0=yOf(0);
+  if(!all.length) return '<div class="mini" style="padding:16px;text-align:center;color:var(--muted)">لا بيانات</div>';
+  let s='';
+  all.forEach((v,i)=>{ const yv=yOf(v), top=Math.min(yv,y0), bh=Math.abs(yv-y0);
+    const x=pad.l+i*gw+gw*0.18, ww=gw*0.64; const col=opts.color||'var(--blue)';
+    s+='<rect x="'+x.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+ww.toFixed(1)+'" height="'+Math.max(0.5,bh).toFixed(1)+'" rx="3" fill="'+col+'"><title>'+esc(labels[i])+': '+money(v)+'</title></rect>';
+    s+='<text x="'+(x+ww/2).toFixed(1)+'" y="'+(top-3).toFixed(1)+'" text-anchor="middle" font-size="9" fill="var(--text)">'+_fmtK(v)+'</text>';
+    s+='<text x="'+(x+ww/2).toFixed(1)+'" y="'+(h-pad.b+13).toFixed(1)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(labels[i])+'</text>';
+  });
+  return '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">'+s+'</svg>';
+}
+function svgGrouped(labels, sa, sb, opts){ opts=opts||{};
+  const w=opts.w||520,h=opts.h||212, pad={l:6,r:6,t:24,b:36};
+  const all=[...sa.values,...sb.values].map(v=>Number(v)||0);
+  const minV=Math.min(0,...all), maxV=Math.max(0,...all), range=(maxV-minV)||1;
+  const plotH=h-pad.t-pad.b, n=labels.length||1, gw=(w-pad.l-pad.r)/n;
+  const yOf=v=>pad.t+plotH*(1-((v-minV)/range)); const y0=yOf(0);
+  let s='';
+  for(let i=0;i<n;i++){ const a=Number(sa.values[i])||0, b=Number(sb.values[i])||0; const bw=gw*0.3, x0=pad.l+i*gw+gw*0.1;
+    [[a,sa.color,sa.name,x0],[b,sb.color,sb.name,x0+bw+gw*0.08]].forEach(g=>{ const v=g[0],col=g[1],nm=g[2],xx=g[3]; const yv=yOf(v), top=Math.min(yv,y0), bh=Math.abs(yv-y0);
+      s+='<rect x="'+xx.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(0.5,bh).toFixed(1)+'" rx="2" fill="'+col+'"><title>'+esc(labels[i])+' — '+esc(nm)+': '+money(v)+'</title></rect>'; });
+    s+='<text x="'+(x0+gw*0.35).toFixed(1)+'" y="'+(h-pad.b+13).toFixed(1)+'" text-anchor="middle" font-size="9" fill="var(--muted)">'+esc(labels[i])+'</text>';
+  }
+  const lg='<g font-size="10"><rect x="'+pad.l+'" y="5" width="10" height="10" rx="2" fill="'+sa.color+'"/><text x="'+(pad.l+14)+'" y="14" fill="var(--text)">'+esc(sa.name)+'</text><rect x="'+(pad.l+96)+'" y="5" width="10" height="10" rx="2" fill="'+sb.color+'"/><text x="'+(pad.l+110)+'" y="14" fill="var(--text)">'+esc(sb.name)+'</text></g>';
+  return '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">'+lg+s+'</svg>';
+}
+function renderDashCharts(){
+  const panel=q('dashChartsPanel'); if(!panel) return;
+  if(!canSeeDebtTotals()){ panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+  const months=dashChartMonthKeys(6); const lbl=m=>m.slice(5)+'/'+m.slice(2,4);
+  const mi=new Map(months.map((m,i)=>[m,i]));
+  const saleMo=new Map(sales.map(s=>[s.id,String(s.sale_date||'').slice(0,7)]));
+  const saleLoc=new Map(sales.map(s=>[s.id,s.location_id]));
+  const mSales=months.map(()=>0), mProfit=months.map(()=>0), mPurch=months.map(()=>0);
+  const byBranch=new Map(), byCat=new Map();
+  for(const it of saleItems){ const mo=saleMo.get(it.sale_id); if(!mi.has(mo)) continue; const i=mi.get(mo);
+    const rev=Number(it.line_total||0), prof=rev-Number(it.qty||0)*saleLineCost(it);
+    mSales[i]+=rev; mProfit[i]+=prof;
+    const loc=saleLoc.get(it.sale_id); if(loc) byBranch.set(loc,(byBranch.get(loc)||0)+rev);
+    const p=productByCode(it.product_code); const cat=p&&p.category?p.category:'بدون تصنيف'; byCat.set(cat,(byCat.get(cat)||0)+rev);
+  }
+  for(const pu of purchases){ const mo=String(pu.purchase_date||'').slice(0,7); if(mi.has(mo)) mPurch[mi.get(mo)]+=Number(pu.total||0); }
+  const Lm=months.map(lbl);
+  if(q('chartSalesProfit')) q('chartSalesProfit').innerHTML=svgGrouped(Lm,{name:'المبيعات',color:'var(--blue)',values:mSales},{name:'صافي الربح',color:'var(--good)',values:mProfit});
+  if(q('chartSalesPurch')) q('chartSalesPurch').innerHTML=svgGrouped(Lm,{name:'المبيعات',color:'var(--blue)',values:mSales},{name:'المشتريات',color:'var(--warn)',values:mPurch});
+  const brs=[...byBranch.entries()].map(e=>({name:(locations.find(l=>l.id===e[0])||{}).name||'—',v:e[1]})).sort((a,b)=>b.v-a.v);
+  if(q('chartByBranch')) q('chartByBranch').innerHTML=svgBars(brs.map(x=>x.name), brs.map(x=>x.v), {color:'var(--blue)'});
+  const cats=[...byCat.entries()].map(e=>({name:e[0],v:e[1]})).sort((a,b)=>b.v-a.v).slice(0,8);
+  if(q('chartTopCats')) q('chartTopCats').innerHTML=svgBars(cats.map(x=>_shortCat(x.name)), cats.map(x=>x.v), {color:'#8b5cf6'});
+}
 function renderDashboardLists(){
   const scScope=sellerBranchScope();
   if(q('dashLastSalesBody')) q('dashLastSalesBody').innerHTML=(scScope?sales.filter(sl=>sl.location_id===scScope):sales).slice(0,5).map(sl=>{const l=locations.find(x=>x.id===sl.location_id); const c=customers.find(x=>x.id===sl.customer_id); return `<tr><td class="ltr"><span class="code">${esc(sl.invoice_no||sl.id.slice(0,8))}</span></td><td>${esc(sl.sale_date)}</td><td><span class="${branchChip(sl.location_id)}">${esc(l?.name)}</span></td><td><span class="name">${esc(c?.name||'زبون نقدي')}</span></td><td><span class="amount total">${money(sl.total)}</span></td><td class="amount ${Number(sl.balance_due)>0?'neg':''}">${money(sl.balance_due)}</td></tr>`}).join('')||'<tr><td colspan="5">لا توجد فواتير بيع بعد.</td></tr>';
