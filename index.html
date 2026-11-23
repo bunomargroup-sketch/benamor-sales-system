@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-2114">
+<link rel="stylesheet" href="app.css?v=20261123-2118">
 </head>
 <body class="auth-locked">
   <header>
@@ -1162,6 +1162,7 @@
             <button class="seg-btn" type="button" data-rep="lossitems" onclick="showReport('lossitems')"><i class="ti ti-trending-down"></i> أصناف خاسرة</button>
             <button class="seg-btn" type="button" data-rep="losscustomers" onclick="showReport('losscustomers')"><i class="ti ti-user-down"></i> زبائن خاسرون</button>
             <button class="seg-btn" type="button" data-rep="supplierprofit" onclick="showReport('supplierprofit')"><i class="ti ti-truck-delivery"></i> ربحية الموردين</button>
+            <button class="seg-btn" type="button" data-rep="purchaseprofit" onclick="showReport('purchaseprofit')"><i class="ti ti-receipt-2"></i> ربحية فواتير الشراء</button>
             <button class="seg-btn" type="button" data-rep="itemhistory" onclick="showReport('itemhistory')"><i class="ti ti-history"></i> حركة صنف</button>
             <button class="seg-btn" type="button" data-rep="customerhistory" onclick="showReport('customerhistory')"><i class="ti ti-user-search"></i> حركة زبون</button>
           </div>
@@ -1223,6 +1224,12 @@
         </div>
         <div id="rep-catprofit" class="rep-view hidden">
           <div class="panel"><h2>أرباح مجموعات الأصناف</h2><p class="muted">مجموعات الأصناف = حقل التصنيف في المنتج.</p><div class="table-scroll"><table><thead><tr><th>التصنيف</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repCatProfitBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-purchaseprofit" class="rep-view hidden">
+          <div class="panel"><div class="tools"><h2>ربحية فواتير الشراء (الربح المحقّق)</h2></div>
+            <p class="muted">لكل فاتورة شراء: الربح المحقّق فعلاً من بيع أصنافها. تُوزَّع مبيعات كل صنف على شحنات شرائه بالأقدم أولاً (FIFO)، والربح = الوحدات المباعة من الفاتورة × (متوسط سعر بيع الصنف − تكلفة الشحنة). تقديري لأن المنظومة لا تربط كل بيعة بشحنةٍ بعينها.</p>
+            <div class="table-scroll" style="max-height:66vh"><table><thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>المورّد</th><th>تكلفة الفاتورة</th><th>وحدات مشتراة</th><th>وحدات مباعة</th><th>الربح المحقّق</th><th>الهامش %</th><th>متبقٍّ بالمخزون</th></tr></thead><tbody id="repPurchaseProfitBody"></tbody><tfoot id="repPurchaseProfitFoot"></tfoot></table></div>
+          </div>
         </div>
         <div id="rep-supplierprofit" class="rep-view hidden">
           <div class="panel"><h2>أرباح الموردين</h2><div class="table-scroll"><table><thead><tr><th>المورد</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الهامش %</th></tr></thead><tbody id="repSupplierProfitBody"></tbody></table></div></div>
@@ -2138,6 +2145,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-2114"></script>
+<script src="app.js?v=20261123-2118"></script>
 </body>
 </html>

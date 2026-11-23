@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2114';
+const APP_BUILD='b20261123-2118';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -13711,6 +13711,24 @@ function renderReportsDetail(){
     const m={}; const add=(it,sign=1)=>{const p=productByCode(it.product_code); const k=p?.supplier_name||'بدون مورد'; const o=m[k]||(m[k]={name:k,rev:0,cost:0}); o.rev+=sign*Number(it.line_total||0); o.cost+=sign*Number(it.qty||0)*saleLineCost(it);};
     d.fItems.forEach(it=>add(it,1)); d.fRetItems.forEach(it=>add(it,-1)); const rows=Object.values(m).map(r=>({...r,profit:r.rev-r.cost,margin:r.rev?(r.rev-r.cost)/r.rev*100:0})).sort((a,b)=>b.profit-a.profit);
     q('repSupplierProfitBody').innerHTML=rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(r.profit)}">${money(r.profit)}</td><td class="${profitClass(r.profit)}">${money(r.margin)}%</td></tr>`).join('')||emptyRow(5);
+  }
+  if(currentReport==='purchaseprofit' && q('repPurchaseProfitBody')){
+    const from=q('reportFrom')?.value||'', to=q('reportTo')?.value||'', loc=q('reportLocation')?.value||'';
+    /* مبيعات كل صنف (صافية: المرتجعات أسطر سالبة) ومتوسط سعر بيعه */
+    const soldByProduct=new Map();
+    for(const it of saleItems){ const k=String(it.product_code||'').toLowerCase(); const o=soldByProduct.get(k)||{qty:0,rev:0}; o.qty+=Number(it.qty||0); o.rev+=Number(it.line_total||0); soldByProduct.set(k,o); }
+    const purById=new Map(purchases.map(p=>[p.id,p]));
+    const lotsByProduct=new Map();
+    for(const pi of purchaseItems){ const k=String(pi.product_code||'').toLowerCase(); const arr=lotsByProduct.get(k)||[]; arr.push({pid:pi.purchase_id,qty:Number(pi.qty||0),cost:Number(pi.unit_cost||0),date:String((purById.get(pi.purchase_id)||{}).purchase_date||'')}); lotsByProduct.set(k,arr); }
+    for(const arr of lotsByProduct.values()) arr.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const inv=new Map(); const invOf=pid=>{let o=inv.get(pid); if(!o){o={soldUnits:0,realized:0,soldRev:0,boughtUnits:0,boughtCost:0}; inv.set(pid,o);} return o;};
+    for(const pi of purchaseItems){ const o=invOf(pi.purchase_id); o.boughtUnits+=Number(pi.qty||0); o.boughtCost+=Number(pi.qty||0)*Number(pi.unit_cost||0); }
+    for(const [code,lots] of lotsByProduct){ const sold=soldByProduct.get(code); let rem=sold?Math.max(0,sold.qty):0; const avg=(sold&&sold.qty>0)?(sold.rev/sold.qty):0; for(const lot of lots){ if(rem<=0)break; const take=Math.min(rem,lot.qty); if(take>0){ const o=invOf(lot.pid); o.soldUnits+=take; o.soldRev+=take*avg; o.realized+=take*(avg-lot.cost); rem-=take; } } }
+    const sById=new Map(suppliers.map(s=>[s.id,s.name]));
+    const rows=purchases.filter(p=>inDateRange(p.purchase_date,from,to) && (!loc||p.location_id===loc)).map(p=>{ const o=inv.get(p.id)||{soldUnits:0,realized:0,soldRev:0,boughtUnits:0,boughtCost:0}; return {no:p.purchase_no||'—',date:String(p.purchase_date||'').slice(0,10),supplier:sById.get(p.supplier_id)||'—',cost:o.boughtCost||Number(p.total||0),bought:o.boughtUnits,sold:o.soldUnits,realized:o.realized,margin:o.soldRev?o.realized/o.soldRev*100:0,remain:o.boughtUnits-o.soldUnits}; }).sort((a,b)=>b.realized-a.realized);
+    q('repPurchaseProfitBody').innerHTML=rows.map(r=>`<tr><td class="ltr">${esc(r.no)}</td><td>${esc(r.date)}</td><td>${esc(r.supplier)}</td><td class="amount">${money(r.cost)}</td><td class="amount">${money(r.bought)}</td><td class="amount">${money(r.sold)}</td><td class="amount ${profitClass(r.realized)}">${money(r.realized)}</td><td class="amount ${profitClass(r.realized)}">${money(r.margin)}%</td><td class="amount">${money(r.remain)}</td></tr>`).join('')||emptyRow(9,'لا فواتير شراء في الفترة المحددة.');
+    const tot=rows.reduce((a,r)=>({cost:a.cost+r.cost,realized:a.realized+r.realized,sold:a.sold+r.sold,remain:a.remain+r.remain}),{cost:0,realized:0,sold:0,remain:0});
+    if(q('repPurchaseProfitFoot')) q('repPurchaseProfitFoot').innerHTML=rows.length?`<tr style="background:var(--table-head)"><td colspan="3"><b>الإجمالي (${rows.length} فاتورة)</b></td><td class="amount"><b>${money(tot.cost)}</b></td><td></td><td class="amount"><b>${money(tot.sold)}</b></td><td class="amount ${profitClass(tot.realized)}"><b>${money(tot.realized)}</b></td><td></td><td class="amount"><b>${money(tot.remain)}</b></td></tr>`:'';
   }
   if(currentReport==='lossitems' && q('repLossItemsBody')){
     /* (قاعدة المالك) الخسارة = بيعٌ فعليّ بأقل من التكلفة فقط. المرتجعات ليست خسارة
