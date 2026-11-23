@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2118';
+const APP_BUILD='b20261123-2128';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
@@ -2018,7 +2018,7 @@ function dashChartMonthKeys(n){ const out=[]; const d=new Date(); for(let i=n-1;
 function _fmtK(v){ v=Number(v)||0; const a=Math.abs(v); if(a>=1e6) return (v/1e6).toFixed(a>=1e7?0:1)+'M'; if(a>=1e3) return Math.round(v/1e3)+'k'; return String(Math.round(v)); }
 function _shortCat(c){ c=String(c||''); const parts=c.split('›'); let s=(parts[parts.length-1]||c).trim(); return s.length>11?s.slice(0,10)+'…':s; }
 function svgBars(labels, values, opts){ opts=opts||{};
-  const w=opts.w||520,h=opts.h||200, pad={l:6,r:6,t:16,b:36};
+  const w=opts.w||560,h=opts.h||300, pad={l:6,r:6,t:18,b:40};
   const all=values.map(v=>Number(v)||0);
   const minV=Math.min(0,...all), maxV=Math.max(0,...all), range=(maxV-minV)||1;
   const plotH=h-pad.t-pad.b, n=all.length||1, gw=(w-pad.l-pad.r)/n;
@@ -2034,7 +2034,7 @@ function svgBars(labels, values, opts){ opts=opts||{};
   return '<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">'+s+'</svg>';
 }
 function svgGrouped(labels, sa, sb, opts){ opts=opts||{};
-  const w=opts.w||520,h=opts.h||212, pad={l:6,r:6,t:24,b:36};
+  const w=opts.w||560,h=opts.h||320, pad={l:6,r:6,t:26,b:40};
   const all=[...sa.values,...sb.values].map(v=>Number(v)||0);
   const minV=Math.min(0,...all), maxV=Math.max(0,...all), range=(maxV-minV)||1;
   const plotH=h-pad.t-pad.b, n=labels.length||1, gw=(w-pad.l-pad.r)/n;

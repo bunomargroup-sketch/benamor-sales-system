@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-2118">
+<link rel="stylesheet" href="app.css?v=20261123-2128">
 </head>
 <body class="auth-locked">
   <header>
@@ -100,15 +100,6 @@
           <div class="card" id="dashCardSuppliersBalance"><h3>إجمالي أرصدة الموردين</h3><div class="num amount total" id="suppliersBalance">0</div></div>
           <div class="card hidden" id="dashNoInvoiceReturns" style="grid-column:1/-1;border-color:rgba(217,119,6,.5)"></div>
         </div>
-        <div class="panel hidden" id="dashChartsPanel">
-          <h2>لوحة المؤشرات</h2>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
-            <div class="card"><h3>المبيعات وصافي الربح (آخر 6 أشهر)</h3><div id="chartSalesProfit"></div></div>
-            <div class="card"><h3>المبيعات مقابل المشتريات (آخر 6 أشهر)</h3><div id="chartSalesPurch"></div></div>
-            <div class="card"><h3>المبيعات حسب الفرع (آخر 6 أشهر)</h3><div id="chartByBranch"></div></div>
-            <div class="card"><h3>أعلى التصنيفات مبيعاً (آخر 6 أشهر)</h3><div id="chartTopCats"></div></div>
-          </div>
-        </div>
         <div class="panel">
           <h2>آخر فواتير البيع</h2>
           <div class="table-scroll"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>الفرع</th><th>الزبون</th><th>الإجمالي</th><th>الدين</th></tr></thead><tbody id="dashLastSalesBody"></tbody></table></div>
@@ -116,6 +107,15 @@
         <div class="panel">
           <h2>آخر حركات المخزون</h2>
           <div class="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>المكان</th><th>الكمية</th></tr></thead><tbody id="dashMovementsBody"></tbody></table></div>
+        </div>
+        <div class="panel hidden" id="dashChartsPanel">
+          <h2>لوحة المؤشرات</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:14px">
+            <div class="card"><h3>المبيعات وصافي الربح (آخر 6 أشهر)</h3><div id="chartSalesProfit"></div></div>
+            <div class="card"><h3>المبيعات مقابل المشتريات (آخر 6 أشهر)</h3><div id="chartSalesPurch"></div></div>
+            <div class="card"><h3>المبيعات حسب الفرع (آخر 6 أشهر)</h3><div id="chartByBranch"></div></div>
+            <div class="card"><h3>أعلى التصنيفات مبيعاً (آخر 6 أشهر)</h3><div id="chartTopCats"></div></div>
+          </div>
         </div>
       </section>
 
@@ -2145,6 +2145,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-2118"></script>
+<script src="app.js?v=20261123-2128"></script>
 </body>
 </html>
