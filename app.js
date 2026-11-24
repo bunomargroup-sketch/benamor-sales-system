@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-1459';
+const APP_BUILD='b20261124-1515';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -6711,7 +6711,10 @@ function initSuggestionFilters(){
   if(q('sgFilterCategory')&&!q('sgFilterCategory').dataset.filled){
     const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ar'));
     q('sgFilterCategory').innerHTML='<option value="">التصنيف — الكل</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
-    q('sgFilterSupplier').innerHTML='<option value="">المورّد — الكل</option>'+suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    q('sgFilterSupplier').innerHTML='<option value="">المورّد — الكل</option>'+[...new Set(products.map(p=>p.supplier_name).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ar')).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    const _sgLocs=(locations||[]).filter(l=>l.active!==false);
+    if(q('sgFilterSource')) q('sgFilterSource').innerHTML='<option value="">المصدر — الكل</option>'+_sgLocs.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    if(q('sgFilterDest')) q('sgFilterDest').innerHTML='<option value="">الفرع المستقبل — الكل</option>'+_sgLocs.filter(l=>l.is_sales_location).map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
     q('sgFilterCategory').dataset.filled='1';
   }
 }
@@ -6818,9 +6821,9 @@ function renderSuggestionList(){
     rows.sort((a,b)=>String(b.rq.last_requested_at||'').localeCompare(String(a.rq.last_requested_at||''))||Number(b.rq.hit_count||1)-Number(a.rq.hit_count||1));
     body.innerHTML=rows.map(x=>{
       const elsewhere=(x.rq.available_elsewhere||[]).map(e=>esc(e.name)+': '+money(e.qty)).join(' · ')||'—';
-      return `<tr>${cbCell(x)}<td>${esc(String(x.rq.last_requested_at||'').slice(0,10))}</td><td class="ltr"><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td>${itemBMCells(x.code)}<td>${esc(locName(x.dest))}</td><td>${money(x.rq.qty_here)}</td><td class="mini">${elsewhere}</td><td><b>${esc(locName(x.from))}</b></td><td><b>${money(x.qty)}</b></td><td>${Number(x.rq.hit_count||1)}×</td><td>${esc(x.rq.user_identifier||'—')}</td><td>${dismissBtn(x)}</td></tr>`;
-    }).join('')||'<tr><td colspan="14"><div style="padding:18px 12px;text-align:center"><div style="font-size:34px">📭</div><div style="font-weight:800;font-size:15px;margin:6px 0">لا طلبات مفتوحة حاليًا</div><div class="mini" style="max-width:520px;margin:0 auto;line-height:1.9">تُملأ هذه القائمة <b>تلقائيًا دون أي إجراء منك</b>: عندما يختار الكاشير منتجًا كميته في فرعه ≤ الحدّ ومتوفّرًا في موقع آخر، يُسجَّل الطلب صامتًا (بدءًا من نشر هذه النسخة — أعطها أيامًا لتتراكم).<br>لو كانت القائمة فارغة بعد أسبوع من البيع اليومي فهذا يعني أن الفروع مكتفية — راجع الحدود من شاشة أقسام المواقع.</div></div></td></tr>';
-    if(q('sgAFoot')) q('sgAFoot').innerHTML=rows.length?`<tr><td colspan="14" class="mini"><b>${rows.length} اقتراحًا</b> — الأحدث أولًا ثم الأكثر طلبًا</td></tr>`:'';
+      return `<tr>${cbCell(x)}<td>${esc(String(x.rq.last_requested_at||'').slice(0,10))}</td><td class="ltr"><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td>${itemBMCells(x.code)}<td>${esc(locName(x.dest))}</td><td>${money(x.rq.qty_here)}</td><td class="mini">${elsewhere}</td><td><b>${esc(locName(x.from))}</b></td><td><b>${money(x.qty)}</b></td><td>${Number(x.rq.hit_count||1)}×</td><td>${esc(x.rq.user_identifier||'—')}</td></tr>`;
+    }).join('')||'<tr><td colspan="13"><div style="padding:18px 12px;text-align:center"><div style="font-size:34px">📭</div><div style="font-weight:800;font-size:15px;margin:6px 0">لا طلبات مفتوحة حاليًا</div><div class="mini" style="max-width:520px;margin:0 auto;line-height:1.9">تُملأ هذه القائمة <b>تلقائيًا دون أي إجراء منك</b>: عندما يختار الكاشير منتجًا كميته في فرعه ≤ الحدّ ومتوفّرًا في موقع آخر، يُسجَّل الطلب صامتًا (بدءًا من نشر هذه النسخة — أعطها أيامًا لتتراكم).<br>لو كانت القائمة فارغة بعد أسبوع من البيع اليومي فهذا يعني أن الفروع مكتفية — راجع الحدود من شاشة أقسام المواقع.</div></div></td></tr>';
+    if(q('sgAFoot')) q('sgAFoot').innerHTML=rows.length?`<tr><td colspan="13" class="mini"><b>${rows.length} اقتراحًا</b> — الأحدث أولًا ثم الأكثر طلبًا</td></tr>`:'';
   }
   else if(sgActiveList==='B'){
     const body=q('sgBBody'); if(!body) return;
@@ -6834,17 +6837,20 @@ function renderSuggestionList(){
       }
     }
     rows.sort((a,b)=>String(b.lastSold).localeCompare(String(a.lastSold)));
-    body.innerHTML=rows.map(x=>`<tr>${cbCell(x)}<td class="ltr"><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td>${itemBMCells(x.code)}<td>${esc(locName(x.dest))}</td><td>${money(x.destQty)}</td><td>${money(x.destThr)}</td><td>${esc(x.lastSold)}</td><td><b>${esc(locName(x.from))}</b></td><td><b>${money(x.qty)}</b></td><td>${dismissBtn(x)}</td></tr>`).join('')||`<tr><td colspan="12"><div style="padding:18px 12px;text-align:center"><div style="font-size:34px">🌱</div><div style="font-weight:800;font-size:15px;margin:6px 0">لا أصناف "نفدت وكانت تُباع هنا" بعد</div><div class="mini" style="max-width:560px;margin:0 auto;line-height:1.9">هذه القائمة تعرض الأصناف التي <b>سبق بيعها فعليًا في الفرع</b> ثم نفدت — وكلما نفد صنف مألوف لدى زبائن الفرع سيظهر هنا تلقائيًا.<br><b>متى تمتلئ؟</b> مع تراكم فواتير البيع: كل فاتورة بيع تُغني سجل "هذا الصنف يُباع في هذا الفرع"، وعند نفاد صنف له سجل كذلك يظهر هنا فورًا.<br>فقراءتها اليوم محدود بتراكم المبيعات المسجلة في النظام حديثًا — وهذا طبيعي ومقصود، لا تعويض عنه بشيء آخر.</div></div></td></tr>`;
-    if(q('sgBFoot')) q('sgBFoot').innerHTML=rows.length?`<tr><td colspan="12" class="mini"><b>${rows.length} اقتراحًا</b></td></tr>`:'';
+    body.innerHTML=rows.map(x=>`<tr>${cbCell(x)}<td class="ltr"><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td>${itemBMCells(x.code)}<td>${esc(locName(x.dest))}</td><td>${money(x.destQty)}</td><td>${money(x.destThr)}</td><td>${esc(x.lastSold)}</td><td><b>${esc(locName(x.from))}</b></td><td><b>${money(x.qty)}</b></td></tr>`).join('')||`<tr><td colspan="11"><div style="padding:18px 12px;text-align:center"><div style="font-size:34px">🌱</div><div style="font-weight:800;font-size:15px;margin:6px 0">لا أصناف "نفدت وكانت تُباع هنا" بعد</div><div class="mini" style="max-width:560px;margin:0 auto;line-height:1.9">هذه القائمة تعرض الأصناف التي <b>سبق بيعها فعليًا في الفرع</b> ثم نفدت — وكلما نفد صنف مألوف لدى زبائن الفرع سيظهر هنا تلقائيًا.<br><b>متى تمتلئ؟</b> مع تراكم فواتير البيع: كل فاتورة بيع تُغني سجل "هذا الصنف يُباع في هذا الفرع"، وعند نفاد صنف له سجل كذلك يظهر هنا فورًا.<br>فقراءتها اليوم محدود بتراكم المبيعات المسجلة في النظام حديثًا — وهذا طبيعي ومقصود، لا تعويض عنه بشيء آخر.</div></div></td></tr>`;
+    if(q('sgBFoot')) q('sgBFoot').innerHTML=rows.length?`<tr><td colspan="11" class="mini"><b>${rows.length} اقتراحًا</b></td></tr>`:'';
   }
   else if(sgActiveList==='C'){
     const body=q('sgCBody'); if(!body) return;
     const cat=(q('sgFilterCategory')?.value||'').trim();
     const sup=(q('sgFilterSupplier')?.value||'').trim();
+    const src=(q('sgFilterSource')?.value||'').trim();
+    const dst=(q('sgFilterDest')?.value||'').trim();
+    const term=(q('sgFilterSearch')?.value||'').trim();
     const minQty=Number(q('sgFilterMinQty')?.value||0)||0;
     const minValue=Number(String(q('sgFilterMinValue')?.value||'').replace(/[^0-9.\-]/g,''))||0;
-    if(!(cat||sup||minQty||minValue)){
-      body.innerHTML='<tr><td colspan="14">اختر فلترًا واحدًا على الأقل (تصنيف، مورّد، أدنى كمية عند المصدر، أو أدنى قيمة للسطر) — بدون فلاتر ستكون النتائج بلا معنى.</td></tr>';
+    if(!(cat||sup||src||dst||term||minQty||minValue)){
+      body.innerHTML='<tr><td colspan="12">اختر فلترًا واحدًا على الأقل (بحث، تصنيف، مورّد، مصدر، فرع مستقبل، أدنى كمية، أو أدنى قيمة).</td></tr>';
       if(q('sgCFoot')) q('sgCFoot').innerHTML='';
       if(q('sgTiming')) q('sgTiming').textContent='';
       return;
@@ -6852,10 +6858,13 @@ function renderSuggestionList(){
     const rows=[];
     for(const p of products){
       if(cat&&p.category!==cat) continue;
-      if(sup&&p.supplier_id!==sup) continue;
+      if(sup&&(p.supplier_name||'')!==sup) continue;
+      if(term&&!smartMatch(term,[p.code,p.name,p.brand,p.model,p.color,p.category,p.supplier_name].filter(Boolean).join(' '))) continue;
       for(const l of engine.salesLocs){
+        if(dst&&l.id!==dst) continue;
         const s=sgSuggestionFor(engine,p.code,l.id);
         if(!s) continue;
+        if(src&&s.from!==src) continue;
         if(minQty&&s.fromQty<minQty) continue;
         const lineValue=s.qty*s.retail;
         if(minValue&&lineValue<minValue) continue;
@@ -6863,8 +6872,8 @@ function renderSuggestionList(){
       }
     }
     rows.sort((a,b)=>b.lineValue-a.lineValue); /* الافتراضي: الكمية المقترحة × سعر البيع تنازليًا */
-    body.innerHTML=rows.slice(0,400).map(x=>`<tr>${cbCell(x)}<td class="ltr"><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td>${itemBMCells(x.code)}<td>${esc(x.category||'—')}</td><td>${esc(locName(x.dest))}</td><td>${money(x.destQty)}</td><td><b>${esc(locName(x.from))}</b></td><td>${money(x.fromQty)}</td><td><b>${money(x.qty)}</b></td><td><b>${money(x.lineValue)}</b></td><td>${dismissBtn(x)}</td></tr>`).join('')||'<tr><td colspan="14">لا نتائج بهذه الفلاتر.</td></tr>';
-    if(q('sgCFoot')) q('sgCFoot').innerHTML=rows.length?`<tr><td colspan="14" class="mini"><b>${rows.length} نتيجة</b>${rows.length>400?' — تُعرض أول 400':''}</td></tr>`:'';
+    body.innerHTML=rows.slice(0,400).map(x=>`<tr>${cbCell(x)}<td class="ltr"><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td>${itemBMCells(x.code)}<td>${esc(x.category||'—')}</td><td>${esc(locName(x.dest))}</td><td>${money(x.destQty)}</td><td><b>${esc(locName(x.from))}</b></td><td>${money(x.fromQty)}</td><td><input type="number" class="sg-qty" min="0" step="1" value="${x.qty}" data-sg="${esc(rowKey(x))}" style="width:78px;text-align:center" onclick="event.stopPropagation()" onchange="sgQtyEdited(this)"></td><td><b>${money(x.lineValue)}</b></td></tr>`).join('')||'<tr><td colspan="12">لا نتائج بهذه الفلاتر.</td></tr>';
+    if(q('sgCFoot')) q('sgCFoot').innerHTML=rows.length?`<tr><td colspan="12" class="mini"><b>${rows.length} نتيجة</b>${rows.length>400?' — تُعرض أول 400':''}</td></tr>`:'';
   }
   sgUpdateSelectedInfo();
   if(q('sgTiming')){
@@ -6873,9 +6882,16 @@ function renderSuggestionList(){
   }
 }
 function sgToggleSelect(cb){
-  if(cb.checked) sgSelected.set(cb.dataset.sg,{code:cb.dataset.code,name:cb.dataset.name,qty:Number(cb.dataset.qty),from:cb.dataset.from,to:cb.dataset.to});
+  const tr=cb.closest('tr'); const qInp=tr?.querySelector('.sg-qty');
+  const qty=qInp?(Number(qInp.value)||0):Number(cb.dataset.qty);
+  if(cb.checked) sgSelected.set(cb.dataset.sg,{code:cb.dataset.code,name:cb.dataset.name,qty,from:cb.dataset.from,to:cb.dataset.to});
   else sgSelected.delete(cb.dataset.sg);
   sgUpdateSelectedInfo();
+}
+/* (طلب المالك) كمية التحويل اليدوية في قائمة «فرق الكميات»: تحديثها يحدّث المحدَّد إن كان مختاراً */
+function sgQtyEdited(inp){
+  const tr=inp.closest('tr'); const cb=tr?.querySelector('input[type=checkbox][data-sg]');
+  if(cb&&cb.checked){ const sel=sgSelected.get(cb.dataset.sg); if(sel){ sel.qty=Number(inp.value)||0; sgSelected.set(cb.dataset.sg,sel); sgUpdateSelectedInfo(); } }
 }
 function sgUpdateSelectedInfo(){
   if(q('sgSelectedInfo')){
