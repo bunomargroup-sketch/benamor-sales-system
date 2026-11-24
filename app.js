@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-1953';
+const APP_BUILD='b20261124-2017';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -11587,19 +11587,24 @@ q('saleForm').addEventListener('submit', async e=>{
   if(keepOriginalPayments){
     payRows.length=0;
     payRows.push(...((salePayments||[]).filter(p=>p.sale_id===editingSaleId).map(p=>({payment_method:p.payment_method,amount:Number(p.amount||0)}))));
-    rawPaid=payRows.reduce((a,x)=>a+x.amount,0);
+    /* المدفوع الحقيقي للفاتورة = paid_amount المخزّن: دفعاتها الأولى + تحصيلات الآجل
+       التي سُدِّدت لاحقاً ووُزِّعت عليها (يبقيه الخادم محدّثاً — 0109). لا يُحسب من
+       صفوف الدفع المحمّلة وحدها، وإلا عاد جزء الدين المسدَّد لاحقاً يظهر ديناً وهماً
+       عند التعديل. الخادم يحسبه بنفس الطريقة عند p_keep_original_payments. */
+    const authPaid=Math.abs(Number(originalSale&&originalSale.paid_amount));
+    rawPaid=Number.isFinite(authPaid)?authPaid:payRows.reduce((a,x)=>a+x.amount,0);
   }
   /* (1962) الفواتير المختلطة (مرتجع + شراء) واردة مجدداً — قرار المالك، الخادم 0089:
      إجمالي موجب = يُسدَّد الفرق عاديّاً · إجمالي سالب = فاتورة استرداد يُدخل فيها
      مبلغ الاسترداد كاملًا (التحققان أدناه). الشاشة المستقلة للمرتجع تبقى متاحة. */
-  if(!isRefundInvoice && rawPaid>total){toast('المدفوع أكبر من إجمالي الفاتورة. صحّح مبالغ الدفع قبل الحفظ.','warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  if(!isRefundInvoice && rawPaid>total && !keepOriginalPayments){toast('المدفوع أكبر من إجمالي الفاتورة. صحّح مبالغ الدفع قبل الحفظ.','warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   /* (0135) فاتورة الاستبدال: يُدفع المسترد كاملًا أو جزء منه والباقي يُقيَّد
      رصيدًا على حساب الزبون — ولا يزيد المصروف عن المطلوب أبدًا. */
-  if(isRefundInvoice && rawPaid>refundRequired+0.001){toast('مبلغ الاسترداد أكبر من المطلوب: '+money(refundRequired)+' '+APP_CONFIG.currency,'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
+  if(isRefundInvoice && rawPaid>refundRequired+0.001 && !keepOriginalPayments){toast('مبلغ الاسترداد أكبر من المطلوب: '+money(refundRequired)+' '+APP_CONFIG.currency,'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   const refundOnAccount=isRefundInvoice?Math.max(0,refundRequired-rawPaid):0;
   if(refundOnAccount>0.001 && !q('saleCustomer').value && !q('saleNewCustomerName').value.trim()){toast('فرق الاسترداد ('+money(refundOnAccount)+' '+APP_CONFIG.currency+') سيُقيَّد رصيدًا على حساب الزبون — اختر زبونًا من القائمة أو أضفه بالاسم والهاتف','warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}
   if(isRefundInvoice){const missing=payRows.find(r=>!defaultAccountFor(r.payment_method,location_id)); if(missing){toast('اختر حسابًا ماليًا لطريقة الاسترداد: '+typeLabel(missing.payment_method),'warn'); openSalePaymentScreen(); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}}
-  const paid=isRefundInvoice?-rawPaid:rawPaid; const balance_due=isRefundInvoice?-refundOnAccount:Math.max(0,total-rawPaid); /* (0135) سالب = فارق دائن للزبون */ if(total>0 && payRows.length===0 && balance_due===total && q('salePaymentMethod').value!=='credit'){toast('يجب تحديد طريقة الدفع: كاش أو تحويل أو بطاقة أو آجل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;} validateAccountingForSale(items,total,payRows,balance_due);
+  const paid=isRefundInvoice?-rawPaid:rawPaid; const balance_due=isRefundInvoice?-refundOnAccount:Math.max(0,total-rawPaid); /* (0135) سالب = فارق دائن للزبون */ if(total>0 && payRows.length===0 && balance_due===total && q('salePaymentMethod').value!=='credit' && !keepOriginalPayments){toast('يجب تحديد طريقة الدفع: كاش أو تحويل أو بطاقة أو آجل','warn'); window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;} if(!keepOriginalPayments) validateAccountingForSale(items,total,payRows,balance_due);
   const positiveSubtotal=items.filter(x=>Number(x.qty)>0).reduce((a,x)=>a+Math.max(0,Number(x.qty||0)*Number(x.unit_price||0)-Number(x.line_discount||0)),0);
   if(discount>0 && positiveSubtotal>0 && discount/positiveSubtotal>SUPERVISOR_DISCOUNT_THRESHOLD){const ok=await requestSupervisorApproval('خصم عالي على الفاتورة',`الخصم ${money(discount)} من إجمالي ${money(positiveSubtotal)}`); if(!ok){window.__busy=false; document.querySelectorAll('#salePaymentScreen .btn,.pos-mini-keypad .enter').forEach(b=>b.disabled=false); return;}}
   /* (0135) الصافي السالب = مال يخرج من الصندوق — إذن المدير لغير المديرين
