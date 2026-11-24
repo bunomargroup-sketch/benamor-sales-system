@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261123-2218">
+<link rel="stylesheet" href="app.css?v=20261124-1344">
 </head>
 <body class="auth-locked">
   <header>
@@ -1263,8 +1263,8 @@
           </div>
           <p class="mini" style="margin-top:8px">للأفضل: ثبّت التطبيق كـ PWA (إضافة إلى الشاشة الرئيسية / Install) ليفتح فوراً دون انتظار الإنترنت.</p>
         </div>
-        <div class="panel">
-          <h2>النسخ الاحتياطي على Google Drive</h2>
+        <div class="panel hidden" id="gdrivePanel">
+          <h2>النسخ الاحتياطي على Google Drive <span class="badge" style="font-size:11px;background:#64748b;color:#fff">متقدّم</span></h2>
           <p class="muted">يُحفظ في مجلد مخفي خاص بالتطبيق في حسابك على Google (appDataFolder) ولا يظهر بين ملفاتك. يتيح نقل <strong>اللقطة المختصرة نفسها</strong> بين الأجهزة بضغطة زر — وليست نسخة كاملة. (متقدّم: يتطلب إعداد OAuth مرّة واحدة.)</p>
           <div><label>معرّف العميل (OAuth Client ID) من Google Cloud</label><input id="gDriveClientID" class="ltr" placeholder="xxxxx.apps.googleusercontent.com"></div>
           <div class="row" style="margin-top:8px">
@@ -2135,6 +2135,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261123-2218"></script>
+<script src="app.js?v=20261124-1344"></script>
 </body>
 </html>

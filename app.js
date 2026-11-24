@@ -7,8 +7,25 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261123-2218';
+const APP_BUILD='b20261124-1344';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
+function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
+function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
+async function loadAppSettings(){
+  try{
+    const rows=await api('pos_app_settings',{qs:'?select=key,value'}); if(!rows) return;
+    let changed=false;
+    for(const r of rows){
+      if(r.key==='general' && r.value && typeof r.value==='object'){ Object.assign(APP_CONFIG,_pickGeneralCfg(r.value)); changed=true; }
+      if(r.key==='product_options' && r.value && typeof r.value==='object'){ if(Array.isArray(r.value.customBrands)) APP_CONFIG.customBrands=r.value.customBrands; if(Array.isArray(r.value.customModels)) APP_CONFIG.customModels=r.value.customModels; if(Array.isArray(r.value.customColors)) APP_CONFIG.customColors=r.value.customColors; changed=true; }
+    }
+    if(changed){ persistLocalConfig(); try{initBranding();}catch(_e){} try{fillSettingsForm();}catch(_e){} try{renderProductDatalist();}catch(_e){} try{renderProductOptionSettings();}catch(_e){} if(q('saleItemsBody')){try{updateSaleTotal();}catch(_e){}} }
+  }catch(e){ console.warn('app settings load',e); }
+}
+async function saveAppSetting(key,value){
+  try{ await fetchWithAuthRetry(SUPABASE_URL+'/rest/v1/pos_app_settings',{method:'POST',headers:{...H,Prefer:'resolution=merge-duplicates'},body:JSON.stringify([{key,value,updated_at:new Date().toISOString(),updated_by:appUser?.identifier||''}])}); }
+  catch(e){ console.warn('save app setting '+key,e); toast('تعذّر حفظ الإعداد على الخادم — حُفظ محلياً','warn'); }
+}
 loadLocalConfig();
 const SUPABASE_URL=APP_CONFIG.supabaseUrl;
 const SUPABASE_KEY=APP_CONFIG.supabaseKey;
@@ -1505,6 +1522,7 @@ async function loadAll(){
     await loadHeavy();
     markAllTabsDirty();
     renderAllProgressive();
+    loadAppSettings();
   }catch(e){ console.error(e); const used=applyEssentialCache(loadEssentialCache()); if(used) toast('الاتصال ضعيف: تم استعمال آخر بيانات محفوظة','warn'); else toast('خطأ: '+e.message+' - لا توجد بيانات محفوظة محليًا'); reapplyOfflineQueueLocally().then(()=>{try{renderAll()}catch(_e){}}).catch(()=>{}); }
   finally{showLoading(false);window.__busy=false}
 }
@@ -2311,7 +2329,7 @@ function tidyNavGroups(){
 }
 function canSelectSaleBranch(){return isManager()||currentRole?.role==='sales_purchase'}
 function applyPermissions(){
-  const _dup=q('dupPaymentsBtn'); if(_dup)_dup.classList.toggle('hidden',!isManager());
+  const _dup=q('dupPaymentsBtn'); if(_dup)_dup.classList.toggle('hidden',!isManager()); q('gdrivePanel')?.classList.toggle('hidden',!isProgrammer());
   if(!appUser?.id){updateAuthUI();return;}
   currentRole=getUserRole()||currentRole||{role:'viewer'}; updateAuthUI();
   document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.style.display=canTab(b.dataset.tab)?'block':'none'});
@@ -11333,7 +11351,7 @@ q('settingsForm')?.addEventListener('submit',e=>{
   e.preventDefault();
   Object.assign(APP_CONFIG,{businessName:q('settingsBusinessName').value.trim()||APP_CONFIG.businessName,tagline:q('settingsTagline').value.trim()||APP_CONFIG.tagline,currency:q('settingsCurrency').value.trim()||APP_CONFIG.currency,lowStockThreshold:Number(q('settingsLowStock').value||0),transferMinQtyDefault:Math.max(0,Number(q('settingsTransferMinQty')?.value||1)),marginRedBelow:Math.max(0,Number(q('settingsMarginRedBelow')?.value??5)),marginOrangeBelow:Math.max(0,Number(q('settingsMarginOrangeBelow')?.value??15)),marginYellowBelow:Math.max(0,Number(q('settingsMarginYellowBelow')?.value??30))});
   localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]}));
-  initBranding(); renderAllProgressive(); if(q('saleItemsBody')) updateSaleTotal(); /* الألوان تتبع العتبات فوراً بلا إعادة تحميل */ toast('تم حفظ الإعدادات');
+  initBranding(); renderAllProgressive(); if(q('saleItemsBody')) updateSaleTotal(); /* الألوان تتبع العتبات فوراً بلا إعادة تحميل */ saveAppSetting('general',{businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow}); toast('تم حفظ الإعدادات');
 });
 
 q('productOptionForm')?.addEventListener('submit',e=>{
@@ -11807,7 +11825,7 @@ function addProductOption(type,value){
   if(!arr.some(x=>String(x).toLowerCase()===String(value).toLowerCase())) arr.push(value);
   APP_CONFIG[key]=arr.sort((a,b)=>String(a).localeCompare(String(b),'ar'));
   localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]}));
-  renderProductDatalist(); renderProductOptionSettings();
+  saveAppSetting('product_options',{customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]}); renderProductDatalist(); renderProductOptionSettings();
 }
 
 
