@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-1344';
+const APP_BUILD='b20261124-1422';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -13986,16 +13986,14 @@ function markSortedHeader(table,idx,dir){
 }
 
 /* ══════ شاشة الإعدادات: نفس الاختيار بلا زر يمين ══════ */
-function renderColumnSettings(){
-  const box=document.getElementById('columnSettingsBody'); if(!box) return;
-  const seen=new Set(); const blocks=[];
+/* (طلب المالك) قائمة منسدلة بالجداول — اختر جدولاً فتظهر أعمدته فقط، بدل تكديس كل الجداول */
+function _colsetTables(){
+  const seen=new Set(); const list=[];
   document.querySelectorAll('table').forEach(table=>{
     const tb=table.querySelector('tbody'); const key=tb&&tb.id;
     if(!key || seen.has(key) || COLS_SKIP.includes(key)) return;
     const cols=tableColumnList(table); if(cols.length<2) return;
     seen.add(key);
-    /* أقرب عنوان فوق الجدول أدقّ من عنوان الشاشة: الشاشة الواحدة قد تحمل
-       عدة جداول. وإن تشابه عنوانان نُميّزهما بأول عمود. */
     let title='';
     for(let n=table.parentElement; n && !title; n=n.parentElement){
       let p=n.previousElementSibling;
@@ -14008,14 +14006,30 @@ function renderColumnSettings(){
                     || table.closest('.modal')?.querySelector('h2,h3')?.textContent?.trim()
                     || key;
     title=title.replace(/\s+/g,' ').slice(0,44);
-    if(blocks.some(b=>b.indexOf('>'+esc(title)+' ')>=0)) title += ' — ' + (cols[0]?.label||key);
-    const hid=__hiddenCols[key]||[];
-    blocks.push(`<details class="colset"><summary>${esc(title)} <span class="mini">(${cols.length - hid.length}/${cols.length})</span></summary>
-      <div class="colset-grid">${cols.map(c=>`<label class="colset-item"><input type="checkbox" ${hid.includes(c.i)?'':'checked'} onchange="toggleTableCol('${esc(key)}',${c.i})"> <span>${esc(c.label)}</span></label>`).join('')}</div>
-      <button class="btn secondary" type="button" style="margin:6px 0 4px" onclick="showAllTableCols('${esc(key)}')">إظهار الكل</button>
-    </details>`);
+    if(list.some(b=>b.title===title)) title += ' — ' + (cols[0]?.label||key);
+    list.push({key,title,cols});
   });
-  box.innerHTML = blocks.join('') || '<div class="mini">افتح الشاشات مرة واحدة لتظهر جداولها هنا.</div>';
+  return list;
+}
+function renderColumnSettings(){
+  const box=document.getElementById('columnSettingsBody'); if(!box) return;
+  const list=_colsetTables();
+  if(!list.length){ box.innerHTML='<div class="mini">افتح الشاشات مرة واحدة لتظهر جداولها هنا.</div>'; return; }
+  const prev=document.getElementById('colsetTableSelect')?.value;
+  const sel=(prev && list.some(t=>t.key===prev))?prev:list[0].key;
+  box.innerHTML=`<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <label style="font-size:13px">اختر الجدول:</label>
+      <select id="colsetTableSelect" onchange="showColsetTable(this.value)" style="min-width:240px;flex:1">${list.map(t=>{const hid=(__hiddenCols[t.key]||[]).length; return `<option value="${esc(t.key)}"${t.key===sel?' selected':''}>${esc(t.title)} (${t.cols.length-hid}/${t.cols.length})</option>`;}).join('')}</select>
+    </div>
+    <div id="colsetCols"></div>`;
+  showColsetTable(sel);
+}
+function showColsetTable(key){
+  const host=document.getElementById('colsetCols'); if(!host) return;
+  const t=_colsetTables().find(x=>x.key===key); if(!t){ host.innerHTML=''; return; }
+  const hid=__hiddenCols[key]||[];
+  host.innerHTML=`<div class="colset-grid">${t.cols.map(c=>`<label class="colset-item"><input type="checkbox" ${hid.includes(c.i)?'':'checked'} onchange="toggleTableCol('${esc(key)}',${c.i})"> <span>${esc(c.label)}</span></label>`).join('')}</div>
+    <button class="btn secondary" type="button" style="margin:8px 0 4px" onclick="showAllTableCols('${esc(key)}')">إظهار كل أعمدة هذا الجدول</button>`;
 }
 
 /* (0157) ترتيب قائمة المنتجات: تفويض على المستند لا ربط لكل رأس.
