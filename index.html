@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261124-1422">
+<link rel="stylesheet" href="app.css?v=20261124-1434">
 </head>
 <body class="auth-locked">
   <header>
@@ -1296,14 +1296,14 @@
         </div>
         <div class="panel">
           <h2>إضافات المنتجات</h2>
-          <p class="muted">أضف ألوانًا أو شركات/ماركات أو موديلات تظهر في قوائم إدخال المنتج بدون تعديل الكود.</p>
+          <p class="muted">أضف أو عدّل العلامات التجارية والموديلات والألوان. القوائم مستخرجة من كل الأصناف — اختر قيمة وعدّل اسمها ليتغيّر في كل أصنافها.</p>
           <form class="form" id="productOptionForm">
-            <div><label>النوع</label><select id="productOptionType"><option value="brand">الشركة / الماركة</option><option value="model">الموديل</option><option value="color">اللون</option></select></div>
+            <div><label>النوع</label><select id="productOptionType"><option value="brand">العلامة التجارية</option><option value="model">الموديل</option><option value="color">اللون</option></select></div>
             <div><label>القيمة</label><input id="productOptionValue" placeholder="مثال: أسود / Grohe / Model X" required></div>
             <button class="btn" type="submit">إضافة</button>
           </form>
-          <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px">
-            <div class="card"><h3>الشركات / الماركات</h3><div id="settingsBrandsList" class="mini"></div></div>
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:12px">
+            <div class="card"><h3>العلامات التجارية</h3><div id="settingsBrandsList" class="mini"></div></div>
             <div class="card"><h3>الموديلات</h3><div id="settingsModelsList" class="mini"></div></div>
             <div class="card"><h3>الألوان</h3><div id="settingsColorsList" class="mini"></div></div>
           </div>
@@ -2135,6 +2135,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261124-1422"></script>
+<script src="app.js?v=20261124-1434"></script>
 </body>
 </html>

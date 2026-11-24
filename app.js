@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-1422';
+const APP_BUILD='b20261124-1434';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -11775,10 +11775,49 @@ async function renameExpenseCategory(id){
   finally{ showLoading(false); window.__busy=false; }
 }
 function renderProductOptionSettings(){
-  const render=(id,arr)=>{const el=q(id); if(el) el.innerHTML=(arr&&arr.length)?arr.map(x=>`<span class="badge gray" style="margin:2px">${esc(x)}</span>`).join(''):'لا توجد إضافات';};
-  render('settingsBrandsList',APP_CONFIG.customBrands||[]);
-  render('settingsModelsList',APP_CONFIG.customModels||[]);
-  render('settingsColorsList',APP_CONFIG.customColors||[]);
+  /* (طلب المالك) قوائم مستخرجة من كل الأصناف + الإضافات — اختر قيمة وعدّل اسمها (يُعاد تسميتها في كل الأصناف) */
+  const build=(hostId,type)=>{
+    const host=q(hostId); if(!host) return;
+    const field=type==='brand'?'brand':(type==='model'?'model':'color');
+    const custKey=type==='brand'?'customBrands':(type==='model'?'customModels':'customColors');
+    const vals=[...new Set([...(products||[]).map(p=>p[field]),...(APP_CONFIG[custKey]||[])].map(v=>String(v==null?'':v).trim()).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ar'));
+    const opts=vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')||'<option value="">— لا شيء —</option>';
+    host.innerHTML=`<select id="optSel_${type}" onchange="optPick('${type}')" style="width:100%">${opts}</select>
+      <div class="row" style="gap:6px;margin-top:6px;flex-wrap:nowrap"><input id="optEdit_${type}" placeholder="عدّل الاسم ثم احفظ" style="flex:1;min-width:0" value="${esc(vals[0]||'')}"><button class="btn secondary" type="button" style="padding:5px 9px;white-space:nowrap" onclick="optRename('${type}')">💾 حفظ</button></div>
+      <div class="mini" style="margin-top:4px;color:var(--muted)">${vals.length} قيمة (من الأصناف + الإضافات)</div>`;
+  };
+  build('settingsBrandsList','brand');
+  build('settingsModelsList','model');
+  build('settingsColorsList','color');
+}
+function optPick(type){ const sel=q('optSel_'+type), ed=q('optEdit_'+type); if(sel&&ed) ed.value=sel.value; }
+async function optRename(type){
+  const sel=q('optSel_'+type), ed=q('optEdit_'+type); if(!sel||!ed) return;
+  const oldVal=String(sel.value||'').trim(), newVal=String(ed.value||'').trim();
+  const typeLbl=type==='brand'?'العلامة التجارية':(type==='model'?'الموديل':'اللون');
+  if(!oldVal){ toast('اختر قيمة أولاً','warn'); return; }
+  if(!newVal){ toast('اكتب الاسم الجديد','warn'); return; }
+  if(newVal===oldVal){ toast('لا تغيير','info'); return; }
+  const field=type==='brand'?'brand':(type==='model'?'model':'color');
+  const affected=(products||[]).filter(p=>String(p[field]==null?'':p[field]).trim()===oldVal);
+  if(!confirm(`إعادة تسمية ${typeLbl} «${oldVal}» إلى «${newVal}» في ${affected.length} صنفاً؟`)) return;
+  if(window.__busy) return; window.__busy=true;
+  try{
+    showLoading(true);
+    for(let i=0;i<affected.length;i+=50){
+      const batch=affected.slice(i,i+50);
+      const qs='?code=in.('+batch.map(p=>encodeURIComponent(p.code)).join(',')+')';
+      await api('pos_products',{method:'PATCH',qs,body:{[field]:newVal,updated_at:new Date().toISOString()}});
+      batch.forEach(p=>{ p[field]=newVal; });
+    }
+    const custKey=type==='brand'?'customBrands':(type==='model'?'customModels':'customColors');
+    APP_CONFIG[custKey]=[...new Set((APP_CONFIG[custKey]||[]).map(x=>String(x).trim()===oldVal?newVal:String(x).trim()).filter(Boolean))];
+    persistLocalConfig(); try{ saveAppSetting('product_options',{customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]}); }catch(_e){}
+    try{ renderProductDatalist(); }catch(_e){} renderProductOptionSettings(); try{ renderProducts(); }catch(_e){}
+    toast(`تمت إعادة التسمية في ${affected.length} صنفاً`,'success');
+    try{ logAction('product_option_rename','pos_products',null,`${field}: «${oldVal}» ← «${newVal}» (${affected.length})`); }catch(_e){}
+  }catch(err){ console.error(err); toast('خطأ في إعادة التسمية: '+(typeof friendlyError==='function'?friendlyError(err):err.message),'error'); }
+  finally{ showLoading(false); window.__busy=false; }
 }
 
 /* ═══ إضافات فورية من نافذة المنتج: ماركة/موديل/لون جديد ➕ أو مورد جديد — بلا مغادرة النفذة ═══ */
