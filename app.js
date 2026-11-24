@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-1434';
+const APP_BUILD='b20261124-1459';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -14335,12 +14335,18 @@ function longPickerItemsFor(el){
   const id=el.id;
   const supplierIds=new Set(['purchaseSupplier','paymentSupplier','ledgerSupplier','productSupplier']);
   if(CUSTOMER_PICKER_IDS.has(id)){
+    /* (طلب المالك) ترتيب الزبائن بأحدث حركة أولاً (أحدث بيع أو قيد كشف حساب) */
+    const custLast=new Map();
+    const bump=(cid,d)=>{ if(!cid||!d) return; const s=String(d); const cur=custLast.get(cid); if(!cur||s>cur) custLast.set(cid,s); };
+    for(const s of (sales||[])) bump(s.customer_id, s.sale_date||s.created_at);
+    for(const e of (customerLedger||[])) bump(e.customer_id, e.entry_date||e.created_at);
     return (customers||[]).map(c=>({
       value:c.id,
       text:[c.customer_no,c.name].filter(Boolean).join(' - ') || c.id,
       sub:[c.phone?('هاتف: '+c.phone):'', Number(c.balance||0)?('الرصيد: '+money(c.balance)+' '+APP_CONFIG.currency):''].filter(Boolean).join(' | '),
-      search:[c.customer_no,c.name,c.phone,c.balance].join(' ')
-    }));
+      search:[c.customer_no,c.name,c.phone,c.balance].join(' '),
+      _last:custLast.get(c.id)||''
+    })).sort((a,b)=> b._last<a._last?-1:(b._last>a._last?1:0) );
   }
   if(supplierIds.has(id)){
     return (suppliers||[]).map(x=>({
@@ -14378,7 +14384,7 @@ function renderLongPicker(){
   longPickerState.filtered=rows.slice(0,300);
   if(longPickerState.index>=longPickerState.filtered.length) longPickerState.index=Math.max(0,longPickerState.filtered.length-1);
   /* (20261003) منتقيات الزبائن فقط: صف «إضافة زبون جديد» أعلى القائمة */
-  const addRow=CUSTOMER_PICKER_IDS.has(longPickerState.target?.id)?`<tr class="lp-add" onclick="longPickerAddCustomer()"><td colspan="2">➕ إضافة زبون جديد — سيُختار تلقائياً هنا بعد حفظه</td></tr>`:'';
+  const addRow=CUSTOMER_PICKER_IDS.has(longPickerState.target?.id)?`<tr onclick="longPickerAddCustomer()" style="cursor:pointer" title="يُفتح نموذج إضافة زبون، ويُختار تلقائياً هنا بعد حفظه"><td colspan="2" class="lp-addcell"><span class="btn secondary" style="padding:4px 14px;display:inline-block;font-weight:600">➕ إضافة زبون جديد</span></td></tr>`:'';
   /* (20261012) منتقيات الزبائن فقط: زرّا «فواتير» و«تعديل» في خلية
      الاختيار نفسها (عمودان كما هما) — فواتير لمن يرى قائمة الفواتير،
      والتعديل لمن يرى تبويب الزبائن. «اختيار» يبقى الزر المهيمن */
