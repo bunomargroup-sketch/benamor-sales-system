@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-1515';
+const APP_BUILD='b20261124-1535';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -15000,8 +15000,20 @@ function renderStockCountLists(){
     const safe=String(r.id).replace(/'/g,"\\\\'");
     const editBtn=r.status==='cancelled'?'':`<button class="btn secondary" type="button" style="padding:4px 8px" title="فتح القائمة في المحرر لتعديل الكميات وإعادة الحفظ/التسوية" onclick="editStockCount('${safe}')">✎ تعديل</button> `;
     const cancelBtn=(!r._local&&r.status!=='cancelled'&&isManager())?` <button class="btn danger" type="button" style="padding:4px 8px" title="${r.status==='settled'?'إلغاء القائمة وعكس صافي أثرها على المخزون بمعاملة واحدة':'حذف المسودة نهائياً'}" onclick="cancelStockCount('${safe}')">${r.status==='settled'?'↩ إلغاء وعكس':'🗑 حذف'}</button>`:'';
-    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="مسودة على هذا الجهاز فقط (تعذّر حفظها على الخادم وقتها). افتحها بزر «تعديل» ثم «حفظ قائمة الجرد» لرفعها إلى الخادم">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap">${editBtn}<button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${cancelBtn}</td></tr>`;
+    const localDelBtn=(r._local&&isManager())?` <button class="btn danger" type="button" style="padding:4px 8px" title="حذف هذا المستند المحلي من هذا الجهاز فقط — لا أثر على المخزون ولا على الخادم" onclick="deleteLocalStockCount('${safe}')">🗑 حذف محلي</button>`:'';
+    return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="مسودة على هذا الجهاز فقط (تعذّر حفظها على الخادم وقتها). افتحها بزر «تعديل» ثم «حفظ قائمة الجرد» لرفعها إلى الخادم">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap">${editBtn}<button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${cancelBtn}${localDelBtn}</td></tr>`;
   }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من المحرر أعلى هذه القائمة.</td></tr>';
+}
+/* (طلب المالك) حذف مستند جرد محلي عالق من هذا الجهاز — لا يمسّ المخزون ولا الخادم */
+function deleteLocalStockCount(id){
+  if(!isManager()){toast('الحذف للمدير فقط','warn');return;}
+  if(!confirm('حذف هذا الجرد المحلي من هذا الجهاز نهائياً؟\nيُزيل المستند المحلي فقط — لا أثر على المخزون ولا على الخادم.\n(إن أردت جرداً رسمياً محفوظاً، أعِد الجرد من تبويب «جرد جديد».)')) return;
+  try{
+    const ls=stockCountLocalList().filter(x=>String(x.id)!==String(id));
+    localStorage.setItem('posStockCountLocal',JSON.stringify(ls));
+    renderStockCountLists();
+    toast('حُذف الجرد المحلي من هذا الجهاز','success');
+  }catch(e){ console.error(e); toast('تعذّر الحذف: '+e.message,'error'); }
 }
 async function cancelStockCount(id){
   const r=mergedStockCounts().find(x=>String(x.id)===String(id));
