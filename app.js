@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-1928';
+const APP_BUILD='b20261124-1953';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -14771,7 +14771,6 @@ async function editStockCount(id){
       toast('الفرع/المخزن الخاص بهذه القائمة غير موجود في قائمة الفروع الآن — لا يمكن تحريرها','warn');
       stockCountData={}; renderStockCount(); return;
     }
-    window.__scUploadingLocalId=null;  /* سياق تعديل مختلف — ألغِ أي رفع محلي معلّق */
     __scEditing={id:String(r.id), status:r.status||'draft', no:r.count_no||String(r.id),
                  count_date:r.count_date||null,
                  location_id:r.location_id,
@@ -14788,7 +14787,7 @@ async function editStockCount(id){
 function cancelStockCountEdit(){
   if(!__scEditing)return;
   if(!confirm('إلغاء تحرير القائمة؟ (تُفرَّغ أسطر المحرر — القائمة المحفوظة لا تتأثر)'))return;
-  __scEditing=null; window.__scUploadingLocalId=null; stockCountData={}; renderStockCount(); toast('أُلغي التحرير','info');
+  __scEditing=null; stockCountData={}; renderStockCount(); toast('أُلغي التحرير','info');
 }
 /* (0149) حفظ الجرد عبر معاملة الخادم الواحدة: الرأس والأسطر والحركات
    المرتبطة بالمستند تُكتب ذرّياً — لا نداءات REST متتالية بعد اليوم،
@@ -14857,7 +14856,6 @@ function setProductPickerTitle(mode){
 }
 /* فتح الجرد بصنف محدد (من قائمة يمين المنتج أو أي زر خارجي) */
 function startProductCount(code){
-  window.__scUploadingLocalId=null;
   openTab('stockCount'); showStockCountSub('editor');
   setTimeout(()=>{
     const locEl=q('stockCountLocation');
@@ -14923,7 +14921,6 @@ async function saveStockCountList(){
     await logAction(wasEdit?'stock_count_edit_save':'stock_count_save',null,null,`${wasEdit?'تحديث قائمة جرد':'حفظ قائمة جرد'} ${doc.rows.length} صنف — ${locations.find(l=>l.id===doc.loc)?.name||''} — صافي قيمة الفرق ${money(doc.header.diff_value)}`);
     __scEditing=null; stockCountData={}; clearStockCountFilters(); renderStockCount();
     toast(wasEdit?'تم تحديث القائمة المحفوظة':'تم حفظ قائمة الجرد — تجدها في القائمة أسفل الصفحة','success');
-    _consumeUploadedLocal();
   }catch(e){console.error(e);toast('تعذّر حفظ قائمة الجرد: '+friendlyError(e),'error')}
   finally{showLoading(false);window.__busy=false}
 }
@@ -14990,7 +14987,6 @@ async function saveStockCount(){
     await refreshSalesDomain();
     renderStockCount();
     toast(isResettle?`تم تطبيق فرق التعديل (${applied} صنف) وتحديث القائمة`:`تم تسوية ${applied} صنف وحفظ قائمة الجرد`,'success');
-    _consumeUploadedLocal();
   }catch(e){console.error(e);toast('تعذّر حفظ الجرد: '+friendlyError(e),'error')}finally{showLoading(false);window.__busy=false}
 }
 /* قوائم الجرد السابقة: عرض وتحرير — والإلغاء/الحذف للمدير عبر معاملة
@@ -15009,46 +15005,57 @@ function renderStockCountLists(){
     return `<tr><td class="ltr"><span class="code">${esc(r.count_no||'—')}</span></td><td>${esc(String(r.count_date||'').slice(0,10))}${r._local?' <span class="badge gray" title="مسودة على هذا الجهاز فقط (تعذّر حفظها على الخادم وقتها). اضغط «⬆️ رفع للخادم» لرفعها، ثم «تسوية» لتطبيقها على المخزون">محلي</span>':''}</td><td>${esc(l?.name||'—')}</td><td class="mini">${esc(r.category||'الكل')}</td><td>${esc(sellerName(r.user_identifier))}</td><td style="text-align:center">${money(r.counted_items||0)}/${money(r.items_count||0)}</td><td style="text-align:center">${money(r.diff_qty||0)}</td><td style="text-align:center"><b>${money(r.diff_value||0)}</b> ${APP_CONFIG.currency}</td><td>${st}</td><td style="white-space:nowrap">${editBtn}<button class="btn secondary" type="button" style="padding:4px 8px" title="عرض أسطر قائمة الجرد وفروقاتها المقيّمة" onclick="viewStockCount('${safe}')">👁 تفاصيل</button>${cancelBtn}${localUpBtn}${localDelBtn}</td></tr>`;
   }).join('')||'<tr><td colspan="10">لا توجد قوائم جرد محفوظة بعد — احفظها من المحرر أعلى هذه القائمة.</td></tr>';
 }
-/* (طلب المالك) رفع جرد محلي عالق إلى الخادم: نُحمّل كمياته المعدودة في
-   المحرر كجردٍ جديد — تُعاد حساب الفروق على المخزون الحالي الآن، ثم يحفظه
-   المستخدم «مسودة» أو «تسوية» بالمسار المعتاد (معاملة 0149 الذرّية).
-   لا أثر على المخزون إلا عند التسوية. بعد نجاح الحفظ على الخادم تُحذف
-   النسخة المحلية تلقائياً عبر _consumeUploadedLocal في مساري الحفظ/التسوية. */
-function uploadLocalStockCount(id){
+/* (طلب المالك) رفع جرد محلي عالق إلى الخادم بضغطة واحدة: يُنشأ مستند خادم
+   جديد بحالة «مسودة» من أسطره المخزّنة عبر معاملة 0149 الذرّية — بلا أي أثر
+   على المخزون (المسودة لا تُحرّك المخزون إطلاقاً). يصبح جرداً عادياً يظهر
+   على كل الأجهزة، وتُحذف النسخة المحلية بعد نجاح الرفع. مفتاح idempotency
+   ثابت (localup-<id>) يمنع الازدواج لو ضُغط الزرّ مرتين.
+   لِمَ «مسودة» لا «مسوّى»؟ لأن أثر هذه الجرود المحلية القديمة على المخزون
+   غير مؤكّد (قد يكون طُبِّق وقتها أو لا) — فنرفعها بأمان مسودةً، ثم يراجعها
+   المالك ويضغط «تسوية» لتطبيقها على المخزون فقط إن لم تكن طُبِّقت. */
+async function uploadLocalStockCount(id){
   if(!isManager()){toast('الرفع للمدير فقط','warn');return;}
   const r=stockCountLocalList().find(x=>String(x.id)===String(id));
   if(!r){toast('لم يوجد الجرد المحلي (ربما حُذف)','warn');return;}
-  const items=r._items||[];
+  const items=(r._items||[]).filter(it=>it&&String(it.product_code||'').trim());
   if(!items.length){toast('لا أسطر معدودة في هذا الجرد المحلي — لا شيء لرفعه','info');return;}
-  const locEl=q('stockCountLocation');
-  if(!locEl){ openTab('stockCount'); setTimeout(()=>uploadLocalStockCount(id),100); return; }
-  if(![...locEl.options].some(o=>String(o.value)===String(r.location_id))){
+  if(!locations.some(l=>String(l.id)===String(r.location_id))){
     toast('فرع/مخزن هذا الجرد لم يعد موجوداً في قائمة الفروع — تعذّر الرفع','warn');return;
   }
-  const n=Object.keys(stockCountData).length;
-  if(n && !confirm(`المحرر فيه ${n} صنفاً الآن — سيُفرَّغ لتحميل الجرد المحلي «${r.count_no||r.id}». متابعة؟`))return;
-  __scEditing=null;                        /* جرد جديد لا تعديل: الفرق يُحسب على المخزون الحالي ويُنشأ مستند خادم جديد */
-  window.__scUploadingLocalId=String(id);  /* بعد نجاح الحفظ على الخادم تُحذف النسخة المحلية */
-  stockCountData={};
-  items.forEach(it=>{ stockCountData[String(it.product_code)]=String(it.counted_qty); });
-  locEl.value=String(r.location_id); locEl.dataset.prev=locEl.value;
-  const de=q('stockCountDate'); if(de){ de.value=String(r.count_date||'').slice(0,10)||new Date().toISOString().slice(0,10); delete de.dataset.userSet; }
-  clearStockCountFilters();
-  showStockCountSub('editor');
-  renderScEditBanner();
-  renderStockCount();
-  toast('حُمِّلت الكميات المعدودة في المحرر — الفروق محسوبة على المخزون الحالي الآن. راجِعها ثم اضغط «تسوية واعتماد الفروقات» لتطبيقها على المخزون (أو «حفظ قائمة الجرد» كمسودة بلا أثر). تُحذف النسخة المحلية تلقائياً بعد نجاح الحفظ على الخادم.','info',9000);
-}
-/* بعد نجاح حفظ/تسوية جرد مرفوع من نسخة محلية: إزالة النسخة المحلية العالقة */
-function _consumeUploadedLocal(){
-  const id=window.__scUploadingLocalId; if(!id)return;
-  window.__scUploadingLocalId=null;
+  if(!confirm(`رفع هذا الجرد المحلي (${items.length} صنفاً) إلى الخادم كـ«مسودة» — بلا أي أثر على المخزون؟\n\nسيصبح جرداً عادياً يظهر على كل الأجهزة. وبما أنه كان محفوظاً محلياً فقط، نرفعه مسودةً بأمان.\nبعد الرفع: افتحه بزر «تعديل» ثم «تسوية» لتطبيقه على المخزون — فقط إن لم يكن أثره قد طُبِّق سابقاً.`))return;
+  if(window.__busy)return;window.__busy=true;
   try{
+    showLoading(true);
+    const di=it=>Number(it.counted_qty||0)-Number(it.system_qty||0);
+    const rows=items.map(it=>({
+      product_code:it.product_code, product_name:it.product_name||'',
+      system_qty:Number(it.system_qty||0), counted_qty:Number(it.counted_qty||0),
+      diff_qty:di(it), unit_cost:Number(it.unit_cost||0), diff_value:di(it)*Number(it.unit_cost||0)
+    }));
+    const header={
+      count_date:String(r.count_date||'').slice(0,10)||new Date().toISOString().slice(0,10),
+      location_id:r.location_id, category:r.category||null, status:'draft',
+      items_count:Number(r.items_count||rows.length), counted_items:rows.length,
+      diff_qty:rows.reduce((a,x)=>a+x.diff_qty,0), diff_value:rows.reduce((a,x)=>a+x.diff_value,0),
+      notes:'مرفوع من نسخة محلية عالقة على جهاز — '+(r.count_no||r.id),
+      user_identifier:r.user_identifier||appUser?.identifier||null
+    };
+    const res=await rpc('post_stock_count_transaction',{
+      p_count:header, p_items:rows, p_status:'draft',
+      p_existing_id:null, p_idempotency_key:'localup-'+String(id),
+      p_user_identifier:appUser?.identifier||''
+    });
+    if(!res?.id) throw new Error('COUNT_RPC_EMPTY_RESPONSE');
+    const rec={...(res.count||{}),_items:res.items||rows};
+    const i=(stockCounts||[]).findIndex(x=>String(x.id)===String(res.id));
+    if(i>=0) stockCounts[i]={...stockCounts[i],...rec}; else stockCounts.unshift(rec);
     const ls=stockCountLocalList().filter(x=>String(x.id)!==String(id));
     localStorage.setItem('posStockCountLocal',JSON.stringify(ls));
+    try{await logAction('stock_count_local_upload','pos_stock_counts',res.id,`رفع جرد محلي عالق كمسودة ${rows.length} صنف — ${locations.find(l=>l.id===r.location_id)?.name||''}`);}catch(_e){}
     renderStockCountLists();
-    toast('رُفِع الجرد إلى الخادم وحُذفت النسخة المحلية من هذا الجهاز','success');
-  }catch(e){ console.warn('consume uploaded local',e); }
+    toast(`رُفِع الجرد إلى الخادم كمسودة «${res.count_no||res.id}» وحُذفت النسخة المحلية. راجِعه بزر «تعديل» ثم «تسوية» لتطبيقه على المخزون إن لزم.`,'success',9000);
+  }catch(e){console.error(e);toast('تعذّر رفع الجرد إلى الخادم: '+friendlyError(e),'error');}
+  finally{showLoading(false);window.__busy=false;}
 }
 /* (طلب المالك) حذف مستند جرد محلي عالق من هذا الجهاز — لا يمسّ المخزون ولا الخادم */
 function deleteLocalStockCount(id){
