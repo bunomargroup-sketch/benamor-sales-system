@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<link rel="stylesheet" href="app.css?v=20261125-1328">
+<link rel="stylesheet" href="app.css?v=20261125-1405">
 </head>
 <body class="auth-locked">
   <header>
@@ -1158,6 +1158,7 @@
             <button class="seg-btn" type="button" data-rep="supplierprofit" onclick="showReport('supplierprofit')"><i class="ti ti-truck-delivery"></i> ربحية الموردين</button>
             <button class="seg-btn" type="button" data-rep="purchaseprofit" onclick="showReport('purchaseprofit')"><i class="ti ti-receipt-2"></i> ربحية فواتير الشراء</button>
             <button class="seg-btn" type="button" data-rep="charts" onclick="showReport('charts')"><i class="ti ti-chart-dots"></i> لوحة المؤشرات</button>
+            <button class="seg-btn" type="button" data-rep="stagnant" onclick="showReport('stagnant')"><i class="ti ti-clock-pause"></i> الأصناف الراكدة</button>
             <button class="seg-btn" type="button" data-rep="itemhistory" onclick="showReport('itemhistory')"><i class="ti ti-history"></i> حركة صنف</button>
             <button class="seg-btn" type="button" data-rep="customerhistory" onclick="showReport('customerhistory')"><i class="ti ti-user-search"></i> حركة زبون</button>
           </div>
@@ -1240,6 +1241,26 @@
         </div>
         <div id="rep-losscustomers" class="rep-view hidden">
           <div class="panel"><h2>زبائن تسبب خسائر</h2><div class="table-scroll"><table><thead><tr><th>الزبون</th><th>عدد الفواتير</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الدين الحالي</th></tr></thead><tbody id="repLossCustomersBody"></tbody></table></div></div>
+        </div>
+        <div id="rep-stagnant" class="rep-view hidden">
+          <div class="panel">
+            <div class="tools"><h2>الأصناف الراكدة — حسب تاريخ آخر بيع</h2>
+              <div class="row" style="flex-wrap:wrap;gap:8px">
+                <select id="repStagLoc" onchange="renderReportsDetail()" title="المخزون المعروض لهذا الموقع (تاريخ آخر بيع يبقى شاملاً كل الفروع)"><option value="">كل المواقع — المخزون الكلي</option></select>
+                <select id="repStagAge" onchange="renderReportsDetail()">
+                  <option value="0">كل الأصناف</option>
+                  <option value="never">لم تُبَع إطلاقاً</option>
+                  <option value="90">راكدة ٩٠ يوماً فأكثر</option>
+                  <option value="180" selected>راكدة ١٨٠ يوماً فأكثر</option>
+                  <option value="365">راكدة سنة فأكثر</option>
+                </select>
+                <label class="row" style="gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" id="repStagInStock" checked onchange="renderReportsDetail()"> في المخزون فقط</label>
+                <input id="repStagSearch" placeholder="بحث: كود/اسم/علامة/موديل" oninput="renderReportsDetail()" style="max-width:260px">
+              </div>
+            </div>
+            <div class="mini" id="repStagMeta" style="margin:4px 0 8px">—</div>
+            <div class="table-scroll"><table><thead><tr><th>#</th><th>الكود</th><th>الاسم</th><th>العلامة التجارية</th><th>الموديل</th><th>المخزون</th><th>آخر بيع</th><th>منذ (يوم)</th><th>إجمالي المُباع</th></tr></thead><tbody id="repStagnantBody"><tr><td colspan="9">يُحمَّل عند فتح التبويب…</td></tr></tbody></table></div>
+          </div>
         </div>
         <div id="rep-itemhistory" class="rep-view hidden">
           <div class="panel"><div class="tools"><h2>حركة أرباح صنف</h2><div class="row"><input id="repHistItemCode" list="productsDatalist" placeholder="اختر أو اكتب كود الصنف" oninput="renderReportsDetail()" style="max-width:320px"><select id="repHistPeriod" onchange="renderReportsDetail()"><option value="month">شهري</option><option value="quarter">ربع سنوي</option><option value="year">سنوي</option></select></div></div><div class="table-scroll"><table><thead><tr><th>الفترة</th><th>الكمية</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th></tr></thead><tbody id="repItemHistoryBody"></tbody></table></div></div>
@@ -2138,6 +2159,6 @@ window.BarcodeCam = {
 
 </script>
 <!-- BCAM:END -->
-<script src="app.js?v=20261125-1328"></script>
+<script src="app.js?v=20261125-1405"></script>
 </body>
 </html>

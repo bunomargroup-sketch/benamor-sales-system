@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261125-1328';
+const APP_BUILD='b20261125-1405';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -8210,12 +8210,31 @@ function updateProformaTotal(){
 function resetProformaForm(){editingProformaId=null; q('proformaForm').reset(); q('proformaItemsBody').innerHTML=''; addProformaRow(); setToday(); q('proformaSubmitBtn').textContent='حفظ الفاتورة المبدئية'; q('proformaCancelEditBtn').classList.add('hidden'); updateProformaTotal();}
 function renderProformas(){
   if(!q('proformasBody')) return;
-  q('proformasBody').innerHTML=proformas.map(pr=>{const l=locations.find(x=>x.id===pr.location_id), c=customers.find(x=>x.id===pr.customer_id); return `<tr><td class="ltr"><b>${esc(pr.proforma_no||pr.id.slice(0,8))}</b></td><td>${esc(pr.proforma_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||pr.customer_name||'')}</td><td><b>${money(pr.total)}</b></td><td>${esc(pr.status)}</td><td><div class="row"><button class="btn secondary" onclick="openProformaForEdit('${pr.id}')">فتح / تعديل</button><button class="btn secondary" onclick="convertProformaToSale('${pr.id}')">تحويل إلى بيع</button></div></td></tr>`}).join('')||'<tr><td colspan="7">لا توجد فواتير مبدئية.</td></tr>';
+  q('proformasBody').innerHTML=proformas.map(pr=>{const l=locations.find(x=>x.id===pr.location_id), c=customers.find(x=>x.id===pr.customer_id); const canDel=isManager()||isProgrammer()||String(pr.created_by||'')===String(appUser?.identifier||''); const delBtn=canDel?`<button class="btn danger" title="حذف الفاتورة المبدئية نهائياً — مستند عرض سعر فقط، لا أثر على المخزون ولا المبيعات" onclick="deleteProforma('${pr.id}')">🗑 حذف</button>`:''; return `<tr><td class="ltr"><b>${esc(pr.proforma_no||pr.id.slice(0,8))}</b></td><td>${esc(pr.proforma_date)}</td><td>${esc(l?.name)}</td><td>${esc(c?.name||pr.customer_name||'')}</td><td><b>${money(pr.total)}</b></td><td>${esc(pr.status)}</td><td><div class="row"><button class="btn secondary" onclick="openProformaForEdit('${pr.id}')">فتح / تعديل</button><button class="btn secondary" onclick="convertProformaToSale('${pr.id}')">تحويل إلى بيع</button>${delBtn}</div></td></tr>`}).join('')||'<tr><td colspan="7">لا توجد فواتير مبدئية.</td></tr>';
+}
+/* (طلب المالك) حذف فاتورة مبدئية — لمن أنشأها أو المدير أو المبرمج.
+   مستند عرض سعر فقط: لا حركة مخزون ولا قيد مالي ولا مبيعات تتأثر. */
+async function deleteProforma(id){
+  const pr=proformas.find(x=>x.id===id); if(!pr){toast('لم توجد الفاتورة المبدئية','warn');return;}
+  const mine=String(pr.created_by||'')===String(appUser?.identifier||'');
+  if(!(isManager()||isProgrammer()||mine)){toast('حذف المبدئية متاح لمن أنشأها أو المدير أو المبرمج فقط','warn');return;}
+  if(!confirm(`حذف الفاتورة المبدئية «${pr.proforma_no||pr.id.slice(0,8)}» نهائياً؟\nمستند عرض سعر فقط — لا أثر على المخزون ولا على المبيعات.`)) return;
+  if(window.__busy)return;window.__busy=true;
+  try{
+    showLoading(true);
+    await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});
+    await api('pos_proformas',{method:'DELETE',qs:`?id=eq.${id}`});
+    proformas=proformas.filter(x=>x.id!==id);
+    try{await logAction('proforma_delete','pos_proformas',id,`حذف فاتورة مبدئية ${pr.proforma_no||String(id).slice(0,8)}`);}catch(_e){}
+    renderProformas();
+    toast('تم حذف الفاتورة المبدئية','success');
+  }catch(e){ console.error(e); toast('تعذّر حذف المبدئية: '+friendlyError(e),'error'); }
+  finally{ showLoading(false); window.__busy=false; }
 }
 async function openProformaForEdit(id){
   try{showLoading(true); const rows=await api('pos_proforma_items',{qs:`?select=*&proforma_id=eq.${id}&order=created_at.asc`}); const pr=proformas.find(x=>x.id===id)||(await api('pos_proformas',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; if(!pr){toast('لم يتم العثور على الفاتورة');return;} editingProformaId=id; openTab('proformas'); q('proformaLocation').value=pr.location_id||''; q('proformaDate').value=pr.proforma_date||''; q('proformaNo').value=pr.proforma_no||''; q('proformaCustomer').value=pr.customer_id||''; q('proformaCustomerName').value=pr.customer_name||''; q('proformaCustomerPhone').value=pr.customer_phone||''; q('proformaNotes').value=pr.notes||''; q('proformaDiscount').value=Number(pr.discount||0); q('proformaItemsBody').innerHTML=''; rows.forEach(it=>addProformaRow(it)); updateProformaTotal(); q('proformaSubmitBtn').textContent='حفظ تعديل المبدئية'; q('proformaCancelEditBtn').classList.remove('hidden');}catch(e){console.error(e);toast('خطأ في فتح المبدئية: '+e.message)}finally{showLoading(false);window.__busy=false}}
 async function convertSaleToProforma(id){
-  try{showLoading(true); const sl=sales.find(x=>x.id===id)||(await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`}); const c=customers.find(x=>x.id===sl.customer_id); const subtotal=rows.reduce((a,x)=>a+Number(x.line_total||0),0); const pr=await api('pos_proformas',{method:'POST',body:{proforma_date:sl.sale_date,location_id:sl.location_id,customer_id:sl.customer_id,customer_name:c?.name||null,customer_phone:c?.phone||null,subtotal,discount:Number(sl.discount||0),total:Number(sl.total||subtotal),status:'draft',source_sale_id:id,notes:'تم إنشاؤها من فاتورة بيع'}}); await api('pos_proforma_items',{method:'POST',body:rows.map(it=>({proforma_id:pr[0].id,product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount||0,discount_text:it.discount_text||'',line_total:it.line_total}))}); toast('تم تحويل فاتورة البيع إلى مبدئية'); await refreshParts(['proformas']); openTab('proformas');}catch(e){console.error(e);toast('خطأ في التحويل: '+e.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}}
+  try{showLoading(true); const sl=sales.find(x=>x.id===id)||(await api('pos_sales',{qs:`?select=*&id=eq.${id}&limit=1`}))[0]; const rows=await api('pos_sale_items',{qs:`?select=*&sale_id=eq.${id}&order=created_at.asc`}); const c=customers.find(x=>x.id===sl.customer_id); const subtotal=rows.reduce((a,x)=>a+Number(x.line_total||0),0); const pr=await api('pos_proformas',{method:'POST',body:{proforma_date:sl.sale_date,location_id:sl.location_id,customer_id:sl.customer_id,customer_name:c?.name||null,customer_phone:c?.phone||null,subtotal,discount:Number(sl.discount||0),total:Number(sl.total||subtotal),status:'draft',source_sale_id:id,notes:'تم إنشاؤها من فاتورة بيع',created_by:appUser?.identifier||''}}); await api('pos_proforma_items',{method:'POST',body:rows.map(it=>({proforma_id:pr[0].id,product_code:it.product_code,product_name:it.product_name,qty:it.qty,unit_price:it.unit_price,line_discount:it.line_discount||0,discount_text:it.discount_text||'',line_total:it.line_total}))}); toast('تم تحويل فاتورة البيع إلى مبدئية'); await refreshParts(['proformas']); openTab('proformas');}catch(e){console.error(e);toast('خطأ في التحويل: '+e.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}}
 async function convertProformaToSale(id){
   if(__saleTabId){toast('أكمل أو أغلق الفاتورة المفتوحة قبل تحويل المبدئية','warn');return;}
   /* (0161) التحويل يستبدل ما على شاشة البيع — لا يفعله بلا سؤال */
@@ -12690,7 +12709,7 @@ function purchaseEmbeddedPaymentPayload(){
 
 q('proformaForm')?.addEventListener('submit',async e=>{
   e.preventDefault(); const items=getProformaItems(); if(!items.length){toast('أضف صنف واحد على الأقل');return;}
-  try{showLoading(true); const subtotal=items.reduce((a,x)=>a+Number(x.line_total||0),0), discount=moneyVal(q('proformaDiscount').value), total=Math.max(0,subtotal-discount); const body={proforma_no:q('proformaNo').value.trim()||null,proforma_date:q('proformaDate').value,location_id:q('proformaLocation').value,customer_id:q('proformaCustomer').value||null,customer_name:q('proformaCustomerName').value.trim()||null,customer_phone:q('proformaCustomerPhone').value.trim()||null,subtotal,discount,total,status:'draft',notes:q('proformaNotes').value.trim()||null}; let id=editingProformaId; if(id){await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{...body,updated_at:new Date().toISOString()}}); await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});}else{const pr=await api('pos_proformas',{method:'POST',body}); id=pr[0].id;} await api('pos_proforma_items',{method:'POST',body:items.map(it=>({...it,proforma_id:id}))}); resetProformaForm(); toast('تم حفظ الفاتورة المبدئية'); await refreshParts(['proformas']);}catch(err){console.error(err);toast('خطأ في حفظ المبدئية: '+err.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}
+  try{showLoading(true); const subtotal=items.reduce((a,x)=>a+Number(x.line_total||0),0), discount=moneyVal(q('proformaDiscount').value), total=Math.max(0,subtotal-discount); const body={proforma_no:q('proformaNo').value.trim()||null,proforma_date:q('proformaDate').value,location_id:q('proformaLocation').value,customer_id:q('proformaCustomer').value||null,customer_name:q('proformaCustomerName').value.trim()||null,customer_phone:q('proformaCustomerPhone').value.trim()||null,subtotal,discount,total,status:'draft',notes:q('proformaNotes').value.trim()||null}; let id=editingProformaId; if(id){await api('pos_proformas',{method:'PATCH',qs:`?id=eq.${id}`,body:{...body,updated_at:new Date().toISOString()}}); await api('pos_proforma_items',{method:'DELETE',qs:`?proforma_id=eq.${id}`});}else{const pr=await api('pos_proformas',{method:'POST',body:{...body,created_by:appUser?.identifier||''}}); id=pr[0].id;} await api('pos_proforma_items',{method:'POST',body:items.map(it=>({...it,proforma_id:id}))}); resetProformaForm(); toast('تم حفظ الفاتورة المبدئية'); await refreshParts(['proformas']);}catch(err){console.error(err);toast('خطأ في حفظ المبدئية: '+err.message+' - تأكد من تشغيل SQL المبدئية')}finally{showLoading(false);window.__busy=false}
 });
 
 q('purchaseForm').addEventListener('submit', async e=>{
@@ -13887,6 +13906,42 @@ function renderReportsDetail(){
     (d.fWaste||[]).forEach(w=>ensure(bucketKey(w.waste_date,period)).waste+=Number(w.total_value||0));
     const rows=Object.values(m).filter(r=>r.k).sort((a,b)=>b.k.localeCompare(a.k)); q('repCompareBody').innerHTML=rows.map(r=>{const gp=r.rev-r.cost, net=gp-r.expenses-r.waste; return `<tr><td>${esc(r.k)}</td><td>${r.count}</td><td>${money(r.rev)}</td><td>${money(r.cost)}</td><td class="${profitClass(gp)}">${money(gp)}</td><td>${money(r.expenses)}</td><td>${r.waste?('−'+money(r.waste)):'0'}</td><td class="${profitClass(net)}">${money(net)}</td></tr>`}).join('')||emptyRow(8);
   }
+  if(currentReport==='stagnant' && q('repStagnantBody')){ renderStagnantReport(); }
+}
+
+/* ═══ تقرير الأصناف الراكدة: آخر تاريخ بيع لكل صنف + المخزون الحالي ═══
+   «آخر بيع» شامل كل الفروع (من عرض pos_product_sales_activity، 0192)،
+   و«المخزون» للموقع المختار. أصناف لم تُبَع إطلاقاً تظهر أولاً. */
+let __stagAct=null;
+async function ensureStagnantActivity(){
+  if(__stagAct) return __stagAct;
+  const rows=await apiAll('pos_product_sales_activity','?select=product_code,last_sale_date,total_qty_sold').catch(e=>{console.warn('stagnant view missing',e);return null;});
+  if(!rows) return null;
+  __stagAct=new Map();
+  rows.forEach(r=>__stagAct.set(String(r.product_code||'').toLowerCase(),{last:r.last_sale_date,qty:Number(r.total_qty_sold||0)}));
+  return __stagAct;
+}
+function stagOnHand(code,loc){
+  const c=String(code||'').toLowerCase();
+  return (stock||[]).reduce((a,s)=>a+((String(s.product_code||'').toLowerCase()===c && (!loc||s.location_id===loc))?Number(s.qty||0):0),0);
+}
+async function renderStagnantReport(){
+  const body=q('repStagnantBody'); if(!body) return;
+  const locSel=q('repStagLoc');
+  if(locSel && !locSel.dataset.filled){ locSel.insertAdjacentHTML('beforeend',(locations||[]).map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')); locSel.dataset.filled='1'; }
+  const act=await ensureStagnantActivity();
+  if(!act){ body.innerHTML='<tr><td colspan="9">تعذّر تحميل حركة المبيعات — شغّل ملف SQL «0192 pos_product_sales_activity».</td></tr>'; const mt=q('repStagMeta'); if(mt)mt.textContent='—'; return; }
+  const loc=locSel?.value||'', age=q('repStagAge')?.value||'180', inStockOnly=q('repStagInStock')?.checked, term=(q('repStagSearch')?.value||'').trim();
+  const today=Date.now(), daysSince=d=>d?Math.floor((today-new Date(d).getTime())/864e5):null;
+  let rows=(products||[]).filter(p=>p.active!==false).map(p=>{ const a=act.get(String(p.code||'').toLowerCase()); return {code:p.code,name:p.name,onhand:stagOnHand(p.code,loc),last:a?a.last:null,days:a?daysSince(a.last):null,sold:a?a.qty:0}; });
+  if(inStockOnly) rows=rows.filter(r=>r.onhand>0.0001);
+  if(age==='never') rows=rows.filter(r=>!r.last);
+  else if(Number(age)>0) rows=rows.filter(r=>!r.last || (r.days!=null && r.days>=Number(age)));
+  if(term) rows=rows.filter(r=>{const p=productByCode(r.code); return smartMatch(term,[r.code,r.name,p?.brand,p?.model].filter(Boolean).join(' '));});
+  rows.sort((x,y)=>{ if(!x.last&&!y.last) return y.onhand-x.onhand; if(!x.last) return -1; if(!y.last) return 1; return String(x.last).localeCompare(String(y.last)); });
+  const mt=q('repStagMeta'); if(mt) mt.textContent=`${money(rows.length)} صنف مطابق · منها ${money(rows.filter(r=>!r.last).length)} لم تُبَع إطلاقاً · إجمالي مخزونها ${money(rows.reduce((a,r)=>a+r.onhand,0))} وحدة · المعروض حتى ٥٠٠`;
+  const show=rows.slice(0,500);
+  body.innerHTML=show.map((r,i)=>`<tr><td>${i+1}</td><td class="ltr"><span class="code">${esc(r.code)}</span></td><td>${esc(pName(r.code,r.name))}</td>${itemBMCells(r.code)}<td style="text-align:center"><b class="${r.onhand>0?'':'muted'}">${money(r.onhand)}</b></td><td>${r.last?esc(String(r.last).slice(0,10)):'<span class="chip due">لم يُبَع</span>'}</td><td style="text-align:center">${r.last?money(r.days):'—'}</td><td style="text-align:center">${money(r.sold)}</td></tr>`).join('')||'<tr><td colspan="9">لا أصناف مطابقة للفلاتر.</td></tr>';
 }
 
 function printReports(){
