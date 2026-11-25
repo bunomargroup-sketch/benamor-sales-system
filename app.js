@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261125-1440';
+const APP_BUILD='b20261125-1448';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -13938,7 +13938,9 @@ async function renderStagnantReport(){
   if(age==='never') rows=rows.filter(r=>!r.last);
   else if(Number(age)>0) rows=rows.filter(r=>!r.last || (r.days!=null && r.days>=Number(age)));
   if(term) rows=rows.filter(r=>{const p=productByCode(r.code); return smartMatch(term,[r.code,r.name,p?.brand,p?.model].filter(Boolean).join(' '));});
-  rows.sort((x,y)=>{ if(!x.last&&!y.last) return y.onhand-x.onhand; if(!x.last) return -1; if(!y.last) return 1; return String(x.last).localeCompare(String(y.last)); });
+  /* الأصناف ذات تاريخ البيع أولاً (الأقدم بيعاً = الأكثر ركوداً) لتظهر التواريخ،
+     ثم التي لم تُبَع إطلاقاً في الذيل (يعزلها فلتر «لم تُبَع إطلاقاً»، الأكبر مخزوناً أولاً) */
+  rows.sort((x,y)=>{ if(!x.last&&!y.last) return y.onhand-x.onhand; if(!x.last) return 1; if(!y.last) return -1; return String(x.last).localeCompare(String(y.last)); });
   const mt=q('repStagMeta'); if(mt) mt.textContent=`${money(rows.length)} صنف مطابق · منها ${money(rows.filter(r=>!r.last).length)} لم تُبَع إطلاقاً · إجمالي مخزونها ${money(rows.reduce((a,r)=>a+r.onhand,0))} وحدة · المعروض حتى 500`;
   const show=rows.slice(0,500);
   body.innerHTML=show.map((r,i)=>`<tr><td>${i+1}</td><td class="ltr"><span class="code">${esc(r.code)}</span></td><td>${esc(pName(r.code,r.name))}</td>${itemBMCells(r.code)}<td style="text-align:center"><b class="${r.onhand>0?'':'muted'}">${money(r.onhand)}</b></td><td>${r.last?esc(String(r.last).slice(0,10)):'<span class="chip due">لم يُبَع</span>'}</td><td style="text-align:center">${r.last?money(r.days):'—'}</td><td style="text-align:center">${money(r.sold)}</td></tr>`).join('')||'<tr><td colspan="9">لا أصناف مطابقة للفلاتر.</td></tr>';
