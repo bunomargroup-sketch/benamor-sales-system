@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded',applyThemeIcon);
 
 
 const APP_CONFIG={businessName:'مجموعة بن عمر',tagline:'نظام بيع ومخزون',currency:'د.ل',lowStockThreshold:2,transferMinQtyDefault:1,marginRedBelow:5,marginOrangeBelow:15,marginYellowBelow:30,supabaseUrl:'https://kkqbkumobeimwuscxztu.supabase.co',supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrcWJrdW1vYmVpbXd1c2N4enR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Nzc0NDAsImV4cCI6MjA5NzM1MzQ0MH0.5hUmVo-RSW_XVrW8XvJZP7_RoRHoxR0Sl0AxplOMwH0'};
-const APP_BUILD='b20261124-2017';
+const APP_BUILD='b20261125-1328';
 function loadLocalConfig(){try{Object.assign(APP_CONFIG,JSON.parse(localStorage.getItem('posAppConfig')||'{}'));}catch(e){}}
 function persistLocalConfig(){ try{ localStorage.setItem('posAppConfig',JSON.stringify({businessName:APP_CONFIG.businessName,tagline:APP_CONFIG.tagline,currency:APP_CONFIG.currency,lowStockThreshold:APP_CONFIG.lowStockThreshold,transferMinQtyDefault:APP_CONFIG.transferMinQtyDefault,marginRedBelow:APP_CONFIG.marginRedBelow,marginOrangeBelow:APP_CONFIG.marginOrangeBelow,marginYellowBelow:APP_CONFIG.marginYellowBelow,customBrands:APP_CONFIG.customBrands||[],customModels:APP_CONFIG.customModels||[],customColors:APP_CONFIG.customColors||[]})); }catch(e){} }
 function _pickGeneralCfg(v){ const o={}; ['businessName','tagline','currency'].forEach(k=>{ if(typeof v[k]==='string'&&v[k].trim()) o[k]=v[k]; }); ['lowStockThreshold','transferMinQtyDefault','marginRedBelow','marginOrangeBelow','marginYellowBelow'].forEach(k=>{ if(v[k]!=null&&!isNaN(Number(v[k]))) o[k]=Number(v[k]); }); return o; }
@@ -7960,7 +7960,9 @@ async function fillSaleEditLog(saleId){
   q('svdBody')?.insertAdjacentHTML('beforeend',`<div id="svdEditLog" style="margin-top:12px"><h3 style="font-size:14px;margin:0 0 6px">📝 سجل التعديلات والدفعات</h3><div id="svdEditLogBody" class="mini">يجلب…</div></div>`);
   const rows=await api('pos_audit_log',{qs:`?select=created_at,user_identifier,action,details&entity_type=eq.pos_sales&entity_id=eq.${saleId}&order=created_at.desc&limit=30`});
   const el=q('svdEditLogBody'); if(!el)return;
-  const fmt=ts=>{try{return new Date(ts).toLocaleString('ar', {dateStyle:'short',timeStyle:'short'})}catch(e){return ts}};
+  /* en-GB: ترتيب يوم/شهر/سنة بأرقام غربية واتجاه LTR ثابت بلا علامات اتجاه
+     مضمَّنة (كان 'ar' يُدخل علامات RLM فينفصل اليوم ويظهر في آخر السطر) */
+  const fmt=ts=>{try{return new Date(ts).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}catch(e){return ts}};
   const summarize=(r)=>{
     if(r.action==='sale_edit'&&r.details&&typeof r.details==='object'){
       const d=r.details; const parts=[];
